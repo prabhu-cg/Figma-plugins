@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+
+  <!-- Rounded square background in brand orange -->
+  <rect width="32" height="32" rx="7" fill="#EE661D"/>
+
+  <!--
+    Stylised "T" built from stacked layer bars — mirrors the card icon language.
+    Global  → widest crossbar  (full white)    the raw foundation
+    Alias   → narrower stem    (75% white)     semantic mapping
+    Component → narrower base  (50% white)     most specific / concrete
+    Opacity fades downward to suggest increasing specificity.
+  -->
+
+  <!-- Global layer (T crossbar) -->
+  <rect x="4" y="6.5" width="24" height="6" rx="2" fill="white"/>
+
+  <!-- Alias layer (T upper stem) -->
+  <rect x="11" y="14.5" width="10" height="5" rx="1.5" fill="white" fill-opacity="0.75"/>
+
+  <!-- Component layer (T lower stem) -->
+  <rect x="11" y="21.5" width="10" height="5" rx="1.5" fill="white" fill-opacity="0.50"/>
+
+</svg>

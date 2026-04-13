@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Token System Generator Pro</title>
+
+  <!--
+    Favicon: stylised "T" from stacked layer bars on brand-orange background.
+    Visible in the browser tab when testing the plugin locally.
+    For the Figma plugin listing icon, use icon.svg via the manifest + publish flow.
+  -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23EE661D'/><rect x='4' y='6.5' width='24' height='6' rx='2' fill='white'/><rect x='11' y='14.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.75'/><rect x='11' y='21.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.5'/></svg>">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Inter, sans-serif;
+      background: #fafafa;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Wizard shell ── */
+    .wizard {
+      position: relative;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute;
+      inset: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      transition: transform 0.28s ease, opacity 0.22s ease;
+    }
+
+    .screen.slide-out-left {
+      transform: translateX(-100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .screen.slide-out-right {
+      transform: translateX(100%);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* ── Header (Screen 1) ── */
+    .header {
+      margin-bottom: 14px;
+    }
+
+    .header h2 {
+      font-size: 17px;
+      font-weight: 700;
+      color: #111;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.5;
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: #eee;
+      margin-bottom: 14px;
+    }
+
+    /* ── Section heading ── */
+    .section-heading {
+      margin-bottom: 12px;
+    }
+
+    .section-heading strong {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: #111;
+      margin-bottom: 3px;
+    }
+
+    .section-heading p {
+      font-size: 12px;
+      color: #888;
+      line-height: 1.5;
+    }
+
+    /* ── Cards ── */
+    .cards {
+      display: flex;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .card {
+      flex: 1;
+      border-radius: 10px;
+      padding: 14px;
+      background: white;
+      border: 1.5px solid #eee;
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      position: relative;
+      user-select: none;
+    }
+
+    .card:hover {
+      border-color: #EE661D;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+    }
+
+    .card.selected {
+      border-color: #EE661D;
+      background: #FFF9EB;
+    }
+
+    /* ── Card icon wrapper ── */
+    .card-icon-wrap {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      background: #f3f3f3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.18s ease;
+    }
+
+    .card:hover .card-icon-wrap {
+      background: rgba(238, 102, 29, 0.1);
+    }
+
+    .card.selected .card-icon-wrap {
+      background: rgba(238, 102, 29, 0.12);
+    }
+
+    /* ── Card icon (SVG) ── */
+    .card-icon {
+      color: #c0c0c0;
+      transition: color 0.18s ease;
+      display: block;
+    }
+
+    .card:hover .card-icon {
+      color: #EE661D;
+    }
+
+    .card.selected .card-icon {
+      color: #EE661D;
+    }
+
+    /* ── Card text ── */
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #111;
+      padding-right: 22px;
+      line-height: 1.4;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+      font-weight: 400;
+      color: #aaa;
+    }
+
+    .card-desc {
+      font-size: 11.5px;
+      color: #666;
+      line-height: 1.6;
+    }
+
+    /* ── Check badge (top-right) ── */
+    .card-check {
+      display: none;
+      position: absolute;
+      top: 11px;
+      right: 11px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #EE661D;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .card.selected .card-check {
+      display: flex;
+    }
+
+    /* ── Hint ── */
+    .hint {
+      font-size: 11px;
+      color: #c0c0c0;
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    /* ── Screen 2 nav ── */
+    .step2-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .back-btn {
+      font-size: 12px;
+      font-weight: 500;
+      color: #EE661D;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      font-family: Inter, sans-serif;
+      transition: color 0.18s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .back-btn:hover {
+      color: #c84f10;
+    }
+
+    .approach-badge {
+      font-size: 11px;
+      color: #EE661D;
+      background: #FFF9EB;
+      border: 1px solid #f5c8a0;
+      border-radius: 20px;
+      padding: 3px 10px;
+      font-weight: 500;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      margin-top: 14px;
+    }
+
+    #generate {
+      width: 100%;
+      height: 38px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: Inter, sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s ease;
+      background: #EE661D;
+      color: white;
+    }
+
+    #generate:hover:not(:disabled) {
+      background: #555;
+    }
+
+    #generate:disabled {
+      background: #e0e0e0;
+      color: #aaa;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+<div class="wizard">
+
+  <!-- ═══════════════════════════════════
+       SCREEN 1 — Choose Approach
+  ═══════════════════════════════════ -->
+  <div class="screen" id="screen1">
+
+    <div class="header">
+      <h2>Token System Generator Pro</h2>
+      <p>Create or convert your design system foundations in seconds.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="section-heading">
+      <strong>Choose your approach</strong>
+      <p>How many layers should your token system have? Select a card to continue.</p>
+    </div>
+
+    <div class="cards">
+
+      <!-- 2 Tier card -->
+      <div class="card" id="card-2tier" onclick="selectApproach('2tier')">
+        <div class="card-check">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Icon: 2 stacked layers -->
+        <div class="card-icon-wrap">
+          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="1.5" y="12" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+            <rect x="1.5" y="1.5" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </div>
+
+        <div class="card-title">2 Tier System</div>
+        <div class="card-desc">A lightweight setup using Global and Alias layers only. Ideal for smaller projects or teams just beginning their design token journey.</div>
+      </div>
+
+      <!-- 3 Tier card -->
+      <div class="card" id="card-3tier" onclick="selectApproach('3tier')">
+        <div class="card-check">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Icon: 3 stacked layers -->
+        <div class="card-icon-wrap">
+          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="1.5" y="15.5" width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+            <rect x="1.5" y="8.3"  width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+            <rect x="1.5" y="1"    width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+          </svg>
+        </div>
+
+        <div class="card-title">3 Tier System</div>
+        <div class="card-desc">A full-scale setup with Global, Alias, and Component layers. Built for mature design systems that need component-level semantic control.</div>
+      </div>
+
+    </div>
+
+    <div class="hint">Click a card to continue — you can always change this later</div>
+
+  </div>
+
+
+  <!-- ═══════════════════════════════════
+       SCREEN 2 — Choose Mode
+  ═══════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen2">
+
+    <div class="step2-nav">
+      <button class="back-btn" onclick="goBack()">← Change approach</button>
+      <span class="approach-badge" id="approach-badge"></span>
+    </div>
+
+    <div class="section-heading">
+      <strong>Choose a mode</strong>
+      <p>How would you like to generate your token system?</p>
+    </div>
+
+    <div class="cards">
+
+      <!-- Starter System card -->
+      <div class="card" id="card-starter" onclick="selectMode('starter')">
+        <div class="card-check">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Icon: layout/template grid suggesting a structured clean start -->
+        <div class="card-icon-wrap">
+          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
+            <line x1="1.5" y1="8.5"  x2="20.5" y2="8.5"  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="11"  y1="8.5"  x2="11"   y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+
+        <div class="card-title">Starter System <span class="card-subtitle">(Boiler plate)</span></div>
+        <div class="card-desc">Generates a clean, ready-to-use token set with best-practice defaults baked in. Perfect for starting your design system from scratch.</div>
+      </div>
+
+      <!-- Smart Convert card -->
+      <div class="card" id="card-convert" onclick="selectMode('convert')">
+        <div class="card-check">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <!-- Icon: swap arrows suggesting transformation/conversion -->
+        <div class="card-icon-wrap">
+          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M2.5 7.5 H16.5 M13 3.5 L17 7.5 L13 11.5"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M19.5 14.5 H5.5 M9 10.5 L5 14.5 L9 18.5"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+
+        <div class="card-title">Smart Convert</div>
+        <div class="card-desc">Scans your existing local styles and automatically maps them into a structured token hierarchy. Best if your file already has styles.</div>
+      </div>
+
+    </div>
+
+    <div class="footer">
+      <button id="generate" disabled onclick="doGenerate()">Generate Tokens</button>
+      <div class="hint" id="generate-hint">Select a card above to enable generation</div>
+    </div>
+
+  </div>
+
+</div><!-- /.wizard -->
+
+<script>
+  let selectedApproach = null;
+  let selectedMode     = null;
+
+  const screen1       = document.getElementById('screen1');
+  const screen2       = document.getElementById('screen2');
+  const approachBadge = document.getElementById('approach-badge');
+  const generateBtn   = document.getElementById('generate');
+  const generateHint  = document.getElementById('generate-hint');
+
+  // ── Screen 1: approach selected ──
+  function selectApproach(value) {
+    selectedApproach = value;
+    selectedMode     = null;
+
+    // Highlight chosen approach card
+    document.getElementById('card-2tier').classList.toggle('selected', value === '2tier');
+    document.getElementById('card-3tier').classList.toggle('selected', value === '3tier');
+
+    // Reset mode cards and button
+    document.getElementById('card-starter').classList.remove('selected');
+    document.getElementById('card-convert').classList.remove('selected');
+    generateBtn.disabled = true;
+    generateHint.textContent = 'Select a card above to enable generation';
+
+    // Update context badge on Screen 2
+    approachBadge.textContent = value === '2tier' ? '2 Tier selected' : '3 Tier selected';
+
+    // Brief pause so user sees the highlight, then slide to Screen 2
+    setTimeout(() => {
+      screen1.classList.add('slide-out-left');
+      screen2.classList.remove('slide-out-right');
+    }, 200);
+  }
+
+  // ── Back: return to Screen 1 ──
+  function goBack() {
+    screen2.classList.add('slide-out-right');
+    screen1.classList.remove('slide-out-left');
+  }
+
+  // ── Screen 2: mode selected ──
+  function selectMode(value) {
+    selectedMode = value;
+
+    document.getElementById('card-starter').classList.toggle('selected', value === 'starter');
+    document.getElementById('card-convert').classList.toggle('selected', value === 'convert');
+
+    generateBtn.disabled = false;
+    generateHint.textContent = 'Ready — click Generate Tokens to apply';
+  }
+
+  // ── Generate ──
+  function doGenerate() {
+    if (!selectedApproach || !selectedMode) return;
+
+    parent.postMessage({
+      pluginMessage: {
+        type: 'generate',
+        approach: selectedApproach,
+        mode: selectedMode
+      }
+    }, '*');
+  }
+
+  // ── Handle messages from plugin code ──
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === 'confirm-replace') {
+      const result = confirm(
+        '⚠️ Tokens already exist.\n\nClick OK to replace them or Cancel to stop.'
+      );
+      if (result) {
+        parent.postMessage({
+          pluginMessage: {
+            type: 'confirm-continue',
+            approach: selectedApproach,
+            mode: selectedMode
+          }
+        }, '*');
+      }
+    }
+  };
+</script>
+
+</body>
+</html>
