@@ -17,11 +17,11 @@
   --text:     #111827;
   --muted:    #6B7280;
   --muted2:   #374151;
-  --accent:   #EE661D;
+  --accent:   #F97316;
   --accent2:  #C9530E;
-  --accent-g: #EE661D;
+  --accent-g: #F97316;
   --green:    #16A34A;
-  --radius:   10px;
+  --radius:   8px;
   --radius-sm:6px;
   --radius-xs:4px;
   --shadow:   0 4px 24px rgba(0,0,0,.10);
@@ -479,7 +479,7 @@ body{
 
     <div class="left-header">
       <h2>Pattern <span>Pilot</span></h2>
-      <p class="left-header-desc">Instantly generate desktop-first section layouts for your Figma projects. Pick a section type, browse six layout variations, and insert the one you love — all without leaving Figma.</p>
+      <p class="left-header-desc">Instantly generate web section layouts for your Figma projects. Pick a section type, browse six layout variations, and insert the one you love — all without leaving Figma.</p>
     </div>
 
     <div class="divider"></div>
@@ -573,14 +573,16 @@ const GROUPS = [
     {id:"cta",           name:"CTA Banner",       icon:"📣"},
     {id:"faq",           name:"FAQ",              icon:"❓"},
     {id:"features",      name:"Feature List",     icon:"✦"},
-    {id:"newsletter",    name:"Newsletter",       icon:"✉️"},
     {id:"pricing",       name:"Pricing Table",    icon:"💰"},
     {id:"stats",         name:"Stats",            icon:"📊"},
     {id:"team",          name:"Team Grid",        icon:"👥"},
     {id:"testimonials",  name:"Testimonials",     icon:"💬"},
   ]},
-  { label:"Media", icon:"🎨", items:[
-    {id:"gallery",       name:"Image Gallery",    icon:"🖼"},
+  { label:"Forms & Auth", icon:"🔐", items:[
+    {id:"signin",        name:"Sign In",          icon:"🔑"},
+    {id:"signup",        name:"Sign Up",          icon:"✍️"},
+    {id:"contact",       name:"Contact Form",     icon:"📬"},
+    {id:"newsletter",    name:"Newsletter",       icon:"✉️"},
   ]},
 ];
 
@@ -605,6 +607,9 @@ const VARIANTS = {
   "tab-h":        [{n:"Branded Pill",s:"tab-h-6"},{n:"Card Tabs",s:"tab-h-3"},{n:"Dark Underline",s:"tab-h-5"},{n:"Full-Width Seg.",s:"tab-h-4"},{n:"Pill Switch",s:"tab-h-2"},{n:"Underline Tabs",s:"tab-h-1"}],
   "tab-v":        [{n:"Accent Sidebar",s:"tab-v-2"},{n:"Compact List",s:"tab-v-5"},{n:"Dark Sidebar",s:"tab-v-3"},{n:"Dark Split",s:"tab-v-6"},{n:"Light Clean",s:"tab-v-1"},{n:"Pill Sidebar",s:"tab-v-4"}],
   "vertical-nav": [{n:"Dark Rail",s:"vnav-2"},{n:"Grouped Sections",s:"vnav-3"},{n:"Icon Only",s:"vnav-5"},{n:"Minimal List",s:"vnav-6"},{n:"With Search",s:"vnav-4"},{n:"Clean Light",s:"vnav-1"}],
+  "signin":  [{n:"Light Card",s:"signin-1"},{n:"Dark Panel",s:"signin-2"},{n:"Split Brand",s:"signin-3"},{n:"Minimal",s:"signin-4"},{n:"Violet Accent",s:"signin-5"},{n:"Image Split",s:"signin-6"}],
+  "signup":  [{n:"Light Card",s:"signup-1"},{n:"Dark Panel",s:"signup-2"},{n:"Social First",s:"signup-3"},{n:"Minimal",s:"signup-4"},{n:"Two Column",s:"signup-5"},{n:"Branded",s:"signup-6"}],
+  "contact": [{n:"Info + Form",s:"contact-1"},{n:"Centered",s:"contact-2"},{n:"Dark Theme",s:"contact-3"},{n:"Card Header",s:"contact-4"},{n:"Minimal",s:"contact-5"},{n:"Map Split",s:"contact-6"}],
 };
 
 function getVariants(id) {
@@ -1242,7 +1247,7 @@ const MOCKUPS = {
   "team-1": ()=>`
     <div class="m-bg" style="background:#fff"></div>
     <div style="position:absolute;top:28px;left:0;right:0;text-align:center">
-      <div style="height:9px;background:#ee661d;border-radius:2px;width:60px;margin:0 auto 10px"></div>
+      <div style="height:9px;background:#f97316;border-radius:2px;width:60px;margin:0 auto 10px"></div>
       <div style="height:16px;background:#111;border-radius:3px;width:260px;margin:0 auto 24px"></div>
     </div>
     <div style="position:absolute;top:100px;left:28px;right:28px;display:flex;gap:12px">
@@ -1353,7 +1358,7 @@ const MOCKUPS = {
   "faq-1": ()=>`
     <div class="m-bg" style="background:#fff"></div>
     <div style="position:absolute;top:28px;left:0;right:0;text-align:center">
-      <div style="height:9px;background:#ee661d;border-radius:2px;width:40px;margin:0 auto 8px"></div>
+      <div style="height:9px;background:#f97316;border-radius:2px;width:40px;margin:0 auto 8px"></div>
       <div style="height:16px;background:#111;border-radius:3px;width:240px;margin:0 auto 28px"></div>
     </div>
     <div style="position:absolute;top:96px;left:72px;right:72px">
@@ -1408,7 +1413,7 @@ const MOCKUPS = {
       ${["01","02","03","04"].map(n=>`
         <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:16px">
           <div style="background:#fff9eb;border-radius:6px;padding:3px 7px;flex-shrink:0">
-            <span style="font-size:10px;color:#ee661d;font-weight:700">${n}</span>
+            <span style="font-size:10px;color:#f97316;font-weight:700">${n}</span>
           </div>
           <div style="flex:1">
             <div style="height:10px;background:#111;border-radius:2px;width:60%;margin-bottom:5px"></div>
@@ -1455,10 +1460,10 @@ const MOCKUPS = {
   "news-1": ()=>`
     <div class="m-bg" style="background:#f9fafb;border:1px solid #e5e7eb"></div>
     <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:48px">
-      <div style="height:9px;background:#ee661d;border-radius:2px;width:90px"></div>
+      <div style="height:9px;background:#f97316;border-radius:2px;width:90px"></div>
       <div style="height:18px;background:#111;border-radius:3px;width:240px"></div>
       <div style="height:9px;background:#e5e7eb;border-radius:2px;width:320px"></div>
-      <div class="m-btn-sm" style="background:#ee661d;width:110px;border-radius:8px;margin-top:4px"></div>
+      <div class="m-btn-sm" style="background:#f97316;width:110px;border-radius:8px;margin-top:4px"></div>
       <div style="height:8px;background:#e5e7eb;border-radius:2px;width:160px"></div>
     </div>`,
 
@@ -1469,12 +1474,12 @@ const MOCKUPS = {
       <div style="height:10px;background:#475569;border-radius:2px;width:300px"></div>
       <div style="display:flex;gap:0;margin-top:6px">
         <div style="width:240px;height:38px;background:#1e293b;border:1px solid #334155;border-radius:0"></div>
-        <div style="width:100px;height:38px;background:#ee661d;border-radius:0"></div>
+        <div style="width:100px;height:38px;background:#f97316;border-radius:0"></div>
       </div>
     </div>`,
 
   "news-3": ()=>`
-    <div class="m-bg" style="background:#ee661d"></div>
+    <div class="m-bg" style="background:#f97316"></div>
     <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:space-between;padding:0 44px">
       <div>
         <div style="height:14px;background:#fff;border-radius:3px;width:170px;margin-bottom:7px"></div>
@@ -1510,7 +1515,7 @@ const MOCKUPS = {
     </div>
     <div style="position:absolute;top:56px;right:36px;width:240px">
       <div style="height:40px;background:#1f2937;border:1px solid #374151;border-radius:8px;margin-bottom:10px"></div>
-      <div style="height:38px;background:#ee661d;border-radius:8px;margin-bottom:8px"></div>
+      <div style="height:38px;background:#f97316;border-radius:8px;margin-bottom:8px"></div>
       <div style="height:8px;background:#374151;border-radius:2px;width:65%;margin:0 auto"></div>
     </div>`,
 
@@ -1535,13 +1540,13 @@ const MOCKUPS = {
       <div style="height:9px;background:#e5e7eb;border-radius:2px;width:200px;margin:0 auto 22px"></div>
     </div>
     <div style="position:absolute;top:90px;left:24px;right:24px;display:flex;gap:10px;align-items:flex-start">
-      ${[{b:"#e5e7eb",hi:false},{b:"#ee661d",hi:true},{b:"#e5e7eb",hi:false}].map(({b,hi})=>`
+      ${[{b:"#e5e7eb",hi:false},{b:"#f97316",hi:true},{b:"#e5e7eb",hi:false}].map(({b,hi})=>`
         <div style="flex:1;background:${hi?'#fff':'#f9fafb'};border:${hi?2:1}px solid ${b};border-radius:12px;padding:14px ${hi?';margin-top:-10px':''}">
           ${hi?`<div style="height:16px;background:#fff9eb;border-radius:99px;width:60px;margin-bottom:8px"></div>`:''}
           <div style="height:8px;background:#9ca3af;border-radius:2px;width:45%;margin-bottom:8px"></div>
           <div style="height:20px;background:#111;border-radius:3px;width:60%;margin-bottom:12px"></div>
           ${[1,2,3].map(()=>`<div style="height:7px;background:#e5e7eb;border-radius:2px;width:90%;margin-bottom:5px"></div>`).join('')}
-          <div style="height:30px;background:${hi?'#ee661d':'none'};border:${hi?'none':'1px solid #e5e7eb'};border-radius:8px;margin-top:10px"></div>
+          <div style="height:30px;background:${hi?'#f97316':'none'};border:${hi?'none':'1px solid #e5e7eb'};border-radius:8px;margin-top:10px"></div>
         </div>`).join('')}
     </div>`,
 
@@ -1551,12 +1556,12 @@ const MOCKUPS = {
       <div style="height:16px;background:#f1f5f9;border-radius:3px;width:180px;margin:0 auto 22px"></div>
     </div>
     <div style="position:absolute;top:80px;left:24px;right:24px;display:flex;gap:10px">
-      ${[{b:"#1e293b",hi:false},{b:"#ee661d",hi:true},{b:"#1e293b",hi:false}].map(({b,hi})=>`
+      ${[{b:"#1e293b",hi:false},{b:"#f97316",hi:true},{b:"#1e293b",hi:false}].map(({b,hi})=>`
         <div style="flex:1;background:${hi?'#1e293b':'#0f172a'};border:${hi?2:1}px solid ${b};border-radius:12px;padding:14px">
           <div style="height:8px;background:#475569;border-radius:2px;width:45%;margin-bottom:8px"></div>
           <div style="height:20px;background:#fff;border-radius:3px;width:50%;margin-bottom:12px"></div>
           ${[1,2,3].map(()=>`<div style="height:7px;background:#1e293b;border-radius:2px;width:90%;margin-bottom:5px"></div>`).join('')}
-          <div style="height:30px;background:${hi?'#ee661d':'transparent'};border:${hi?'none':'1.5px solid #334155'};border-radius:8px;margin-top:10px"></div>
+          <div style="height:30px;background:${hi?'#f97316':'transparent'};border:${hi?'none':'1.5px solid #334155'};border-radius:8px;margin-top:10px"></div>
         </div>`).join('')}
     </div>`,
 
@@ -1571,7 +1576,7 @@ const MOCKUPS = {
         <div style="height:20px;background:#111;border-radius:3px;width:50%;margin-bottom:14px"></div>
         <div style="height:28px;border:1px solid #e5e7eb;border-radius:6px;margin-top:36px"></div>
       </div>
-      <div style="flex:1;background:#ee661d;padding:18px;margin-top:-10px;margin-bottom:-10px;z-index:1">
+      <div style="flex:1;background:#f97316;padding:18px;margin-top:-10px;margin-bottom:-10px;z-index:1">
         <div style="height:8px;background:rgba(255,255,255,.6);border-radius:2px;width:45%;margin-bottom:8px"></div>
         <div style="height:20px;background:#fff;border-radius:3px;width:50%;margin-bottom:14px"></div>
         <div style="height:28px;background:#fff;border-radius:6px;margin-top:28px"></div>
@@ -1593,12 +1598,12 @@ const MOCKUPS = {
       </div>
     </div>
     <div style="position:absolute;top:108px;left:20px;right:20px;display:flex;gap:10px">
-      ${[{b:"#e5e7eb"},{b:"#ee661d",h:true},{b:"#e5e7eb"}].map(({b,h})=>`
+      ${[{b:"#e5e7eb"},{b:"#f97316",h:true},{b:"#e5e7eb"}].map(({b,h})=>`
         <div style="flex:1;background:#fff;border:${h?2:1}px solid ${b};border-radius:12px;padding:12px">
           <div style="height:8px;background:#6b7280;border-radius:2px;width:45%;margin-bottom:7px"></div>
           <div style="height:18px;background:#111;border-radius:3px;width:48%;margin-bottom:10px"></div>
           ${[1,2,3].map(()=>`<div style="height:7px;background:#f1f5f9;border-radius:2px;width:90%;margin-bottom:4px"></div>`).join('')}
-          <div style="height:26px;background:${h?'#ee661d':'none'};border:${h?'none':'1px solid #e5e7eb'};border-radius:6px;margin-top:8px"></div>
+          <div style="height:26px;background:${h?'#f97316':'none'};border:${h?'none':'1px solid #e5e7eb'};border-radius:6px;margin-top:8px"></div>
         </div>`).join('')}
     </div>`,
 
@@ -1615,11 +1620,11 @@ const MOCKUPS = {
         ${[1,2,3].map(()=>`<div style="height:7px;background:#f1f5f9;border-radius:2px;width:90%;margin-bottom:5px"></div>`).join('')}
         <div style="height:32px;background:#f3f4f6;border-radius:8px;margin-top:14px"></div>
       </div>
-      <div style="flex:1;border:2px solid #ee661d;border-radius:16px;padding:22px">
+      <div style="flex:1;border:2px solid #f97316;border-radius:16px;padding:22px">
         <div style="height:12px;background:#111;border-radius:3px;width:48%;margin-bottom:10px"></div>
         <div style="height:24px;background:#111;border-radius:3px;width:42%;margin-bottom:14px"></div>
         ${[1,2,3,4,5].map(()=>`<div style="height:7px;background:#f1f5f9;border-radius:2px;width:90%;margin-bottom:5px"></div>`).join('')}
-        <div style="height:32px;background:#ee661d;border-radius:8px;margin-top:14px"></div>
+        <div style="height:32px;background:#f97316;border-radius:8px;margin-top:14px"></div>
       </div>
     </div>`,
 
@@ -1630,7 +1635,7 @@ const MOCKUPS = {
       <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;width:680px">
         <div style="display:flex;background:#f9fafb;padding:9px 18px;border-bottom:1px solid #e5e7eb">
           <div style="flex:2;height:8px;background:#9ca3af;border-radius:2px;width:55px"></div>
-          <div style="flex:1;text-align:center;height:8px;background:#ee661d;border-radius:2px;width:28px;margin:0 auto"></div>
+          <div style="flex:1;text-align:center;height:8px;background:#f97316;border-radius:2px;width:28px;margin:0 auto"></div>
           <div style="flex:1;text-align:center;height:8px;background:#d1d5db;border-radius:2px;width:28px;margin:0 auto"></div>
         </div>
         ${[1,2,3,4,5].map((f,i)=>`
@@ -1651,7 +1656,7 @@ const MOCKUPS = {
       <div style="height:22px;background:#fff;border-radius:3px;width:55%;margin-bottom:16px"></div>
       <div style="height:9px;background:#475569;border-radius:2px;width:70%;margin-bottom:20px"></div>
       <div style="display:flex;gap:8px;margin-bottom:24px">
-        <div class="m-btn-sm" style="background:#ee661d;width:100px;border-radius:8px"></div>
+        <div class="m-btn-sm" style="background:#f97316;width:100px;border-radius:8px"></div>
         <div class="m-btn-sm" style="background:#1e293b;width:90px;border-radius:8px"></div>
       </div>
       <div style="display:flex;gap:10px">
@@ -1682,7 +1687,7 @@ const MOCKUPS = {
 
   "bento-3": ()=>`
     <div class="m-bg" style="background:#fff"></div>
-    <div style="position:absolute;top:20px;left:36px;bottom:20px;width:340px;background:#ee661d;border-radius:16px;padding:24px;display:flex;flex-direction:column;justify-content:space-between">
+    <div style="position:absolute;top:20px;left:36px;bottom:20px;width:340px;background:#f97316;border-radius:16px;padding:24px;display:flex;flex-direction:column;justify-content:space-between">
       <div>
         <div style="height:18px;background:rgba(255,255,255,.9);border-radius:3px;width:80%;margin-bottom:8px"></div>
         <div style="height:18px;background:rgba(255,255,255,.9);border-radius:3px;width:65%;margin-bottom:12px"></div>
@@ -1727,7 +1732,7 @@ const MOCKUPS = {
           <div style="height:18px;background:#111;border-radius:3px;width:170px"></div>
         </div>
         <div>
-          <div class="m-btn-sm" style="background:#ee661d;width:100px;border-radius:8px;margin-bottom:7px"></div>
+          <div class="m-btn-sm" style="background:#f97316;width:100px;border-radius:8px;margin-bottom:7px"></div>
           <div style="height:8px;background:#e5e7eb;border-radius:2px;width:170px"></div>
         </div>
       </div>
@@ -1745,9 +1750,9 @@ const MOCKUPS = {
     <div style="position:absolute;top:36px;left:36px;width:240px">
       <div style="height:20px;background:#111;border-radius:3px;width:85%;margin-bottom:7px"></div>
       <div style="height:20px;background:#111;border-radius:3px;width:65%;margin-bottom:7px"></div>
-      <div style="height:20px;background:#ee661d;border-radius:3px;width:55%;margin-bottom:14px"></div>
+      <div style="height:20px;background:#f97316;border-radius:3px;width:55%;margin-bottom:14px"></div>
       <div style="height:9px;background:#e5e7eb;border-radius:2px;width:80%;margin-bottom:18px"></div>
-      <div class="m-btn-sm" style="background:#ee661d;width:120px;border-radius:8px"></div>
+      <div class="m-btn-sm" style="background:#f97316;width:120px;border-radius:8px"></div>
     </div>
     <div style="position:absolute;top:28px;right:28px;width:390px">
       <div style="display:flex;gap:10px;margin-bottom:10px">
@@ -1775,14 +1780,14 @@ const MOCKUPS = {
         <div style="height:20px;background:#111;border-radius:3px;width:38%;margin:0 auto 13px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:58%;margin:0 auto 5px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:46%;margin:0 auto 15px"></div>
-        <div style="height:28px;width:112px;background:#ee661d;border-radius:8px;margin:0 auto"></div>
+        <div style="height:28px;width:112px;background:#f97316;border-radius:8px;margin:0 auto"></div>
       </div>
       <div style="display:flex;gap:14px">
-        ${[["#f97316","68%"],["#0ea5e9","54%"],["#64748b","61%"]].map(([c,w])=>`
+        ${[["#d1d5db","68%"],["#9ca3af","54%"],["#e5e7eb","61%"]].map(([c,w])=>`
           <div style="flex:1;display:flex;flex-direction:column;gap:8px">
             <div style="height:124px;background:${c};border-radius:10px"></div>
             <div style="height:10px;background:#111;border-radius:2px;width:${w}"></div>
-            <div style="height:8px;background:#d1d5db;border-radius:2px;width:88%"></div>
+            <div style="height:8px;background:#9ca3af;border-radius:2px;width:88%"></div>
           </div>`).join('')}
       </div>
     </div>`,
@@ -1796,10 +1801,10 @@ const MOCKUPS = {
         <div style="height:20px;background:#f1f5f9;border-radius:3px;width:36%;margin:0 auto 13px"></div>
         <div style="height:8px;background:#475569;border-radius:2px;width:54%;margin:0 auto 5px"></div>
         <div style="height:8px;background:#475569;border-radius:2px;width:42%;margin:0 auto 15px"></div>
-        <div style="height:28px;width:112px;background:#ee661d;border-radius:8px;margin:0 auto"></div>
+        <div style="height:28px;width:112px;background:#f97316;border-radius:8px;margin:0 auto"></div>
       </div>
       <div style="display:flex;gap:12px">
-        ${[["#8b5cf6"],["#0ea5e9"],["#10b981"]].map(([c])=>`
+        ${[["#334155"],["#475569"],["#64748b"]].map(([c])=>`
           <div style="flex:1;background:#1e293b;border-radius:12px;overflow:hidden">
             <div style="height:108px;background:${c};border-radius:10px 10px 0 0"></div>
             <div style="padding:10px 12px 12px">
@@ -1813,7 +1818,7 @@ const MOCKUPS = {
   "gallery-3": ()=>`
     <div class="m-bg" style="background:#fff"></div>
     <div style="position:absolute;top:36px;left:36px;bottom:36px;width:244px;display:flex;flex-direction:column;gap:13px;justify-content:center">
-      <div style="height:9px;background:#ee661d;border-radius:2px;width:48px"></div>
+      <div style="height:9px;background:#f97316;border-radius:2px;width:48px"></div>
       <div>
         <div style="height:18px;background:#111;border-radius:3px;width:82%;margin-bottom:6px"></div>
         <div style="height:18px;background:#111;border-radius:3px;width:66%;margin-bottom:6px"></div>
@@ -1823,16 +1828,16 @@ const MOCKUPS = {
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:92%;margin-bottom:5px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:74%"></div>
       </div>
-      <div class="m-btn-sm" style="background:#ee661d;width:108px;border-radius:8px"></div>
+      <div class="m-btn-sm" style="background:#f97316;width:108px;border-radius:8px"></div>
     </div>
     <div style="position:absolute;top:36px;bottom:36px;left:304px;right:36px;display:flex;flex-direction:column;gap:10px">
       <div style="display:flex;gap:10px;flex:1">
-        <div style="flex:1;background:#f97316;border-radius:10px"></div>
-        <div style="flex:1;background:#8b5cf6;border-radius:10px"></div>
+        <div style="flex:1;background:#d1d5db;border-radius:10px"></div>
+        <div style="flex:1;background:#9ca3af;border-radius:10px"></div>
       </div>
       <div style="display:flex;gap:10px;flex:1">
-        <div style="flex:1;background:#0ea5e9;border-radius:10px"></div>
-        <div style="flex:1;background:#10b981;border-radius:10px"></div>
+        <div style="flex:1;background:#cbd5e1;border-radius:10px"></div>
+        <div style="flex:1;background:#e5e7eb;border-radius:10px"></div>
       </div>
     </div>`,
 
@@ -1844,13 +1849,13 @@ const MOCKUPS = {
         <div style="height:20px;background:#111;border-radius:3px;width:34%;margin:0 auto 12px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:56%;margin:0 auto 5px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:42%;margin:0 auto 14px"></div>
-        <div style="height:26px;width:112px;background:#ee661d;border-radius:8px;margin:0 auto"></div>
+        <div style="height:26px;width:112px;background:#f97316;border-radius:8px;margin:0 auto"></div>
       </div>
       <div style="display:flex;gap:12px;height:196px">
-        <div style="flex:1;background:#0ea5e9;border-radius:14px"></div>
+        <div style="flex:1;background:#d1d5db;border-radius:14px"></div>
         <div style="width:232px;display:flex;flex-direction:column;gap:12px">
-          <div style="flex:1;background:#f97316;border-radius:12px"></div>
-          <div style="flex:1;background:#8b5cf6;border-radius:12px"></div>
+          <div style="flex:1;background:#9ca3af;border-radius:12px"></div>
+          <div style="flex:1;background:#e5e7eb;border-radius:12px"></div>
         </div>
       </div>
     </div>`,
@@ -1862,13 +1867,13 @@ const MOCKUPS = {
         <div style="height:22px;background:#111;border-radius:3px;width:46%;margin:0 auto 7px"></div>
         <div style="height:22px;background:#111;border-radius:3px;width:34%;margin:0 auto 12px"></div>
         <div style="height:8px;background:#9ca3af;border-radius:2px;width:52%;margin:0 auto 13px"></div>
-        <div style="height:26px;width:120px;background:#ee661d;border-radius:8px;margin:0 auto"></div>
+        <div style="height:26px;width:120px;background:#f97316;border-radius:8px;margin:0 auto"></div>
       </div>
-      <div style="height:156px;background:#64748b;border-radius:16px;margin-bottom:12px"></div>
+      <div style="height:156px;background:#d1d5db;border-radius:16px;margin-bottom:12px"></div>
       <div style="display:flex;gap:12px">
-        <div style="flex:1;height:72px;background:#f97316;border-radius:10px"></div>
-        <div style="flex:1;height:72px;background:#0ea5e9;border-radius:10px"></div>
-        <div style="flex:1;height:72px;background:#10b981;border-radius:10px"></div>
+        <div style="flex:1;height:72px;background:#9ca3af;border-radius:10px"></div>
+        <div style="flex:1;height:72px;background:#cbd5e1;border-radius:10px"></div>
+        <div style="flex:1;height:72px;background:#e5e7eb;border-radius:10px"></div>
       </div>
     </div>`,
 
@@ -1880,16 +1885,16 @@ const MOCKUPS = {
         <div style="height:20px;background:#f9fafb;border-radius:3px;width:44%;margin:0 auto 7px"></div>
         <div style="height:20px;background:#f9fafb;border-radius:3px;width:32%;margin:0 auto 12px"></div>
         <div style="height:8px;background:#374151;border-radius:2px;width:52%;margin:0 auto 13px"></div>
-        <div style="height:26px;width:112px;background:#ee661d;border-radius:8px;margin:0 auto"></div>
+        <div style="height:26px;width:112px;background:#f97316;border-radius:8px;margin:0 auto"></div>
       </div>
       <div style="display:flex;gap:10px;margin-bottom:10px">
-        <div style="flex:1;height:92px;background:#8b5cf6;border-radius:10px"></div>
-        <div style="flex:1;height:92px;background:#f97316;border-radius:10px"></div>
-        <div style="flex:1;height:92px;background:#0ea5e9;border-radius:10px"></div>
+        <div style="flex:1;height:92px;background:#334155;border-radius:10px"></div>
+        <div style="flex:1;height:92px;background:#475569;border-radius:10px"></div>
+        <div style="flex:1;height:92px;background:#64748b;border-radius:10px"></div>
       </div>
       <div style="display:flex;gap:10px">
-        <div style="flex:1;height:72px;background:#10b981;border-radius:10px"></div>
-        <div style="flex:1;height:72px;background:#64748b;border-radius:10px"></div>
+        <div style="flex:1;height:72px;background:#374151;border-radius:10px"></div>
+        <div style="flex:1;height:72px;background:#4b5563;border-radius:10px"></div>
       </div>
     </div>`,
 
@@ -1913,10 +1918,10 @@ const MOCKUPS = {
       <div style="height:20px;background:#111;border-radius:3px;width:65%;margin-bottom:16px"></div>
       <div style="height:9px;background:#e5e7eb;border-radius:2px;width:100%;margin-bottom:4px"></div>
       <div style="height:9px;background:#e5e7eb;border-radius:2px;width:80%;margin-bottom:20px"></div>
-      <div class="m-btn-sm" style="background:#ee661d;width:120px;border-radius:8px"></div>
+      <div class="m-btn-sm" style="background:#f97316;width:120px;border-radius:8px"></div>
     </div>
     <div style="position:absolute;top:36px;right:28px;width:310px;height:220px;background:#f1f5f9;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px">
-      <div style="width:40px;height:40px;background:#ee661d;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff">▶</div>
+      <div style="width:40px;height:40px;background:#f97316;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff">▶</div>
       <div style="height:8px;background:#d1d5db;border-radius:2px;width:110px"></div>
     </div>`,
 
@@ -1952,10 +1957,10 @@ const MOCKUPS = {
           <div style="height:14px;background:#f1f5f9;border-radius:3px;width:190px;margin-bottom:7px"></div>
           <div style="height:9px;background:#334155;border-radius:2px;width:260px"></div>
         </div>
-        <div class="m-btn-sm" style="background:#ee661d;width:100px;border-radius:8px"></div>
+        <div class="m-btn-sm" style="background:#f97316;width:100px;border-radius:8px"></div>
       </div>
       <div style="height:150px;background:#1e293b;border:1px solid #334155;border-radius:12px;display:flex;align-items:center;justify-content:center;gap:9px;margin-bottom:14px">
-        <div style="background:#ee661d;border-radius:99px;padding:8px 16px;display:flex;gap:7px;align-items:center">
+        <div style="background:#f97316;border-radius:99px;padding:8px 16px;display:flex;gap:7px;align-items:center">
           <span style="font-size:11px;color:#fff">▶</span>
           <div style="height:8px;background:rgba(255,255,255,.8);border-radius:2px;width:65px"></div>
         </div>
@@ -2228,6 +2233,343 @@ const MOCKUPS = {
           <span style="font-size:11px;font-weight:${i===0?600:400};color:${i===0?"#6366f1":"#374151"}">${lbl}</span>
           ${i===0?`<span style="color:#6366f1;font-size:11px">→</span>`:""}
         </div>`).join('')}
+    </div>`,
+
+  // ── SIGN IN ───────────────────────────────────────────────
+  "signin-1": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:32px 36px;width:280px;display:flex;flex-direction:column;align-items:center;gap:0">
+        <div style="width:36px;height:36px;background:#111827;border-radius:9px;margin-bottom:16px"></div>
+        <div style="height:14px;background:#111;border-radius:3px;width:140px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:190px;margin-bottom:20px"></div>
+        <div style="width:100%;height:36px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px"></div>
+        <div style="width:100%;height:36px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:6px"></div>
+        <div style="height:8px;background:#f97316;border-radius:2px;width:100px;align-self:flex-end;margin-bottom:16px"></div>
+        <div style="width:100%;height:38px;background:#111827;border-radius:8px;margin-bottom:14px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:160px"></div>
+      </div>
+    </div>`,
+
+  "signin-2": ()=>`
+    <div class="m-bg" style="background:#0f172a"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:16px;padding:32px 36px;width:280px;display:flex;flex-direction:column;align-items:center;gap:0">
+        <div style="width:36px;height:36px;background:#6366f1;border-radius:9px;margin-bottom:16px"></div>
+        <div style="height:14px;background:#f1f5f9;border-radius:3px;width:140px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#334155;border-radius:2px;width:190px;margin-bottom:20px"></div>
+        <div style="width:100%;height:36px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:10px"></div>
+        <div style="width:100%;height:36px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:6px"></div>
+        <div style="height:8px;background:#6366f1;border-radius:2px;width:100px;align-self:flex-end;margin-bottom:16px"></div>
+        <div style="width:100%;height:38px;background:#6366f1;border-radius:8px;margin-bottom:14px"></div>
+        <div style="height:8px;background:#334155;border-radius:2px;width:160px"></div>
+      </div>
+    </div>`,
+
+  "signin-3": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex">
+      <div style="width:45%;background:#f97316;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px">
+        <div style="width:40px;height:40px;background:rgba(255,255,255,.25);border-radius:10px;margin-bottom:6px"></div>
+        <div style="height:14px;background:#fff;border-radius:3px;width:110px"></div>
+        <div style="height:8px;background:rgba(255,255,255,.5);border-radius:2px;width:140px"></div>
+        <div style="height:8px;background:rgba(255,255,255,.4);border-radius:2px;width:120px"></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:32px">
+        <div style="height:14px;background:#111;border-radius:3px;width:130px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:180px;margin-bottom:18px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:9px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="width:100%;height:36px;background:#f97316;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:140px"></div>
+      </div>
+    </div>`,
+
+  "signin-4": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px">
+      <div style="height:16px;background:#111;border-radius:3px;width:150px;margin-bottom:8px"></div>
+      <div style="height:8px;background:#e5e7eb;border-radius:2px;width:210px;margin-bottom:24px"></div>
+      <div style="width:280px">
+        <div style="height:8px;background:#374151;border-radius:2px;width:80px;margin-bottom:6px"></div>
+        <div style="width:100%;height:36px;background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;margin-bottom:14px"></div>
+        <div style="height:8px;background:#374151;border-radius:2px;width:70px;margin-bottom:6px"></div>
+        <div style="width:100%;height:36px;background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;margin-bottom:18px"></div>
+        <div style="width:100%;height:38px;background:#111;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:1px;background:#e5e7eb;margin-bottom:12px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:160px;margin:0 auto"></div>
+      </div>
+    </div>`,
+
+  "signin-5": ()=>`
+    <div class="m-bg" style="background:#f5f3ff"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border:1px solid #ede9fe;border-radius:16px;overflow:hidden;width:280px">
+        <div style="background:#7c3aed;padding:20px 32px;text-align:center">
+          <div style="height:12px;background:rgba(255,255,255,.9);border-radius:3px;width:110px;margin:0 auto 6px"></div>
+          <div style="height:8px;background:rgba(255,255,255,.5);border-radius:2px;width:160px;margin:0 auto"></div>
+        </div>
+        <div style="padding:24px 28px;display:flex;flex-direction:column;gap:0">
+          <div style="width:100%;height:34px;background:#faf5ff;border:1px solid #ede9fe;border-radius:8px;margin-bottom:10px"></div>
+          <div style="width:100%;height:34px;background:#faf5ff;border:1px solid #ede9fe;border-radius:8px;margin-bottom:6px"></div>
+          <div style="height:8px;background:#7c3aed;border-radius:2px;width:110px;align-self:flex-end;margin-bottom:16px;opacity:.6"></div>
+          <div style="width:100%;height:36px;background:#7c3aed;border-radius:8px;margin-bottom:12px"></div>
+          <div style="height:8px;background:#e5e7eb;border-radius:2px;width:150px;margin:0 auto"></div>
+        </div>
+      </div>
+    </div>`,
+
+  "signin-6": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex">
+      <div style="flex:1;background:#e2e8f0;display:flex;align-items:center;justify-content:center">
+        <div style="color:#94a3b8;font-size:32px">🖼</div>
+      </div>
+      <div style="width:320px;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:36px;gap:0">
+        <div style="height:14px;background:#111;border-radius:3px;width:130px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:190px;margin-bottom:22px"></div>
+        <div style="width:100%;height:35px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px"></div>
+        <div style="width:100%;height:35px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px"></div>
+        <div style="width:100%;height:38px;background:#111827;border-radius:8px;margin-bottom:14px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:160px"></div>
+      </div>
+    </div>`,
+
+  // ── SIGN UP ───────────────────────────────────────────────
+  "signup-1": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px 32px;width:290px;display:flex;flex-direction:column;align-items:center;gap:0">
+        <div style="width:34px;height:34px;background:#111827;border-radius:9px;margin-bottom:14px"></div>
+        <div style="height:14px;background:#111;border-radius:3px;width:150px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:190px;margin-bottom:18px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="width:100%;height:37px;background:#f97316;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:155px"></div>
+      </div>
+    </div>`,
+
+  "signup-2": ()=>`
+    <div class="m-bg" style="background:#0f172a"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:16px;padding:28px 32px;width:290px;display:flex;flex-direction:column;align-items:center;gap:0">
+        <div style="width:34px;height:34px;background:#6366f1;border-radius:9px;margin-bottom:14px"></div>
+        <div style="height:14px;background:#f1f5f9;border-radius:3px;width:150px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#334155;border-radius:2px;width:190px;margin-bottom:18px"></div>
+        <div style="width:100%;height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px;margin-bottom:14px"></div>
+        <div style="width:100%;height:37px;background:#6366f1;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:8px;background:#334155;border-radius:2px;width:155px"></div>
+      </div>
+    </div>`,
+
+  "signup-3": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px 32px;width:290px">
+        <div style="height:14px;background:#111;border-radius:3px;width:150px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:185px;margin-bottom:18px"></div>
+        <div style="width:100%;height:36px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:13px">G</span>
+        </div>
+        <div style="width:100%;height:36px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <div style="flex:1;height:1px;background:#e5e7eb"></div>
+          <div style="height:8px;background:#d1d5db;border-radius:2px;width:30px"></div>
+          <div style="flex:1;height:1px;background:#e5e7eb"></div>
+        </div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="width:100%;height:37px;background:#111;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:150px;margin:0 auto"></div>
+      </div>
+    </div>`,
+
+  "signup-4": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:32px">
+      <div style="width:310px">
+        <div style="height:14px;background:#111;border-radius:3px;width:160px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:210px;margin-bottom:20px"></div>
+        <div style="display:flex;gap:7px;width:100%;height:34px;margin-bottom:10px">
+          <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+          <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+        </div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:10px"></div>
+        <div style="width:100%;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+          <div style="width:16px;height:16px;border:1.5px solid #d1d5db;border-radius:4px"></div>
+          <div style="height:8px;background:#e5e7eb;border-radius:2px;width:180px"></div>
+        </div>
+        <div style="width:100%;height:37px;background:#111;border-radius:8px;margin-bottom:12px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:155px;margin:0 auto"></div>
+      </div>
+    </div>`,
+
+  "signup-5": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex">
+      <div style="flex:1;background:#dbeafe;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:32px">
+        <div style="width:48px;height:48px;background:#2563eb;border-radius:12px;margin-bottom:6px"></div>
+        <div style="height:13px;background:#1e40af;border-radius:3px;width:100px"></div>
+        <div style="height:8px;background:#93c5fd;border-radius:2px;width:130px"></div>
+        <div style="height:8px;background:#93c5fd;border-radius:2px;width:110px"></div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;gap:0">
+        <div style="height:13px;background:#111;border-radius:3px;width:140px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:180px;margin-bottom:16px"></div>
+        <div style="display:flex;gap:8px;width:100%;margin-bottom:8px">
+          <div style="flex:1;height:33px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+          <div style="flex:1;height:33px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+        </div>
+        <div style="width:100%;height:33px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px"></div>
+        <div style="width:100%;height:33px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:14px"></div>
+        <div style="width:100%;height:36px;background:#2563eb;border-radius:8px;margin-bottom:10px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:140px"></div>
+      </div>
+    </div>`,
+
+  "signup-6": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;width:290px">
+        <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:22px 28px">
+          <div style="width:32px;height:32px;background:rgba(255,255,255,.25);border-radius:8px;margin-bottom:10px"></div>
+          <div style="height:12px;background:#fff;border-radius:3px;width:120px;margin-bottom:6px"></div>
+          <div style="height:8px;background:rgba(255,255,255,.5);border-radius:2px;width:160px"></div>
+        </div>
+        <div style="padding:22px 28px;display:flex;flex-direction:column;gap:0">
+          <div style="display:flex;gap:8px;margin-bottom:9px">
+            <div style="flex:1;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+            <div style="flex:1;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+          </div>
+          <div style="width:100%;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:9px"></div>
+          <div style="width:100%;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px;margin-bottom:14px"></div>
+          <div style="width:100%;height:36px;background:#6366f1;border-radius:8px;margin-bottom:10px"></div>
+          <div style="height:8px;background:#e5e7eb;border-radius:2px;width:148px;margin:0 auto"></div>
+        </div>
+      </div>
+    </div>`,
+
+  // ── CONTACT FORM ──────────────────────────────────────────
+  "contact-1": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:stretch;padding:36px;gap:32px">
+      <div style="width:200px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;padding-top:8px">
+        <div style="height:16px;background:#111;border-radius:3px;width:130px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:180px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:160px"></div>
+        <div style="height:1px;background:#e5e7eb;margin:4px 0"></div>
+        ${[["📧","hello@brand.com"],["📞","+1 (555) 000-0000"],["📍","123 Market St, SF"]].map(([icon,text])=>`
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:13px">${icon}</span>
+            <div style="height:8px;background:#9ca3af;border-radius:2px;width:120px"></div>
+          </div>`).join('')}
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+          <div style="flex:1;height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+        </div>
+        <div style="height:34px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:80px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="width:120px;height:36px;background:#f97316;border-radius:8px"></div>
+      </div>
+    </div>`,
+
+  "contact-2": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px">
+      <div style="height:16px;background:#111;border-radius:3px;width:180px;margin-bottom:8px"></div>
+      <div style="height:8px;background:#e5e7eb;border-radius:2px;width:260px;margin-bottom:22px"></div>
+      <div style="width:420px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;height:34px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+          <div style="flex:1;height:34px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        </div>
+        <div style="height:34px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:34px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:72px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="width:130px;height:36px;background:#111;border-radius:8px"></div>
+      </div>
+    </div>`,
+
+  "contact-3": ()=>`
+    <div class="m-bg" style="background:#0f172a"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px">
+      <div style="height:16px;background:#f1f5f9;border-radius:3px;width:180px;margin-bottom:8px"></div>
+      <div style="height:8px;background:#334155;border-radius:2px;width:240px;margin-bottom:22px"></div>
+      <div style="background:#1e293b;border:1px solid #334155;border-radius:14px;padding:24px 28px;width:400px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px"></div>
+          <div style="flex:1;height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px"></div>
+        </div>
+        <div style="height:34px;background:#0f172a;border:1px solid #334155;border-radius:8px"></div>
+        <div style="height:70px;background:#0f172a;border:1px solid #334155;border-radius:8px"></div>
+        <div style="width:130px;height:36px;background:#6366f1;border-radius:8px"></div>
+      </div>
+    </div>`,
+
+  "contact-4": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;width:400px">
+        <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:18px 24px">
+          <div style="height:13px;background:#111;border-radius:3px;width:140px;margin-bottom:7px"></div>
+          <div style="height:8px;background:#e5e7eb;border-radius:2px;width:220px"></div>
+        </div>
+        <div style="padding:20px 24px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+            <div style="flex:1;height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+          </div>
+          <div style="height:32px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+          <div style="height:60px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:7px"></div>
+          <div style="display:flex;justify-content:flex-end">
+            <div style="width:110px;height:34px;background:#f97316;border-radius:7px"></div>
+          </div>
+        </div>
+      </div>
+    </div>`,
+
+  "contact-5": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:36px">
+      <div style="width:380px">
+        <div style="height:8px;background:#f97316;border-radius:2px;width:70px;margin-bottom:12px"></div>
+        <div style="height:18px;background:#111;border-radius:3px;width:200px;margin-bottom:8px"></div>
+        <div style="height:8px;background:#e5e7eb;border-radius:2px;width:260px;margin-bottom:24px"></div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <div style="flex:1;height:34px;border-bottom:2px solid #e5e7eb"></div>
+          <div style="flex:1;height:34px;border-bottom:2px solid #e5e7eb"></div>
+        </div>
+        <div style="height:34px;border-bottom:2px solid #e5e7eb;margin-bottom:10px"></div>
+        <div style="height:68px;border-bottom:2px solid #e5e7eb;margin-bottom:18px"></div>
+        <div style="width:120px;height:36px;background:#111;border-radius:8px"></div>
+      </div>
+    </div>`,
+
+  "contact-6": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:stretch;padding:28px;gap:24px">
+      <div style="flex:1;background:#e2e8f0;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative">
+        <span style="font-size:28px;color:#94a3b8">🗺</span>
+        <div style="position:absolute;bottom:16px;left:16px;right:16px;background:#fff;border-radius:8px;padding:10px 12px">
+          <div style="height:9px;background:#111;border-radius:2px;width:100px;margin-bottom:5px"></div>
+          <div style="height:7px;background:#9ca3af;border-radius:2px;width:130px"></div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:9px">
+        <div style="height:14px;background:#111;border-radius:3px;width:130px;margin-bottom:4px"></div>
+        <div style="height:32px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:32px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:32px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="height:64px;background:#fff;border:1px solid #e5e7eb;border-radius:8px"></div>
+        <div style="width:110px;height:34px;background:#f97316;border-radius:8px"></div>
+      </div>
     </div>`,
 };
 

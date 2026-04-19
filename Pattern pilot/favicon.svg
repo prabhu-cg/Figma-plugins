@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="28" fill="#4F46E5"/>
+
+  <!-- 3x3 grid of squares — top row -->
+  <rect x="16" y="16" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+  <rect x="52" y="16" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+  <rect x="88" y="16" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+
+  <!-- Middle row — centre square is orange (the "pilot" focal point) -->
+  <rect x="16" y="52" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+  <rect x="52" y="52" width="28" height="28" rx="6" fill="#F97316"/>
+  <rect x="88" y="52" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+
+  <!-- Bottom row -->
+  <rect x="16" y="88" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+  <rect x="52" y="88" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+  <rect x="88" y="88" width="28" height="28" rx="6" fill="white" opacity="0.9"/>
+</svg>
