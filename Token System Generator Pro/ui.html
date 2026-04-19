@@ -3,518 +3,654 @@
 <head>
   <meta charset="UTF-8" />
   <title>Token System Generator Pro</title>
-
-  <!--
-    Favicon: stylised "T" from stacked layer bars on brand-orange background.
-    Visible in the browser tab when testing the plugin locally.
-    For the Figma plugin listing icon, use icon.svg via the manifest + publish flow.
-  -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23EE661D'/><rect x='4' y='6.5' width='24' height='6' rx='2' fill='white'/><rect x='11' y='14.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.75'/><rect x='11' y='21.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.5'/></svg>">
-
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html, body {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-    }
-
-    body {
-      font-family: Inter, sans-serif;
-      background: #fafafa;
-      display: flex;
-      flex-direction: column;
-    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { font-family: Inter, sans-serif; background: #fafafa; display: flex; flex-direction: column; }
 
     /* ── Wizard shell ── */
-    .wizard {
-      position: relative;
-      flex: 1;
-      overflow: hidden;
-    }
+    .wizard { position: relative; flex: 1; overflow: hidden; }
 
     /* ── Screens ── */
     .screen {
-      position: absolute;
-      inset: 0;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
       transition: transform 0.28s ease, opacity 0.22s ease;
     }
+    .screen.slide-out-left  { transform: translateX(-100%); opacity: 0; pointer-events: none; }
+    .screen.slide-out-right { transform: translateX(100%);  opacity: 0; pointer-events: none; }
 
-    .screen.slide-out-left {
-      transform: translateX(-100%);
-      opacity: 0;
-      pointer-events: none;
+    /* ── Scrollable content + fixed footer ── */
+    .screen-body   { flex: 1; overflow-y: auto; padding: 20px 20px 0; }
+    .screen-footer { padding: 12px 20px 18px; flex-shrink: 0; }
+
+    /* ── Top nav ── */
+    .top-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px 0; flex-shrink: 0;
+    }
+    .back-btn {
+      font-size: 12px; font-weight: 500; color: #EE661D; cursor: pointer;
+      background: none; border: none; padding: 0; font-family: Inter, sans-serif;
+      transition: color .18s; display: flex; align-items: center; gap: 4px;
+    }
+    .back-btn:hover { color: #c84f10; }
+    .approach-badge {
+      font-size: 11px; color: #EE661D; background: #FFF9EB;
+      border: 1px solid #f5c8a0; border-radius: 20px; padding: 3px 10px; font-weight: 500;
     }
 
-    .screen.slide-out-right {
-      transform: translateX(100%);
-      opacity: 0;
-      pointer-events: none;
-    }
-
-    /* ── Header (Screen 1) ── */
-    .header {
-      margin-bottom: 14px;
-    }
-
-    .header h2 {
-      font-size: 17px;
-      font-weight: 700;
-      color: #111;
-      margin-bottom: 4px;
-    }
-
-    .header p {
-      font-size: 12px;
-      color: #888;
-      line-height: 1.5;
-    }
+    /* ── Header ── */
+    .header { margin-bottom: 14px; }
+    .header h2 { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .header p  { font-size: 12px; color: #888; line-height: 1.5; }
 
     /* ── Divider ── */
-    .divider {
-      height: 1px;
-      background: #eee;
-      margin-bottom: 14px;
-    }
+    .divider { height: 1px; background: #eee; margin-bottom: 14px; }
 
     /* ── Section heading ── */
-    .section-heading {
-      margin-bottom: 12px;
-    }
-
-    .section-heading strong {
-      display: block;
-      font-size: 14px;
-      font-weight: 600;
-      color: #111;
-      margin-bottom: 3px;
-    }
-
-    .section-heading p {
-      font-size: 12px;
-      color: #888;
-      line-height: 1.5;
-    }
+    .section-heading { margin-bottom: 12px; }
+    .section-heading strong { display: block; font-size: 14px; font-weight: 600; color: #111; margin-bottom: 3px; }
+    .section-heading p { font-size: 12px; color: #888; line-height: 1.5; }
 
     /* ── Cards ── */
-    .cards {
-      display: flex;
-      gap: 12px;
-      flex: 1;
-    }
-
+    .cards { display: flex; gap: 12px; }
     .card {
-      flex: 1;
-      border-radius: 10px;
-      padding: 14px;
-      background: white;
-      border: 1.5px solid #eee;
-      cursor: pointer;
-      transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      position: relative;
-      user-select: none;
+      flex: 1; border-radius: 10px; padding: 14px; background: white;
+      border: 1.5px solid #eee; cursor: pointer;
+      transition: border-color .18s, background .18s, box-shadow .18s;
+      display: flex; flex-direction: column; gap: 8px;
+      position: relative; user-select: none;
     }
-
-    .card:hover {
-      border-color: #EE661D;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
-    }
-
-    .card.selected {
-      border-color: #EE661D;
-      background: #FFF9EB;
-    }
-
-    /* ── Card icon wrapper ── */
+    .card:hover { border-color: #EE661D; box-shadow: 0 4px 14px rgba(0,0,0,.07); }
+    .card.selected { border-color: #EE661D; background: #FFF9EB; }
     .card-icon-wrap {
-      width: 38px;
-      height: 38px;
-      border-radius: 9px;
-      background: #f3f3f3;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      transition: background 0.18s ease;
+      width: 38px; height: 38px; border-radius: 9px; background: #f3f3f3;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background .18s;
     }
-
-    .card:hover .card-icon-wrap {
-      background: rgba(238, 102, 29, 0.1);
-    }
-
-    .card.selected .card-icon-wrap {
-      background: rgba(238, 102, 29, 0.12);
-    }
-
-    /* ── Card icon (SVG) ── */
-    .card-icon {
-      color: #c0c0c0;
-      transition: color 0.18s ease;
-      display: block;
-    }
-
-    .card:hover .card-icon {
-      color: #EE661D;
-    }
-
-    .card.selected .card-icon {
-      color: #EE661D;
-    }
-
-    /* ── Card text ── */
-    .card-title {
-      font-size: 13px;
-      font-weight: 600;
-      color: #111;
-      padding-right: 22px;
-      line-height: 1.4;
-    }
-
-    .card-subtitle {
-      font-size: 11px;
-      font-weight: 400;
-      color: #aaa;
-    }
-
-    .card-desc {
-      font-size: 11.5px;
-      color: #666;
-      line-height: 1.6;
-    }
-
-    /* ── Check badge (top-right) ── */
+    .card:hover .card-icon-wrap,
+    .card.selected .card-icon-wrap { background: rgba(238,102,29,.12); }
+    .card-icon { color: #c0c0c0; transition: color .18s; display: block; }
+    .card:hover .card-icon,
+    .card.selected .card-icon { color: #EE661D; }
+    .card-title    { font-size: 13px; font-weight: 600; color: #111; padding-right: 22px; line-height: 1.4; }
+    .card-subtitle { font-size: 11px; font-weight: 400; color: #aaa; }
+    .card-desc     { font-size: 11.5px; color: #666; line-height: 1.6; }
     .card-check {
-      display: none;
-      position: absolute;
-      top: 11px;
-      right: 11px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: #EE661D;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+      display: none; position: absolute; top: 11px; right: 11px;
+      width: 18px; height: 18px; border-radius: 50%; background: #EE661D;
+      align-items: center; justify-content: center; flex-shrink: 0;
     }
+    .card.selected .card-check { display: flex; }
 
-    .card.selected .card-check {
-      display: flex;
+    /* ── Buttons ── */
+    .btn-primary {
+      width: 100%; height: 38px; border: none; border-radius: 8px;
+      font-size: 13px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; transition: background .2s; background: #EE661D; color: white;
     }
+    .btn-primary:hover:not(:disabled) { background: #555; }
+    .btn-primary:disabled { background: #e0e0e0; color: #aaa; cursor: not-allowed; }
+    .btn-secondary {
+      flex: 1; height: 34px; border: 1.5px solid #EE661D; border-radius: 8px;
+      font-size: 12px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; transition: background .18s; background: white; color: #EE661D;
+    }
+    .btn-secondary:hover { background: #FFF9EB; }
+    .btn-ghost {
+      flex: 1; height: 32px; border: 1px solid #e0e0e0; border-radius: 8px;
+      font-size: 11px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; background: white; color: #888; transition: border-color .18s, color .18s;
+    }
+    .btn-ghost:hover { border-color: #888; color: #444; }
 
     /* ── Hint ── */
-    .hint {
-      font-size: 11px;
-      color: #c0c0c0;
-      text-align: center;
-      margin-top: 10px;
-    }
+    .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
 
-    /* ── Screen 2 nav ── */
-    .step2-nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
+    /* ── Screen 2: color rows ── */
+    .color-section-label {
+      display: block; font-size: 12px; font-weight: 600; color: #111; margin: 14px 0 8px;
     }
+    .color-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .color-row label { font-size: 12px; color: #555; width: 80px; flex-shrink: 0; }
+    .color-swatch {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      background: #eee; border: 1.5px solid transparent; transition: border-color .18s;
+    }
+    .color-swatch.invalid { border-color: #ff4444 !important; }
+    .color-input {
+      flex: 1; height: 28px; border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif;
+      outline: none; transition: border-color .18s;
+    }
+    .color-input:focus { border-color: #EE661D; }
+    .color-input.invalid { border-color: #ff4444; }
 
-    .back-btn {
-      font-size: 12px;
-      font-weight: 500;
-      color: #EE661D;
-      cursor: pointer;
-      background: none;
-      border: none;
-      padding: 0;
-      font-family: Inter, sans-serif;
-      transition: color 0.18s;
-      display: flex;
-      align-items: center;
-      gap: 4px;
+    /* ── Screen 2: scale inputs ── */
+    .scale-section { margin-top: 16px; }
+    .scale-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+    .scale-row label { font-size: 12px; color: #555; width: 110px; flex-shrink: 0; padding-top: 6px; }
+    .scale-input-wrap { flex: 1; }
+    .scale-input {
+      height: 28px; width: 70px; border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none;
+      transition: border-color .18s;
     }
+    .scale-input:focus { border-color: #EE661D; }
+    .scale-preview { font-size: 11px; color: #EE661D; margin-top: 4px; font-weight: 500; }
+    .scale-hint    { font-size: 11px; color: #aaa; line-height: 1.5; }
+    .scale-input-row { display: flex; align-items: center; gap: 10px; }
+    .req { color: #ff4444; font-size: 9px; margin-left: 1px; }
+    .opt { color: #aaa; font-size: 9px; margin-left: 2px; }
+    .color-desc    { font-size: 10.5px; color: #bbb; line-height: 1.4; padding-left: 118px; margin-top: -2px; margin-bottom: 9px; }
 
-    .back-btn:hover {
-      color: #c84f10;
+    /* ── Screen 4: export ── */
+    .export-success {
+      display: flex; align-items: center; gap: 10px;
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
     }
-
-    .approach-badge {
-      font-size: 11px;
-      color: #EE661D;
-      background: #FFF9EB;
-      border: 1px solid #f5c8a0;
-      border-radius: 20px;
-      padding: 3px 10px;
-      font-weight: 500;
+    .export-success span { font-size: 12px; color: #166534; font-weight: 500; }
+    .json-panel-label { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 6px; }
+    .json-panel {
+      background: #1e1e2e; border-radius: 8px; padding: 12px;
+      flex: 1; min-height: 0; overflow-y: auto;
+      font-size: 11px; font-family: 'Menlo', 'Consolas', monospace;
+      color: #cdd6f4; line-height: 1.6; white-space: pre;
     }
-
-    /* ── Footer ── */
-    .footer {
-      margin-top: 14px;
-    }
-
-    #generate {
-      width: 100%;
-      height: 38px;
-      border: none;
-      border-radius: 8px;
-      font-size: 13px;
-      font-family: Inter, sans-serif;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s ease;
-      background: #EE661D;
-      color: white;
-    }
-
-    #generate:hover:not(:disabled) {
-      background: #555;
-    }
-
-    #generate:disabled {
-      background: #e0e0e0;
-      color: #aaa;
-      cursor: not-allowed;
-    }
+    .export-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .export-footer  { display: flex; gap: 8px; }
   </style>
 </head>
 <body>
-
 <div class="wizard">
 
-  <!-- ═══════════════════════════════════
-       SCREEN 1 — Choose Approach
-  ═══════════════════════════════════ -->
-  <div class="screen" id="screen1">
-
-    <div class="header">
-      <h2>Token System Generator Pro</h2>
-      <p>Create or convert your design system foundations in seconds.</p>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="section-heading">
-      <strong>Choose your approach</strong>
-      <p>How many layers should your token system have? Select a card to continue.</p>
-    </div>
-
-    <div class="cards">
-
-      <!-- 2 Tier card -->
-      <div class="card" id="card-2tier" onclick="selectApproach('2tier')">
-        <div class="card-check">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-
-        <!-- Icon: 2 stacked layers -->
-        <div class="card-icon-wrap">
-          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect x="1.5" y="12" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
-            <rect x="1.5" y="1.5" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
-          </svg>
-        </div>
-
-        <div class="card-title">2 Tier System</div>
-        <div class="card-desc">A lightweight setup using Global and Alias layers only. Ideal for smaller projects or teams just beginning their design token journey.</div>
+  <!-- ══════════════════════════════════════
+       SMART LANDING
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-left" id="screen-landing">
+    <div class="screen-body">
+      <div class="header" style="padding-top:6px">
+        <h2>Token System Generator Pro</h2>
+        <p>Your token variables are ready.</p>
       </div>
-
-      <!-- 3 Tier card -->
-      <div class="card" id="card-3tier" onclick="selectApproach('3tier')">
-        <div class="card-check">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-
-        <!-- Icon: 3 stacked layers -->
-        <div class="card-icon-wrap">
-          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect x="1.5" y="15.5" width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
-            <rect x="1.5" y="8.3"  width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
-            <rect x="1.5" y="1"    width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
-          </svg>
-        </div>
-
-        <div class="card-title">3 Tier System</div>
-        <div class="card-desc">A full-scale setup with Global, Alias, and Component layers. Built for mature design systems that need component-level semantic control.</div>
+      <div class="divider"></div>
+      <div class="section-heading">
+        <strong>What would you like to do?</strong>
+        <p id="landing-summary">Found existing variable collections.</p>
       </div>
-
+      <div class="cards">
+        <div class="card" id="card-export-landing" onclick="landingExport()">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M11 2v12M6 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Export to JSON</div>
+          <div class="card-desc">Generate dev-ready Style Dictionary tokens from your current Figma variables.</div>
+        </div>
+        <div class="card" id="card-regenerate" onclick="goTo('screen1','left')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M2.5 7.5H16.5M13 3.5L17 7.5L13 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M19.5 14.5H5.5M9 10.5L5 14.5L9 18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Regenerate Tokens</div>
+          <div class="card-desc">Start fresh — replace existing variables with a new token system.</div>
+        </div>
+      </div>
     </div>
-
-    <div class="hint">Click a card to continue — you can always change this later</div>
-
   </div>
 
+  <!-- ══════════════════════════════════════
+       SCREEN 1 — Mode
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen1">
+    <div class="screen-body">
+      <div class="header">
+        <h2>Token System Generator Pro</h2>
+        <p>Create or convert your design system foundations in seconds.</p>
+      </div>
+      <div class="divider"></div>
+      <div class="section-heading">
+        <strong>Choose your approach</strong>
+        <p>How do you want to build your token system?</p>
+      </div>
+      <div class="cards" style="flex-wrap:wrap; gap:10px;">
 
-  <!-- ═══════════════════════════════════
-       SCREEN 2 — Choose Mode
-  ═══════════════════════════════════ -->
+        <div class="card" id="card-scratch" onclick="selectMode('scratch')" style="min-width:calc(50% - 5px)">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <circle cx="11" cy="11" r="4" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M11 3v2M11 17v2M3 11h2M17 11h2M5.6 5.6l1.4 1.4M15 15l1.4 1.4M5.6 16.4l1.4-1.4M15 7l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-title">From Scratch</div>
+          <div class="card-desc">Pick brand colors, generate full ramps with spacing and radius scales.</div>
+        </div>
+
+        <div class="card" id="card-starter" onclick="selectMode('starter')" style="min-width:calc(50% - 5px)">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
+              <line x1="1.5" y1="8.5" x2="20.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="11"  y1="8.5" x2="11"   y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Starter System <span class="card-subtitle">(Boilerplate)</span></div>
+          <div class="card-desc">Clean token set with best-practice defaults. Perfect for starting fresh.</div>
+        </div>
+
+        <div class="card" id="card-convert" onclick="selectMode('convert')" style="min-width:100%">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M2.5 7.5H16.5M13 3.5L17 7.5L13 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M19.5 14.5H5.5M9 10.5L5 14.5L9 18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Smart Convert</div>
+          <div class="card-desc">Scans your existing local styles and maps them into a structured token hierarchy. Best if your file already has styles.</div>
+        </div>
+
+      </div>
+      <div class="hint" style="padding-bottom:20px">Click a card to continue</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 2 — Colors + Scale (From Scratch)
+  ══════════════════════════════════════ -->
   <div class="screen slide-out-right" id="screen2">
-
-    <div class="step2-nav">
-      <button class="back-btn" onclick="goBack()">← Change approach</button>
-      <span class="approach-badge" id="approach-badge"></span>
+    <div class="top-nav">
+      <button class="back-btn" onclick="goTo('screen1','right')">← Change approach</button>
+      <span class="approach-badge">From Scratch</span>
     </div>
+    <div class="screen-body" style="padding-top:12px">
 
-    <div class="section-heading">
-      <strong>Choose a mode</strong>
-      <p>How would you like to generate your token system?</p>
-    </div>
+      <span class="color-section-label">Brand Colors</span>
+      <div class="color-row">
+        <label>Primary <span class="req">*</span></label>
+        <div class="color-swatch" id="sw-primary"></div>
+        <input class="color-input" id="inp-primary" type="text" placeholder="#6600FF" oninput="onColorInput('primary')">
+      </div>
+      <p class="color-desc">Your main brand color — used for primary buttons, links, and key UI actions.</p>
+      <div class="color-row">
+        <label>Secondary <span class="req">*</span></label>
+        <div class="color-swatch" id="sw-secondary"></div>
+        <input class="color-input" id="inp-secondary" type="text" placeholder="#00AAFF" oninput="onColorInput('secondary')">
+      </div>
+      <p class="color-desc">A complementary brand color — used for secondary actions and supporting elements.</p>
+      <div class="color-row">
+        <label>Tertiary <span class="opt">(opt)</span></label>
+        <div class="color-swatch" id="sw-tertiary"></div>
+        <input class="color-input" id="inp-tertiary" type="text" placeholder="#FF6600" oninput="onColorInput('tertiary')">
+      </div>
+      <p class="color-desc">A third brand color — used for highlights, decorative elements, or tertiary CTAs.</p>
+      <div class="color-row">
+        <label>Accent <span class="req">*</span></label>
+        <div class="color-swatch" id="sw-accent"></div>
+        <input class="color-input" id="inp-accent" type="text" placeholder="#F59E0B" oninput="onColorInput('accent')">
+      </div>
+      <p class="color-desc">A bold contrasting color — used for badges, callouts, notifications, or promotional moments.</p>
 
-    <div class="cards">
+      <span class="color-section-label" style="margin-top:16px">Semantic Colors</span>
+      <div class="color-row">
+        <label>Info</label>
+        <div class="color-swatch" id="sw-info" style="background:#0066FF"></div>
+        <input class="color-input" id="inp-info" type="text" value="#0066FF" oninput="onColorInput('info')">
+      </div>
+      <p class="color-desc">Communicates informational messages, tips, and neutral notifications.</p>
+      <div class="color-row">
+        <label>Success</label>
+        <div class="color-swatch" id="sw-success" style="background:#00BB66"></div>
+        <input class="color-input" id="inp-success" type="text" value="#00BB66" oninput="onColorInput('success')">
+      </div>
+      <p class="color-desc">Confirms completed actions, valid states, and positive outcomes.</p>
+      <div class="color-row">
+        <label>Error</label>
+        <div class="color-swatch" id="sw-error" style="background:#FF3333"></div>
+        <input class="color-input" id="inp-error" type="text" value="#FF3333" oninput="onColorInput('error')">
+      </div>
+      <p class="color-desc">Signals errors, destructive actions, and critical failures requiring immediate attention.</p>
+      <div class="color-row">
+        <label>Warning</label>
+        <div class="color-swatch" id="sw-warning" style="background:#FFAA00"></div>
+        <input class="color-input" id="inp-warning" type="text" value="#FFAA00" oninput="onColorInput('warning')">
+      </div>
+      <p class="color-desc">Alerts users to potential issues or reversible actions that need attention.</p>
+      <div class="color-row">
+        <label>Neutral</label>
+        <div class="color-swatch" id="sw-neutral" style="background:#6B7280"></div>
+        <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
+      </div>
+      <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
 
-      <!-- Starter System card -->
-      <div class="card" id="card-starter" onclick="selectMode('starter')">
-        <div class="card-check">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <div class="scale-section">
+        <span class="color-section-label">Spacing</span>
+        <div class="scale-row">
+          <label>Base unit (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-spacing" type="number" min="1" max="32" value="4" oninput="onSpacingInput()">
+              <div class="scale-hint">Use 4 or 8 for grid-friendly layouts. Your base unit is the smallest spacing step.</div>
+            </div>
+            <div class="scale-preview" id="preview-spacing">Scale: 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64</div>
+          </div>
         </div>
-
-        <!-- Icon: layout/template grid suggesting a structured clean start -->
-        <div class="card-icon-wrap">
-          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
-            <line x1="1.5" y1="8.5"  x2="20.5" y2="8.5"  stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <line x1="11"  y1="8.5"  x2="11"   y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </div>
-
-        <div class="card-title">Starter System <span class="card-subtitle">(Boiler plate)</span></div>
-        <div class="card-desc">Generates a clean, ready-to-use token set with best-practice defaults baked in. Perfect for starting your design system from scratch.</div>
       </div>
 
-      <!-- Smart Convert card -->
-      <div class="card" id="card-convert" onclick="selectMode('convert')">
-        <div class="card-check">
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6"
-              stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Border Radius</span>
+        <div class="scale-row">
+          <label>Base radius (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-radius" type="number" min="0" max="64" value="4" oninput="onRadiusInput()">
+              <div class="scale-hint">Controls rounding feel: 0 = sharp, 4 = subtle, 8 = friendly, 16 = soft.</div>
+            </div>
+            <div class="scale-preview" id="preview-radius">none(0) · sm(2) · md(4) · lg(8) · xl(16) · 2xl(24) · full(∞)</div>
+          </div>
         </div>
-
-        <!-- Icon: swap arrows suggesting transformation/conversion -->
-        <div class="card-icon-wrap">
-          <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
-            <path d="M2.5 7.5 H16.5 M13 3.5 L17 7.5 L13 11.5"
-              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M19.5 14.5 H5.5 M9 10.5 L5 14.5 L9 18.5"
-              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-
-        <div class="card-title">Smart Convert</div>
-        <div class="card-desc">Scans your existing local styles and automatically maps them into a structured token hierarchy. Best if your file already has styles.</div>
       </div>
 
     </div>
-
-    <div class="footer">
-      <button id="generate" disabled onclick="doGenerate()">Generate Tokens</button>
-      <div class="hint" id="generate-hint">Select a card above to enable generation</div>
+    <div class="screen-footer">
+      <button class="btn-primary" id="btn-next2" disabled onclick="goTo('screen3','left')">Next: Choose Architecture →</button>
+      <div class="hint" id="hint-next2">Fill in Primary, Secondary &amp; Accent to continue</div>
     </div>
+  </div>
 
+  <!-- ══════════════════════════════════════
+       SCREEN 3 — Architecture
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen3">
+    <div class="top-nav">
+      <button class="back-btn" onclick="backFromScreen3()">← Change approach</button>
+      <span class="approach-badge" id="badge3"></span>
+    </div>
+    <div class="screen-body" style="padding-top:14px">
+      <div class="section-heading">
+        <strong>Choose architecture</strong>
+        <p>How many layers should your token system have?</p>
+      </div>
+      <div class="cards">
+
+        <div class="card" id="card-2tier" onclick="selectArch('2tier')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="12"  width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="1.5" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </div>
+          <div class="card-title">2 Tier System</div>
+          <div class="card-desc">A lightweight setup using Global and Alias layers only. Ideal for smaller projects or teams just beginning their design token journey.</div>
+        </div>
+
+        <div class="card" id="card-3tier" onclick="selectArch('3tier')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="15.5" width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="8.3"  width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="1"    width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </div>
+          <div class="card-title">3 Tier System</div>
+          <div class="card-desc">A full-scale setup with Global, Alias, and Component layers. Built for mature design systems that need component-level semantic control.</div>
+        </div>
+
+      </div>
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" id="btn-generate" disabled onclick="doGenerate()">Generate Tokens</button>
+      <div class="hint" id="hint-generate">Select an architecture above to generate</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 4 — Done + Export
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen4">
+    <div style="padding: 20px 20px 0; flex-shrink: 0;">
+      <div class="export-success">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="8" fill="#22c55e"/>
+          <polyline points="5,9 8,12 13,6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="export-summary">Tokens created successfully.</span>
+      </div>
+      <div class="json-panel-label">
+        JSON Export
+        <span style="font-size:10px;font-weight:400;color:#aaa;margin-left:4px">(Style Dictionary v3)</span>
+      </div>
+    </div>
+    <div class="json-panel" id="json-panel" style="margin: 0 20px;"></div>
+    <div class="screen-footer">
+      <div class="export-actions">
+        <button class="btn-secondary" id="btn-copy" onclick="copyJSON()">Copy to clipboard</button>
+        <button class="btn-secondary" onclick="downloadJSON()">Download tokens.json</button>
+      </div>
+      <div class="export-footer">
+        <button class="btn-ghost" onclick="refreshJSON()">↺ Refresh JSON</button>
+        <button class="btn-ghost" onclick="startOver()">← Start over</button>
+      </div>
+    </div>
   </div>
 
 </div><!-- /.wizard -->
 
 <script>
-  let selectedApproach = null;
-  let selectedMode     = null;
+  // ── State ──────────────────────────────────────────────────────
+  let selectedMode = null;
+  let selectedArch = null;
+  let currentJSON  = '';
 
-  const screen1       = document.getElementById('screen1');
-  const screen2       = document.getElementById('screen2');
-  const approachBadge = document.getElementById('approach-badge');
-  const generateBtn   = document.getElementById('generate');
-  const generateHint  = document.getElementById('generate-hint');
+  const REQUIRED_COLORS  = ['primary', 'secondary', 'accent'];
+  const ALL_COLOR_FIELDS = ['primary','secondary','tertiary','accent','info','success','error','warning','neutral'];
 
-  // ── Screen 1: approach selected ──
-  function selectApproach(value) {
-    selectedApproach = value;
-    selectedMode     = null;
+  // ── Transitions ────────────────────────────────────────────────
+  function goTo(targetId, exitDirection) {
+    const current = document.querySelector('.screen:not(.slide-out-left):not(.slide-out-right)');
+    if (current) current.classList.add(exitDirection === 'left' ? 'slide-out-left' : 'slide-out-right');
+    const target = document.getElementById(targetId);
+    target.classList.remove('slide-out-left', 'slide-out-right');
+  }
 
-    // Highlight chosen approach card
-    document.getElementById('card-2tier').classList.toggle('selected', value === '2tier');
-    document.getElementById('card-3tier').classList.toggle('selected', value === '3tier');
+  // ── Smart Landing ──────────────────────────────────────────────
+  function landingExport() {
+    parent.postMessage({ pluginMessage: { type: 'export-json' } }, '*');
+  }
 
-    // Reset mode cards and button
-    document.getElementById('card-starter').classList.remove('selected');
-    document.getElementById('card-convert').classList.remove('selected');
-    generateBtn.disabled = true;
-    generateHint.textContent = 'Select a card above to enable generation';
+  // ── Screen 1: Mode ─────────────────────────────────────────────
+  function selectMode(value) {
+    selectedMode = value;
+    selectedArch = null;
 
-    // Update context badge on Screen 2
-    approachBadge.textContent = value === '2tier' ? '2 Tier selected' : '3 Tier selected';
+    ['scratch','starter','convert'].forEach(id =>
+      document.getElementById('card-' + id).classList.toggle('selected', id === value)
+    );
+    ['2tier','3tier'].forEach(id =>
+      document.getElementById('card-' + id).classList.remove('selected')
+    );
+    document.getElementById('btn-generate').disabled = true;
+    document.getElementById('hint-generate').textContent = 'Select an architecture above to generate';
 
-    // Brief pause so user sees the highlight, then slide to Screen 2
+    const labels = { scratch: 'From Scratch', starter: 'Starter System', convert: 'Smart Convert' };
+    document.getElementById('badge3').textContent = labels[value];
+
     setTimeout(() => {
-      screen1.classList.add('slide-out-left');
-      screen2.classList.remove('slide-out-right');
+      if (value === 'scratch') goTo('screen2', 'left');
+      else goTo('screen3', 'left');
     }, 200);
   }
 
-  // ── Back: return to Screen 1 ──
-  function goBack() {
-    screen2.classList.add('slide-out-right');
-    screen1.classList.remove('slide-out-left');
+  // ── Screen 2: Colors + Scales ──────────────────────────────────
+  function isValidHex(hex) { return /^#[0-9A-Fa-f]{6}$/.test(hex); }
+
+  function normalizeHex(val) {
+    val = (val || '').trim();
+    return val.startsWith('#') ? val : '#' + val;
   }
 
-  // ── Screen 2: mode selected ──
-  function selectMode(value) {
-    selectedMode = value;
-
-    document.getElementById('card-starter').classList.toggle('selected', value === 'starter');
-    document.getElementById('card-convert').classList.toggle('selected', value === 'convert');
-
-    generateBtn.disabled = false;
-    generateHint.textContent = 'Ready — click Generate Tokens to apply';
+  function onColorInput(field) {
+    const input  = document.getElementById('inp-' + field);
+    const swatch = document.getElementById('sw-' + field);
+    const val    = normalizeHex(input.value);
+    const valid  = isValidHex(val);
+    swatch.style.background = valid ? val : '#eee';
+    swatch.classList.toggle('invalid', !valid);
+    input.classList.toggle('invalid', input.value !== '' && !valid);
+    validateScreen2();
   }
 
-  // ── Generate ──
+  function onSpacingInput() {
+    const base = parseInt(document.getElementById('inp-spacing').value) || 0;
+    const mults = [1,2,3,4,5,6,8,10,12,16];
+    document.getElementById('preview-spacing').textContent = base > 0
+      ? 'Scale: ' + mults.map(m => m * base).join(' · ')
+      : '';
+    validateScreen2();
+  }
+
+  function onRadiusInput() {
+    const base = parseInt(document.getElementById('inp-radius').value);
+    if (isNaN(base)) { document.getElementById('preview-radius').textContent = ''; return; }
+    const sm = Math.max(1, Math.round(base / 2));
+    document.getElementById('preview-radius').textContent =
+      `none(0) · sm(${sm}) · md(${base}) · lg(${base*2}) · xl(${base*4}) · 2xl(${base*6}) · full(∞)`;
+    validateScreen2();
+  }
+
+  function validateScreen2() {
+    const allBrandValid = REQUIRED_COLORS.every(f => isValidHex(normalizeHex(document.getElementById('inp-' + f).value)));
+    const spacingOk = parseInt(document.getElementById('inp-spacing').value) >= 1;
+    const radiusOk  = parseInt(document.getElementById('inp-radius').value)  >= 0;
+    const ok = allBrandValid && spacingOk && radiusOk;
+    document.getElementById('btn-next2').disabled = !ok;
+    document.getElementById('hint-next2').textContent = ok
+      ? 'Ready — click Next to choose architecture'
+      : 'Fill in Primary, Secondary & Accent to continue';
+  }
+
+  function backFromScreen3() {
+    if (selectedMode === 'scratch') goTo('screen2', 'right');
+    else goTo('screen1', 'right');
+  }
+
+  // ── Screen 3: Architecture ─────────────────────────────────────
+  function selectArch(value) {
+    selectedArch = value;
+    document.getElementById('card-2tier').classList.toggle('selected', value === '2tier');
+    document.getElementById('card-3tier').classList.toggle('selected', value === '3tier');
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('hint-generate').textContent = 'Ready — click Generate Tokens';
+  }
+
+  // ── Generate ───────────────────────────────────────────────────
+  function buildScratchPayload() {
+    return {
+      colors: {
+        primary:   normalizeHex(document.getElementById('inp-primary').value),
+        secondary: normalizeHex(document.getElementById('inp-secondary').value),
+        tertiary:  normalizeHex(document.getElementById('inp-tertiary').value),
+        accent:    normalizeHex(document.getElementById('inp-accent').value),
+        info:      normalizeHex(document.getElementById('inp-info').value),
+        success:   normalizeHex(document.getElementById('inp-success').value),
+        error:     normalizeHex(document.getElementById('inp-error').value),
+        warning:   normalizeHex(document.getElementById('inp-warning').value),
+        neutral:   normalizeHex(document.getElementById('inp-neutral').value),
+      },
+      spacingBase: parseInt(document.getElementById('inp-spacing').value),
+      radiusBase:  parseInt(document.getElementById('inp-radius').value),
+    };
+  }
+
   function doGenerate() {
-    if (!selectedApproach || !selectedMode) return;
-
-    parent.postMessage({
-      pluginMessage: {
-        type: 'generate',
-        approach: selectedApproach,
-        mode: selectedMode
-      }
-    }, '*');
+    if (!selectedMode || !selectedArch) return;
+    const msg = { type: 'generate', approach: selectedArch, mode: selectedMode };
+    if (selectedMode === 'scratch') Object.assign(msg, buildScratchPayload());
+    parent.postMessage({ pluginMessage: msg }, '*');
   }
 
-  // ── Handle messages from plugin code ──
+  // ── Screen 4: Export ───────────────────────────────────────────
+  function showExport(json, total, cols) {
+    currentJSON = json;
+    document.getElementById('json-panel').textContent = json;
+    document.getElementById('export-summary').textContent =
+      `${total} variable${total !== 1 ? 's' : ''} created across ${cols} collection${cols !== 1 ? 's' : ''}.`;
+    goTo('screen4', 'left');
+  }
+
+  function copyJSON() {
+    const btn = document.getElementById('btn-copy');
+    navigator.clipboard.writeText(currentJSON).then(() => {
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000);
+    });
+  }
+
+  function downloadJSON() {
+    const blob = new Blob([currentJSON], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'tokens.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function refreshJSON() {
+    parent.postMessage({ pluginMessage: { type: 'export-json' } }, '*');
+  }
+
+  function startOver() {
+    selectedMode = null; selectedArch = null; currentJSON = '';
+    ['scratch','starter','convert','2tier','3tier'].forEach(id => {
+      const el = document.getElementById('card-' + id);
+      if (el) el.classList.remove('selected');
+    });
+    goTo('screen1', 'right');
+  }
+
+  // ── Messages from code.js ──────────────────────────────────────
   window.onmessage = (event) => {
     const msg = event.data.pluginMessage;
     if (!msg) return;
 
-    if (msg.type === 'confirm-replace') {
-      const result = confirm(
-        '⚠️ Tokens already exist.\n\nClick OK to replace them or Cancel to stop.'
-      );
-      if (result) {
-        parent.postMessage({
-          pluginMessage: {
-            type: 'confirm-continue',
-            approach: selectedApproach,
-            mode: selectedMode
-          }
-        }, '*');
+    if (msg.type === 'tokens-status') {
+      if (msg.exists) {
+        document.getElementById('landing-summary').textContent =
+          `Found ${msg.total} variable${msg.total !== 1 ? 's' : ''} across ${msg.cols} collection${msg.cols !== 1 ? 's' : ''}.`;
+        goTo('screen-landing', 'left');
+      } else {
+        goTo('screen1', 'right');
       }
     }
-  };
-</script>
 
+    if (msg.type === 'confirm-replace') {
+      const ok = confirm('⚠️ Tokens already exist.\n\nClick OK to replace them or Cancel to stop.');
+      if (ok) {
+        const m = { type: 'confirm-continue', approach: selectedArch, mode: selectedMode };
+        if (selectedMode === 'scratch') Object.assign(m, buildScratchPayload());
+        parent.postMessage({ pluginMessage: m }, '*');
+      }
+    }
+
+    if (msg.type === 'generation-complete' || msg.type === 'export-ready') {
+      showExport(msg.json, msg.total, msg.cols);
+    }
+  };
+
+  // ── Bootstrap ─────────────────────────────────────────────────
+  parent.postMessage({ pluginMessage: { type: 'check-tokens' } }, '*');
+</script>
 </body>
 </html>
