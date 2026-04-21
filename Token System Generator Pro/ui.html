@@ -109,22 +109,66 @@
     /* ── Hint ── */
     .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
 
+    /* ── Starter info panel ── */
+    .starter-info {
+      display: none;
+      margin: 12px 0 0;
+      padding: 11px 13px;
+      background: #f5f7ff;
+      border: 1px solid #dde3f7;
+      border-left: 3px solid #6b8af5;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .starter-info.visible {
+      display: block;
+    }
+    .starter-info.animate {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .starter-info-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b8af5;
+      margin-bottom: 5px;
+    }
+    .starter-info-text {
+      font-size: 11.5px;
+      color: #555;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .starter-info-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .starter-info-tag {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: #4a6ae8;
+      background: #eaeefd;
+      border-radius: 4px;
+      padding: 2px 7px;
+      white-space: nowrap;
+    }
+
     /* ── Screen 2: color rows ── */
     .color-section-label {
       display: block; font-size: 12px; font-weight: 600; color: #111; margin: 14px 0 8px;
     }
-    .color-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-    .color-row label { font-size: 12px; color: #555; width: 80px; flex-shrink: 0; }
+    .color-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
     .color-swatch {
       width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
       background: #eee; border: 1.5px solid transparent; transition: border-color .18s;
+      margin-top: 0;
     }
     .color-swatch.invalid { border-color: #ff4444 !important; }
-    .color-input {
-      flex: 1; height: 28px; border: 1.5px solid #e0e0e0; border-radius: 6px;
-      padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif;
-      outline: none; transition: border-color .18s;
-    }
     .color-input:focus { border-color: #EE661D; }
     .color-input.invalid { border-color: #ff4444; }
 
@@ -139,12 +183,40 @@
       transition: border-color .18s;
     }
     .scale-input:focus { border-color: #EE661D; }
-    .scale-preview { font-size: 11px; color: #EE661D; margin-top: 4px; font-weight: 500; }
-    .scale-hint    { font-size: 11px; color: #aaa; line-height: 1.5; }
+    .scale-hint    { font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 4px; }
+
+    /* ── Spacing chips ── */
+    .preview-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .preview-chip  { font-size: 10px; color: #555; background: #f5f5f5; border: 1px solid #eaeaea; border-radius: 4px; padding: 2px 7px; font-family: 'Menlo','Consolas',monospace; }
+
+    /* ── Radius demos ── */
+    .radius-demos      { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; align-items: flex-end; }
+    .radius-demo-item  { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .radius-demo-box   { width: 28px; height: 28px; background: #efefef; border: 1.5px solid #ddd; }
+    .radius-demo-label { font-size: 9px; color: #aaa; font-family: 'Menlo','Consolas',monospace; }
+
+    /* ── Typography preview ── */
+    .type-preview     { margin-top: 10px; background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; }
+    .type-preview-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .type-lvl-name    { font-size: 10px; color: #777; width: 74px; flex-shrink: 0; font-family: 'Menlo','Consolas',monospace; }
+    .type-lvl-track   { flex: 1; height: 3px; background: #ebebeb; border-radius: 2px; overflow: hidden; }
+    .type-lvl-bar     { height: 100%; background: #c8c8c8; border-radius: 2px; }
+    .type-lvl-px      { font-size: 10px; color: #bbb; width: 34px; text-align: right; flex-shrink: 0; font-family: 'Menlo','Consolas',monospace; }
+    .type-divider     { height: 1px; background: #ebebeb; margin: 5px 0; }
     .scale-input-row { display: flex; align-items: center; gap: 10px; }
-    .req { color: #ff4444; font-size: 9px; margin-left: 1px; }
-    .opt { color: #aaa; font-size: 9px; margin-left: 2px; }
-    .color-desc    { font-size: 10.5px; color: #bbb; line-height: 1.4; padding-left: 118px; margin-top: -2px; margin-bottom: 9px; }
+    .scale-select {
+      height: 28px; width: 100%; border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 0 28px 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none;
+      background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") no-repeat right 8px center;
+      color: #333; cursor: pointer; transition: border-color .18s; -webkit-appearance: none; appearance: none;
+    }
+    .scale-select:focus { border-color: #EE661D; }
+    .color-row label { font-size: 12px; color: #555; width: 80px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; }
+    .label-note { font-size: 9px; font-weight: 400; color: #aaa; }
+    .label-note.opt { color: #c0c0c0; }
+    .color-input-wrap { flex: 1; }
+    .color-input { height: 28px; width: 100%; border: 1.5px solid #e0e0e0; border-radius: 6px; padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none; transition: border-color .18s; }
+    .color-desc    { font-size: 10.5px; color: #bbb; line-height: 1.4; margin-top: 3px; }
 
     /* ── Screen 4: export ── */
     .export-success {
@@ -222,47 +294,53 @@
         <strong>Choose your approach</strong>
         <p>How do you want to build your token system?</p>
       </div>
-      <div class="cards" style="flex-wrap:wrap; gap:10px;">
+      <div class="cards" style="flex-direction:column; gap:8px;">
 
-        <div class="card" id="card-scratch" onclick="selectMode('scratch')" style="min-width:calc(50% - 5px)">
+        <div class="card" id="card-scratch" onclick="selectMode('scratch')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
           <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="card-icon-wrap">
+          <div class="card-icon-wrap" style="flex-shrink:0">
             <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
               <circle cx="11" cy="11" r="4" stroke="currentColor" stroke-width="1.7"/>
               <path d="M11 3v2M11 17v2M3 11h2M17 11h2M5.6 5.6l1.4 1.4M15 15l1.4 1.4M5.6 16.4l1.4-1.4M15 7l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <div class="card-title">From Scratch</div>
-          <div class="card-desc">Pick brand colors, generate full ramps with spacing and radius scales.</div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">From Scratch</div>
+            <div class="card-desc">Enter hex colors → auto-detects color names for Global primitives (e.g. Blue/500), maps them to semantic aliases (surface/primary), and creates local paint &amp; text styles with a full 13-level type scale.</div>
+          </div>
         </div>
 
-        <div class="card" id="card-starter" onclick="selectMode('starter')" style="min-width:calc(50% - 5px)">
+        <div class="card" id="card-starter" onclick="selectMode('starter')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
           <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="card-icon-wrap">
+          <div class="card-icon-wrap" style="flex-shrink:0">
             <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
               <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
               <line x1="1.5" y1="8.5" x2="20.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <line x1="11"  y1="8.5" x2="11"   y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <div class="card-title">Starter System <span class="card-subtitle">(Boilerplate)</span></div>
-          <div class="card-desc">Clean token set with best-practice defaults. Perfect for starting fresh.</div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">Starter System <span class="card-subtitle">(Boilerplate)</span></div>
+            <div class="card-desc">Scaffolds Global, Alias (+ Component for 3-tier) with placeholder values — brand color, spacing, border-radius, and body type. No color inputs needed; edit values in Figma to match your brand.</div>
+          </div>
         </div>
 
-        <div class="card" id="card-convert" onclick="selectMode('convert')" style="min-width:100%">
+        <div class="card" id="card-convert" onclick="selectMode('convert')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
           <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-          <div class="card-icon-wrap">
+          <div class="card-icon-wrap" style="flex-shrink:0">
             <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
               <path d="M2.5 7.5H16.5M13 3.5L17 7.5L13 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M19.5 14.5H5.5M9 10.5L5 14.5L9 18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
-          <div class="card-title">Smart Convert</div>
-          <div class="card-desc">Scans your existing local styles and maps them into a structured token hierarchy. Best if your file already has styles.</div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">Smart Convert</div>
+            <div class="card-desc">Scans your file's existing paint &amp; text styles, organises them into Global primitives and Alias semantic tokens (+ Component for 3-tier). Best for teams migrating an existing system.</div>
+          </div>
         </div>
 
       </div>
-      <div class="hint" style="padding-bottom:20px">Click a card to continue</div>
+      <div class="hint" style="padding-bottom:12px">Click a card to continue</div>
     </div>
   </div>
 
@@ -278,61 +356,79 @@
 
       <span class="color-section-label">Brand Colors</span>
       <div class="color-row">
-        <label>Primary <span class="req">*</span></label>
+        <label>Primary<span class="label-note">(required)</span></label>
         <div class="color-swatch" id="sw-primary"></div>
-        <input class="color-input" id="inp-primary" type="text" placeholder="#6600FF" oninput="onColorInput('primary')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-primary" type="text" placeholder="#6600FF" oninput="onColorInput('primary')">
+          <p class="color-desc">Your main brand color — used for primary buttons, links, and key UI actions.</p>
+        </div>
       </div>
-      <p class="color-desc">Your main brand color — used for primary buttons, links, and key UI actions.</p>
       <div class="color-row">
-        <label>Secondary <span class="req">*</span></label>
+        <label>Secondary<span class="label-note">(required)</span></label>
         <div class="color-swatch" id="sw-secondary"></div>
-        <input class="color-input" id="inp-secondary" type="text" placeholder="#00AAFF" oninput="onColorInput('secondary')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-secondary" type="text" placeholder="#00AAFF" oninput="onColorInput('secondary')">
+          <p class="color-desc">A complementary brand color — used for secondary actions and supporting elements.</p>
+        </div>
       </div>
-      <p class="color-desc">A complementary brand color — used for secondary actions and supporting elements.</p>
       <div class="color-row">
-        <label>Tertiary <span class="opt">(opt)</span></label>
+        <label>Tertiary<span class="label-note opt">(optional)</span></label>
         <div class="color-swatch" id="sw-tertiary"></div>
-        <input class="color-input" id="inp-tertiary" type="text" placeholder="#FF6600" oninput="onColorInput('tertiary')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-tertiary" type="text" placeholder="#FF6600" oninput="onColorInput('tertiary')">
+          <p class="color-desc">A third brand color — used for highlights, decorative elements, or tertiary CTAs.</p>
+        </div>
       </div>
-      <p class="color-desc">A third brand color — used for highlights, decorative elements, or tertiary CTAs.</p>
       <div class="color-row">
-        <label>Accent <span class="req">*</span></label>
+        <label>Accent<span class="label-note">(required)</span></label>
         <div class="color-swatch" id="sw-accent"></div>
-        <input class="color-input" id="inp-accent" type="text" placeholder="#F59E0B" oninput="onColorInput('accent')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-accent" type="text" placeholder="#F59E0B" oninput="onColorInput('accent')">
+          <p class="color-desc">A bold contrasting color — used for badges, callouts, notifications, or promotional moments.</p>
+        </div>
       </div>
-      <p class="color-desc">A bold contrasting color — used for badges, callouts, notifications, or promotional moments.</p>
 
       <span class="color-section-label" style="margin-top:16px">Semantic Colors</span>
       <div class="color-row">
         <label>Info</label>
         <div class="color-swatch" id="sw-info" style="background:#0066FF"></div>
-        <input class="color-input" id="inp-info" type="text" value="#0066FF" oninput="onColorInput('info')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-info" type="text" value="#0066FF" oninput="onColorInput('info')">
+          <p class="color-desc">Communicates informational messages, tips, and neutral notifications.</p>
+        </div>
       </div>
-      <p class="color-desc">Communicates informational messages, tips, and neutral notifications.</p>
       <div class="color-row">
         <label>Success</label>
         <div class="color-swatch" id="sw-success" style="background:#00BB66"></div>
-        <input class="color-input" id="inp-success" type="text" value="#00BB66" oninput="onColorInput('success')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-success" type="text" value="#00BB66" oninput="onColorInput('success')">
+          <p class="color-desc">Confirms completed actions, valid states, and positive outcomes.</p>
+        </div>
       </div>
-      <p class="color-desc">Confirms completed actions, valid states, and positive outcomes.</p>
       <div class="color-row">
         <label>Error</label>
         <div class="color-swatch" id="sw-error" style="background:#FF3333"></div>
-        <input class="color-input" id="inp-error" type="text" value="#FF3333" oninput="onColorInput('error')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-error" type="text" value="#FF3333" oninput="onColorInput('error')">
+          <p class="color-desc">Signals errors, destructive actions, and critical failures requiring immediate attention.</p>
+        </div>
       </div>
-      <p class="color-desc">Signals errors, destructive actions, and critical failures requiring immediate attention.</p>
       <div class="color-row">
         <label>Warning</label>
         <div class="color-swatch" id="sw-warning" style="background:#FFAA00"></div>
-        <input class="color-input" id="inp-warning" type="text" value="#FFAA00" oninput="onColorInput('warning')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-warning" type="text" value="#FFAA00" oninput="onColorInput('warning')">
+          <p class="color-desc">Alerts users to potential issues or reversible actions that need attention.</p>
+        </div>
       </div>
-      <p class="color-desc">Alerts users to potential issues or reversible actions that need attention.</p>
       <div class="color-row">
         <label>Neutral</label>
         <div class="color-swatch" id="sw-neutral" style="background:#6B7280"></div>
-        <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
+          <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
+        </div>
       </div>
-      <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
 
       <div class="scale-section">
         <span class="color-section-label">Spacing</span>
@@ -341,9 +437,9 @@
           <div class="scale-input-wrap">
             <div class="scale-input-row">
               <input class="scale-input" id="inp-spacing" type="number" min="1" max="32" value="4" oninput="onSpacingInput()">
-              <div class="scale-hint">Use 4 or 8 for grid-friendly layouts. Your base unit is the smallest spacing step.</div>
             </div>
-            <div class="scale-preview" id="preview-spacing">Scale: 4 · 8 · 12 · 16 · 20 · 24 · 32 · 40 · 48 · 64</div>
+            <div class="scale-hint">Use 4 or 8 for grid-friendly layouts. Your base unit is the smallest spacing step.</div>
+            <div class="preview-chips" id="preview-spacing"></div>
           </div>
         </div>
       </div>
@@ -355,11 +451,52 @@
           <div class="scale-input-wrap">
             <div class="scale-input-row">
               <input class="scale-input" id="inp-radius" type="number" min="0" max="64" value="4" oninput="onRadiusInput()">
-              <div class="scale-hint">Controls rounding feel: 0 = sharp, 4 = subtle, 8 = friendly, 16 = soft.</div>
             </div>
-            <div class="scale-preview" id="preview-radius">none(0) · sm(2) · md(4) · lg(8) · xl(16) · 2xl(24) · full(∞)</div>
+            <div class="scale-hint">Controls rounding feel: 0 = sharp, 4 = subtle, 8 = friendly, 16 = soft.</div>
+            <div class="radius-demos" id="preview-radius"></div>
           </div>
         </div>
+      </div>
+
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Border Width</span>
+        <div class="scale-row">
+          <label>Base width (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-width" type="number" min="1" max="16" value="1" oninput="onWidthInput()">
+            </div>
+            <div class="scale-hint">Base stroke width. 1px works for most UIs; 2px for heavier visual style.</div>
+            <div class="radius-demos" id="preview-width"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Typography</span>
+        <div class="scale-row">
+          <label>Base size (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-font-base" type="number" min="10" max="24" value="16" oninput="onTypoInput()">
+            </div>
+            <div class="scale-hint">The body text size your entire scale is built from. 16px is the web standard.</div>
+          </div>
+        </div>
+        <div class="scale-row">
+          <label>Scale ratio</label>
+          <div class="scale-input-wrap">
+            <select class="scale-select" id="inp-ratio" onchange="onTypoInput()">
+              <option value="major-second">Major Second — 1.125×</option>
+              <option value="minor-third">Minor Third — 1.200×</option>
+              <option value="major-third" selected>Major Third — 1.250×</option>
+              <option value="perfect-fourth">Perfect Fourth — 1.333×</option>
+              <option value="aug-fourth">√2 / Aug. Fourth — 1.414×</option>
+            </select>
+            <div class="scale-hint" id="ratio-feel">Compact — clean product UI</div>
+          </div>
+        </div>
+        <div class="type-preview" id="type-preview"></div>
       </div>
 
     </div>
@@ -410,6 +547,19 @@
         </div>
 
       </div>
+
+      <div class="starter-info" id="starter-info">
+        <div class="starter-info-label">What gets generated</div>
+        <div class="starter-info-text">A complete token system built from a curated default palette — ready to use immediately or customise directly in Figma.</div>
+        <div class="starter-info-tags">
+          <span class="starter-info-tag">9 color ramps × 10 stops</span>
+          <span class="starter-info-tag">Spacing scale (base 4)</span>
+          <span class="starter-info-tag">Border radius scale (base 4)</span>
+          <span class="starter-info-tag">Border width scale (base 1)</span>
+          <span class="starter-info-tag">13-level type scale · Major Third</span>
+        </div>
+      </div>
+
     </div>
     <div class="screen-footer">
       <button class="btn-primary" id="btn-generate" disabled onclick="doGenerate()">Generate Tokens</button>
@@ -484,6 +634,7 @@
     );
     document.getElementById('btn-generate').disabled = true;
     document.getElementById('hint-generate').textContent = 'Select an architecture above to generate';
+    document.getElementById('starter-info').classList.remove('visible', 'animate');
 
     const labels = { scratch: 'From Scratch', starter: 'Starter System', convert: 'Smart Convert' };
     document.getElementById('badge3').textContent = labels[value];
@@ -492,6 +643,55 @@
       if (value === 'scratch') goTo('screen2', 'left');
       else goTo('screen3', 'left');
     }, 200);
+  }
+
+  // ── Typography scale constants ─────────────────────────────────
+  const SCALE_RATIOS = {
+    'major-second':   { ratio: 1.125, feel: 'Very tight — compact UIs with minimal hierarchy' },
+    'minor-third':    { ratio: 1.200, feel: 'Subtle — works well for dense data products' },
+    'major-third':    { ratio: 1.250, feel: 'Compact — clean product UI' },
+    'perfect-fourth': { ratio: 1.333, feel: 'Balanced — editorial and marketing sites' },
+    'aug-fourth':     { ratio: 1.414, feel: 'Bold — high-contrast display hierarchy' },
+  };
+  const TYPE_LEVELS = [
+    { name: 'display-lg', step: 10 },
+    { name: 'display-md', step:  9 },
+    { name: 'display-sm', step:  8 },
+    { name: 'h1',         step:  7 },
+    { name: 'h2',         step:  6 },
+    { name: 'h3',         step:  5 },
+    { name: 'h4',         step:  4 },
+    { name: 'h5',         step:  3 },
+    { name: 'h6',         step:  2 },
+    { name: 'body-lg',    step:  1 },
+    { name: 'body',       step:  0 },
+    { name: 'caption',    step: -1 },
+    { name: 'xs',         step: -2 },
+  ];
+  function calcTypeScale(base, ratio) {
+    return TYPE_LEVELS.map(({ name, step }) => ({
+      name, size: Math.round(base * Math.pow(ratio, step) / 4) * 4,
+    }));
+  }
+  const TYPE_GROUPS = new Set(['h1', 'body-lg']); // divider before these
+
+  function onTypoInput() {
+    const base = parseInt(document.getElementById('inp-font-base').value) || 16;
+    const key  = document.getElementById('inp-ratio').value;
+    const { ratio, feel } = SCALE_RATIOS[key];
+    document.getElementById('ratio-feel').textContent = feel;
+    const scale  = calcTypeScale(base, ratio);
+    const maxPx  = scale[0].size;
+    document.getElementById('type-preview').innerHTML = scale.map(s => {
+      const divider = TYPE_GROUPS.has(s.name) ? '<div class="type-divider"></div>' : '';
+      const pct     = Math.round(s.size / maxPx * 100);
+      return divider +
+        `<div class="type-preview-row">
+          <span class="type-lvl-name">${s.name}</span>
+          <div class="type-lvl-track"><div class="type-lvl-bar" style="width:${pct}%"></div></div>
+          <span class="type-lvl-px">${s.size}px</span>
+        </div>`;
+    }).join('');
   }
 
   // ── Screen 2: Colors + Scales ──────────────────────────────────
@@ -514,20 +714,56 @@
   }
 
   function onSpacingInput() {
-    const base = parseInt(document.getElementById('inp-spacing').value) || 0;
+    const base  = parseInt(document.getElementById('inp-spacing').value) || 0;
     const mults = [1,2,3,4,5,6,8,10,12,16];
-    document.getElementById('preview-spacing').textContent = base > 0
-      ? 'Scale: ' + mults.map(m => m * base).join(' · ')
+    document.getElementById('preview-spacing').innerHTML = base > 0
+      ? mults.map(m => `<span class="preview-chip">${m * base}</span>`).join('')
       : '';
     validateScreen2();
   }
 
   function onRadiusInput() {
     const base = parseInt(document.getElementById('inp-radius').value);
-    if (isNaN(base)) { document.getElementById('preview-radius').textContent = ''; return; }
+    const el   = document.getElementById('preview-radius');
+    if (isNaN(base)) { el.innerHTML = ''; return; }
     const sm = Math.max(1, Math.round(base / 2));
-    document.getElementById('preview-radius').textContent =
-      `none(0) · sm(${sm}) · md(${base}) · lg(${base*2}) · xl(${base*4}) · 2xl(${base*6}) · full(∞)`;
+    const steps = [
+      { label: 'none', r: 0       },
+      { label: 'sm',   r: sm      },
+      { label: 'md',   r: base    },
+      { label: 'lg',   r: base*2  },
+      { label: 'xl',   r: base*4  },
+      { label: '2xl',  r: base*6  },
+      { label: 'full', r: 9999    },
+    ];
+    el.innerHTML = steps.map(s =>
+      `<div class="radius-demo-item">
+        <div class="radius-demo-box" style="border-radius:${s.r}px"></div>
+        <span class="radius-demo-label">${s.label}</span>
+      </div>`
+    ).join('');
+    validateScreen2();
+  }
+
+  function onWidthInput() {
+    const base = parseInt(document.getElementById('inp-width').value);
+    const el   = document.getElementById('preview-width');
+    if (isNaN(base) || base < 1) { el.innerHTML = ''; validateScreen2(); return; }
+    const steps = [
+      { label: 'none', w: 0        },
+      { label: 'sm',   w: base     },
+      { label: 'md',   w: base * 2 },
+      { label: 'lg',   w: base * 4 },
+      { label: 'xl',   w: base * 8 },
+    ];
+    el.innerHTML = steps.map(s =>
+      `<div class="radius-demo-item">
+        <div class="radius-demo-box" style="${s.w === 0
+          ? 'border:1.5px dashed #ddd;background:#f5f5f5'
+          : `border:${s.w}px solid #888;background:white`}"></div>
+        <span class="radius-demo-label">${s.label}</span>
+      </div>`
+    ).join('');
     validateScreen2();
   }
 
@@ -535,7 +771,8 @@
     const allBrandValid = REQUIRED_COLORS.every(f => isValidHex(normalizeHex(document.getElementById('inp-' + f).value)));
     const spacingOk = parseInt(document.getElementById('inp-spacing').value) >= 1;
     const radiusOk  = parseInt(document.getElementById('inp-radius').value)  >= 0;
-    const ok = allBrandValid && spacingOk && radiusOk;
+    const widthOk   = parseInt(document.getElementById('inp-width').value)   >= 1;
+    const ok = allBrandValid && spacingOk && radiusOk && widthOk;
     document.getElementById('btn-next2').disabled = !ok;
     document.getElementById('hint-next2').textContent = ok
       ? 'Ready — click Next to choose architecture'
@@ -554,6 +791,16 @@
     document.getElementById('card-3tier').classList.toggle('selected', value === '3tier');
     document.getElementById('btn-generate').disabled = false;
     document.getElementById('hint-generate').textContent = 'Ready — click Generate Tokens';
+
+    var info = document.getElementById('starter-info');
+    if (selectedMode === 'starter') {
+      info.classList.add('visible');
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { info.classList.add('animate'); });
+      });
+    } else {
+      info.classList.remove('visible', 'animate');
+    }
   }
 
   // ── Generate ───────────────────────────────────────────────────
@@ -572,6 +819,9 @@
       },
       spacingBase: parseInt(document.getElementById('inp-spacing').value),
       radiusBase:  parseInt(document.getElementById('inp-radius').value),
+      widthBase:   parseInt(document.getElementById('inp-width').value)   || 1,
+      fontBase:    parseInt(document.getElementById('inp-font-base').value) || 16,
+      ratioKey:    document.getElementById('inp-ratio').value,
     };
   }
 
@@ -650,6 +900,10 @@
   };
 
   // ── Bootstrap ─────────────────────────────────────────────────
+  onSpacingInput();
+  onRadiusInput();
+  onWidthInput();
+  onTypoInput();
   parent.postMessage({ pluginMessage: { type: 'check-tokens' } }, '*');
 </script>
 </body>

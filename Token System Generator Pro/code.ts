@@ -63,6 +63,18 @@ function rgbToHex(r: number, g: number, b: number): string {
 const RAMP_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 type RampStop = typeof RAMP_STOPS[number];
 
+const STARTER_COLORS = {
+  primary:   '#3D6BE8',
+  secondary: '#7C3AED',
+  tertiary:  '#0891B2',
+  accent:    '#EA580C',
+  info:      '#3B82F6',
+  success:   '#22C55E',
+  error:     '#EF4444',
+  warning:   '#F59E0B',
+  neutral:   '#6B7280',
+} as const;
+
 function generateColorRamp(hex: string): Record<RampStop, RGB> {
   const rgb = hexToRgb(hex);
   const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
@@ -87,6 +99,43 @@ function generateColorRamp(hex: string): Record<RampStop, RGB> {
   return result;
 }
 
+// ─── TYPOGRAPHY SCALE ─────────────────────────────────────────────
+
+const TS_RATIO: Record<string, number> = {
+  'major-second':   1.125,
+  'minor-third':    1.200,
+  'major-third':    1.250,
+  'perfect-fourth': 1.333,
+  'aug-fourth':     1.414,
+};
+
+interface TypeLevel { name: string; fontSize: number; lineHeight: number; letterSpacing: number; }
+
+function generateTypographyScale(fontBase: number, ratioKey: string): TypeLevel[] {
+  const ratio = TS_RATIO[ratioKey] ?? 1.25;
+  const levels = [
+    { name: 'display-lg', step: 10, lh: 1.0,  ls: -0.05 },
+    { name: 'display-md', step:  9, lh: 1.0,  ls: -0.05 },
+    { name: 'display-sm', step:  8, lh: 1.05, ls: -0.04 },
+    { name: 'h1',         step:  7, lh: 1.1,  ls: -0.03 },
+    { name: 'h2',         step:  6, lh: 1.1,  ls: -0.03 },
+    { name: 'h3',         step:  5, lh: 1.2,  ls: -0.02 },
+    { name: 'h4',         step:  4, lh: 1.2,  ls: -0.02 },
+    { name: 'h5',         step:  3, lh: 1.2,  ls:  0    },
+    { name: 'h6',         step:  2, lh: 1.2,  ls:  0    },
+    { name: 'body-lg',    step:  1, lh: 1.5,  ls:  0    },
+    { name: 'body',       step:  0, lh: 1.5,  ls:  0    },
+    { name: 'caption',    step: -1, lh: 1.4,  ls:  0.01 },
+    { name: 'xs',         step: -2, lh: 1.4,  ls:  0.02 },
+  ];
+  return levels.map(({ name, step, lh, ls }) => ({
+    name,
+    fontSize:      Math.round(fontBase * Math.pow(ratio, step) / 4) * 4,
+    lineHeight:    lh,
+    letterSpacing: ls,
+  }));
+}
+
 const SPACING_MULTIPLIERS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];
 
 function generateSpacingScale(base: number): Record<string, number> {
@@ -105,6 +154,49 @@ function generateRadiusScale(base: number): Record<string, number> {
     '2xl': base * 6,
     full: 9999,
   };
+}
+
+function generateBorderWidthScale(base: number): Record<string, number> {
+  return { none: 0, sm: base, md: base * 2, lg: base * 4, xl: base * 8 };
+}
+
+// Names never overlap with the semantic reserved words: blue, green, red, amber, grey.
+function getColorName(hex: string): string {
+  const { r, g, b } = hexToRgb(hex);
+  const { h, s, l } = rgbToHsl(r, g, b);
+  const hDeg = h * 360;
+  const sPct = s * 100;
+  const lPct = l * 100;
+
+  if (sPct < 8) return lPct >= 70 ? 'silver' : 'charcoal';
+
+  let base: string;
+  if      (hDeg < 14 || hDeg >= 348) base = 'crimson';
+  else if (hDeg < 24)                 base = 'scarlet';
+  else if (hDeg < 36)                 base = 'coral';
+  else if (hDeg < 47)                 base = 'orange';
+  else if (hDeg < 57)                 base = 'gold';
+  else if (hDeg < 69)                 base = 'saffron';
+  else if (hDeg < 82)                 base = 'yellow';
+  else if (hDeg < 94)                 base = 'lime';
+  else if (hDeg < 130)               base = 'emerald';
+  else if (hDeg < 148)               base = 'jade';
+  else if (hDeg < 163)               base = 'teal';
+  else if (hDeg < 180)               base = 'turquoise';
+  else if (hDeg < 200)               base = 'aqua';
+  else if (hDeg < 218)               base = 'sky';
+  else if (hDeg < 244)               base = 'cobalt';
+  else if (hDeg < 262)               base = 'indigo';
+  else if (hDeg < 280)               base = 'violet';
+  else if (hDeg < 300)               base = 'purple';
+  else if (hDeg < 320)               base = 'fuchsia';
+  else if (hDeg < 336)               base = 'rose';
+  else                               base = 'ruby';
+
+  if      (lPct <= 22) return `deep-${base}`;
+  else if (lPct >= 80) return `pale-${base}`;
+  else if (sPct <  28) return `muted-${base}`;
+  return base;
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────
@@ -149,6 +241,8 @@ function deleteAllCollections(): void {
     });
     try { col.remove(); } catch (_e) {}
   });
+  figma.getLocalPaintStyles().forEach(s => { try { s.remove(); } catch (_e) {} });
+  figma.getLocalTextStyles().forEach(s => { try { s.remove(); } catch (_e) {} });
 }
 
 function tokensExist(): boolean {
@@ -157,35 +251,8 @@ function tokensExist(): boolean {
 
 // ─── EXISTING GENERATION (unchanged) ─────────────────────────────
 
-function createStarterSystem(): void {
-  const global    = figma.variables.createVariableCollection('01 Global');
-  const aliasCol  = figma.variables.createVariableCollection('02 Alias');
-  const component = figma.variables.createVariableCollection('03 Component');
-
-  const brand  = createColor(global, 'color/brand', 0.6, 0, 1);
-  const white  = createColor(global, 'color/white', 1, 1, 1);
-  const black  = createColor(global, 'color/black', 0.1, 0.1, 0.1);
-  createNumber(global, 'spacing/16', 16);
-  createNumber(global, 'borderRadius/md', 8);
-  const fontSize = createNumber(global, 'typography/fontSize/body', 16);
-  const lineH    = createNumber(global, 'typography/lineHeight/body', 24);
-  const letterS  = createNumber(global, 'typography/letterSpacing/body', 0);
-  const paraS    = createNumber(global, 'typography/paragraphSpacing/body', 8);
-
-  const surfacePrimary = alias(aliasCol, 'surface/primary', brand);
-  const textPrimary    = alias(aliasCol, 'text/primary', black);
-  const textInverse    = alias(aliasCol, 'text/inverse', white);
-  alias(aliasCol, 'text/body/fontSize',          fontSize);
-  alias(aliasCol, 'text/body/lineHeight',         lineH);
-  alias(aliasCol, 'text/body/letterSpacing',      letterS);
-  alias(aliasCol, 'text/body/paragraphSpacing',   paraS);
-
-  alias(component, 'component/text/primary',    textPrimary);
-  alias(component, 'component/text/inverse',    textInverse);
-  alias(component, 'component/surface/primary', surfacePrimary);
-  alias(component, 'component/icon/primary',    textPrimary);
-  alias(component, 'component/icon/inverse',    textInverse);
-  alias(component, 'component/border/default',  textPrimary);
+async function createStarterSystem(): Promise<void> {
+  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', '3tier');
 }
 
 function convertStylesToTokens(): void {
@@ -250,27 +317,8 @@ function convertStylesToTokens(): void {
   figma.notify('✅ Typography + color tokens created!');
 }
 
-function createStarterSystem2Tier(): void {
-  const global   = figma.variables.createVariableCollection('01 Global');
-  const aliasCol = figma.variables.createVariableCollection('02 Alias');
-
-  const brand  = createColor(global, 'color/brand', 0.6, 0, 1);
-  const white  = createColor(global, 'color/white', 1, 1, 1);
-  const black  = createColor(global, 'color/black', 0.1, 0.1, 0.1);
-  createNumber(global, 'spacing/16', 16);
-  createNumber(global, 'borderRadius/md', 8);
-  const fontSize = createNumber(global, 'typography/fontSize/body', 16);
-  const lineH    = createNumber(global, 'typography/lineHeight/body', 24);
-  const letterS  = createNumber(global, 'typography/letterSpacing/body', 0);
-  const paraS    = createNumber(global, 'typography/paragraphSpacing/body', 8);
-
-  alias(aliasCol, 'surface/primary',            brand);
-  alias(aliasCol, 'text/primary',               black);
-  alias(aliasCol, 'text/inverse',               white);
-  alias(aliasCol, 'text/body/fontSize',         fontSize);
-  alias(aliasCol, 'text/body/lineHeight',        lineH);
-  alias(aliasCol, 'text/body/letterSpacing',     letterS);
-  alias(aliasCol, 'text/body/paragraphSpacing',  paraS);
+async function createStarterSystem2Tier(): Promise<void> {
+  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', '2tier');
 }
 
 function convertStylesToTokens2Tier(): void {
@@ -322,19 +370,164 @@ function convertStylesToTokens2Tier(): void {
   figma.notify('✅ Typography + color tokens created!');
 }
 
-// ─── FROM SCRATCH (stubs — implemented in Task 3) ─────────────────
+// ─── FROM SCRATCH ─────────────────────────────────────────────────
 
-function createFromScratch3Tier(
-  _colors: ScratchColors,
-  _spacingBase: number,
-  _radiusBase: number
-): void { figma.notify('TODO'); }
+function buildFromScratch(
+  colors: ScratchColors,
+  spacingBase: number,
+  radiusBase: number,
+  widthBase: number,
+  fontBase: number,
+  ratioKey: string,
+  tier: '2tier' | '3tier'
+): void {
+  const global = figma.variables.createVariableCollection('01 Global');
 
-function createFromScratch2Tier(
-  _colors: ScratchColors,
-  _spacingBase: number,
-  _radiusBase: number
-): void { figma.notify('TODO'); }
+  // ── Color ramps — brand colors get hue-derived names; semantic colors get fixed color words
+  const SEMANTIC_GLOBAL: Record<string, string> = {
+    info: 'blue', success: 'green', error: 'red', warning: 'amber', neutral: 'grey',
+  };
+  const rv: Record<string, Record<number, Variable>> = {};
+
+  const usedBrandNames = new Set<string>();
+  for (const key of ['primary', 'secondary', 'tertiary', 'accent'] as const) {
+    const hex = colors[key];
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+    let colorName = getColorName(hex);
+    if (usedBrandNames.has(colorName)) {
+      let i = 2;
+      while (usedBrandNames.has(`${colorName}-${i}`)) i++;
+      colorName = `${colorName}-${i}`;
+    }
+    usedBrandNames.add(colorName);
+    const ramp = generateColorRamp(hex);
+    rv[key] = {};
+    for (const stop of RAMP_STOPS) {
+      const { r, g, b } = ramp[stop];
+      rv[key][stop] = createColor(global, `color/${colorName}/${stop}`, r, g, b);
+    }
+  }
+
+  for (const key of ['info', 'success', 'error', 'warning', 'neutral'] as const) {
+    const hex = colors[key];
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+    const colorName = SEMANTIC_GLOBAL[key];
+    const ramp = generateColorRamp(hex);
+    rv[key] = {};
+    for (const stop of RAMP_STOPS) {
+      const { r, g, b } = ramp[stop];
+      rv[key][stop] = createColor(global, `color/${colorName}/${stop}`, r, g, b);
+    }
+  }
+
+  // ── Spacing
+  for (const [k, v] of Object.entries(generateSpacingScale(spacingBase))) {
+    createNumber(global, `spacing/${k}`, v);
+  }
+
+  // ── Border Radius (named by pixel value)
+  const radiusEntries = Object.entries(generateRadiusScale(radiusBase)) as [string, number][];
+  const radiusGlobal = new Map<number, Variable>();
+  for (const [, v] of radiusEntries) {
+    if (!radiusGlobal.has(v)) radiusGlobal.set(v, createNumber(global, `borderRadius/${v}`, v));
+  }
+
+  // ── Border Width (named by pixel value)
+  const widthEntries = Object.entries(generateBorderWidthScale(widthBase)) as [string, number][];
+  const widthGlobal = new Map<number, Variable>();
+  for (const [, v] of widthEntries) {
+    if (!widthGlobal.has(v)) widthGlobal.set(v, createNumber(global, `borderWidth/${v}`, v));
+  }
+
+  // ── Typography
+  const typo = generateTypographyScale(fontBase, ratioKey);
+  const fsV: Record<string, Variable> = {};
+  const lhV: Record<string, Variable> = {};
+  const lsV: Record<string, Variable> = {};
+  for (const t of typo) {
+    fsV[t.name] = createNumber(global, `typography/font-size/${t.name}`,      t.fontSize);
+    lhV[t.name] = createNumber(global, `typography/line-height/${t.name}`,    t.lineHeight);
+    lsV[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, t.letterSpacing);
+  }
+
+  // ── 02 Alias
+  const aliasCol = figma.variables.createVariableCollection('02 Alias');
+  const P = rv['primary'],  S = rv['secondary'], A = rv['accent'],
+        T = rv['tertiary'], N = rv['neutral'];
+
+  let intDefault: Variable | undefined, intHover: Variable | undefined,
+      intPressed: Variable | undefined, intSubtle: Variable | undefined, intOn: Variable | undefined;
+  if (P) {
+    intDefault = alias(aliasCol, 'color/interactive/default', P[500]);
+    intHover   = alias(aliasCol, 'color/interactive/hover',   P[600]);
+    intPressed = alias(aliasCol, 'color/interactive/pressed', P[700]);
+    intSubtle  = alias(aliasCol, 'color/interactive/subtle',  P[100]);
+    intOn      = alias(aliasCol, 'color/interactive/on',      N ? N[50] : P[50]);
+  }
+  if (S) {
+    alias(aliasCol, 'color/secondary/default', S[500]);
+    alias(aliasCol, 'color/secondary/hover',   S[600]);
+    alias(aliasCol, 'color/secondary/subtle',  S[100]);
+  }
+  if (A) {
+    alias(aliasCol, 'color/accent/default', A[500]);
+    alias(aliasCol, 'color/accent/subtle',  A[100]);
+  }
+  if (T) {
+    alias(aliasCol, 'color/tertiary/default', T[500]);
+    alias(aliasCol, 'color/tertiary/subtle',  T[100]);
+  }
+
+  for (const state of ['info', 'success', 'error', 'warning'] as const) {
+    const R = rv[state];
+    if (R) {
+      alias(aliasCol, `color/feedback/${state}/default`, R[500]);
+      alias(aliasCol, `color/feedback/${state}/subtle`,  R[100]);
+      alias(aliasCol, `color/feedback/${state}/strong`,  R[700]);
+    }
+  }
+
+  for (const [k, v] of radiusEntries) {
+    const gVar = radiusGlobal.get(v);
+    if (gVar) alias(aliasCol, `borderRadius/${k}`, gVar);
+  }
+  for (const [k, v] of widthEntries) {
+    const gVar = widthGlobal.get(v);
+    if (gVar) alias(aliasCol, `borderWidth/${k}`, gVar);
+  }
+
+  for (const t of typo) {
+    alias(aliasCol, `text/${t.name}/font-size`,      fsV[t.name]);
+    alias(aliasCol, `text/${t.name}/line-height`,    lhV[t.name]);
+    alias(aliasCol, `text/${t.name}/letter-spacing`, lsV[t.name]);
+  }
+
+  if (tier !== '3tier') return;
+
+  // ── 03 Component
+  const comp = figma.variables.createVariableCollection('03 Component');
+  if (intDefault) alias(comp, 'button/bg/default',     intDefault);
+  if (intHover)   alias(comp, 'button/bg/hover',       intHover);
+  if (intPressed) alias(comp, 'button/bg/pressed',     intPressed);
+  if (intOn)      alias(comp, 'button/text/label',     intOn);
+  if (intSubtle)  alias(comp, 'button/bg/ghost',       intSubtle);
+  if (intDefault) alias(comp, 'button/border/default', intDefault);
+
+  if (N) {
+    alias(comp, 'input/bg/default',       N[50]);
+    alias(comp, 'input/border/default',   N[300]);
+    if (intDefault) alias(comp, 'input/border/focus', intDefault);
+    alias(comp, 'input/text/default',     N[900]);
+    alias(comp, 'input/text/placeholder', N[400]);
+    alias(comp, 'surface/page',    N[50]);
+    alias(comp, 'surface/card',    N[100]);
+    alias(comp, 'surface/overlay', N[200]);
+    alias(comp, 'text/default',  N[900]);
+    alias(comp, 'text/subtle',   N[600]);
+    alias(comp, 'text/disabled', N[400]);
+    alias(comp, 'text/inverse',  N[50]);
+  }
+}
 
 // ─── JSON EXPORT (stub — implemented in Task 4) ───────────────────
 
@@ -347,30 +540,39 @@ function runGeneration(
   mode: string,
   colors?: ScratchColors,
   spacingBase?: number,
-  radiusBase?: number
+  radiusBase?: number,
+  widthBase?: number,
+  fontBase?: number,
+  ratioKey?: string
 ): void {
   if (tokensExist()) {
     figma.ui.postMessage({ type: 'confirm-replace' }); return;
   }
-  generate(approach, mode, colors, spacingBase, radiusBase);
+  generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey);
 }
 
-function generate(
+async function generate(
   approach: string,
   mode: string,
   colors?: ScratchColors,
   spacingBase?: number,
-  radiusBase?: number
-): void {
+  radiusBase?: number,
+  widthBase?: number,
+  fontBase?: number,
+  ratioKey?: string
+): Promise<void> {
   deleteAllCollections();
   if (mode === 'scratch') {
-    if (approach === '3tier') createFromScratch3Tier(colors!, spacingBase!, radiusBase!);
-    else createFromScratch2Tier(colors!, spacingBase!, radiusBase!);
+    buildFromScratch(
+      colors!, spacingBase!, radiusBase!, widthBase ?? 1,
+      fontBase ?? 16, ratioKey ?? 'major-third',
+      approach === '3tier' ? '3tier' : '2tier'
+    );
   } else if (approach === '3tier') {
-    if (mode === 'starter') createStarterSystem();
+    if (mode === 'starter') await createStarterSystem();
     if (mode === 'convert') convertStylesToTokens();
   } else {
-    if (mode === 'starter') createStarterSystem2Tier();
+    if (mode === 'starter') await createStarterSystem2Tier();
     if (mode === 'convert') convertStylesToTokens2Tier();
   }
   const json  = exportVariablesToJSON();
@@ -389,12 +591,15 @@ figma.ui.onmessage = (msg: {
   colors?: ScratchColors;
   spacingBase?: number;
   radiusBase?: number;
+  widthBase?: number;
+  fontBase?: number;
+  ratioKey?: string;
 }) => {
   if (msg.type === 'generate') {
-    runGeneration(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase);
+    runGeneration(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey);
   }
   if (msg.type === 'confirm-continue') {
-    generate(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase);
+    generate(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey);
   }
   if (msg.type === 'export-json') {
     if (!tokensExist()) { figma.notify('⚠️ No variables found — generate tokens first'); return; }

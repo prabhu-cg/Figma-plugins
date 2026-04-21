@@ -1,40 +1,35 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Token System Generator Pro
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+A free Figma plugin that scaffolds a complete design token system — color ramps, spacing, border radius, border width, and typography — directly into your Figma Variables in seconds.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## What it does
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+Token System Generator Pro creates structured Figma Variable collections following a 2-tier (Global + Alias) or 3-tier (Global + Alias + Component) token architecture, ready to hand off to developers.
 
-  https://nodejs.org/en/download/
+## Three approaches
 
-Next, install TypeScript using the command:
+| Approach | Best for |
+|---|---|
+| **From Scratch** | New projects — enter your brand hex colors and let the plugin generate full 10-stop color ramps, spacing, radius, and a 13-level type scale |
+| **Starter System** | Rapid prototyping — scaffolds a complete boilerplate token system with placeholder values you edit directly in Figma |
+| **Smart Convert** | Existing projects — scans your file's local paint and text styles and organises them into a Global + Alias (+ Component) variable hierarchy |
 
-  npm install -g typescript
+## What gets generated
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+- **Color ramps** — 10 stops (50–900) per color, auto-named by hue (e.g. `cobalt/500`, `violet/200`)
+- **Semantic colors** — info, success, error, warning, neutral mapped to alias tokens
+- **Spacing scale** — configurable base unit, 10 tokens at Tailwind-equivalent multipliers
+- **Border radius** — 7 semantic stops (none → full) from a configurable base
+- **Border width** — 5 semantic stops (none → xl)
+- **Typography** — 13 levels (display-lg → xs) across 5 musical scale ratios
 
-  npm install --save-dev @figma/plugin-typings
+## Development
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+Built with TypeScript + the Figma Plugin API. No external dependencies.
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+```bash
+npm install
+# Then in VS Code: Terminal > Run Build Task > npm: watch
+```
 
-For more information, visit https://www.typescriptlang.org/
-
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
-
-We recommend writing TypeScript code using Visual Studio code:
-
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
-
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+Tests live in `tests/`.
