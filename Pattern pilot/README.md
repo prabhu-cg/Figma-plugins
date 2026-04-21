@@ -1,3 +1,7 @@
+
+<img width="1000" height="560" alt="thumbnail" src="https://github.com/user-attachments/assets/b4b27953-511e-445c-b4aa-8b56bf0f0e8b" />
+
+
 # Pattern Pilot — Figma Plugin
 
 Insert production-ready UI section patterns in one click — 21 sections, 6 style variants each, across Desktop, Tablet, and Mobile breakpoints. 100% free, forever.
