@@ -1,3 +1,6 @@
+<img width="1000" height="560" alt="thumbnail" src="https://github.com/user-attachments/assets/144687b7-94e3-49ab-8b7a-660a5b39c371" />
+
+
 # Token System Generator Pro
 
 A free Figma plugin that scaffolds a complete design token system — color ramps, spacing, border radius, border width, and typography — directly into your Figma Variables in seconds.
