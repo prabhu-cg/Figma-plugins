@@ -29,7 +29,7 @@ Each pattern can be inserted at any of the following widths:
 |------------|-------|
 | Desktop | 1440 px |
 | Tablet | 768 px |
-| Mobile | 390 px |
+| Mobile | 375 px |
 
 ---
 
