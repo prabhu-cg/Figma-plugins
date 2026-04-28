@@ -241,8 +241,6 @@ function deleteAllCollections(): void {
     });
     try { col.remove(); } catch (_e) {}
   });
-  figma.getLocalPaintStyles().forEach(s => { try { s.remove(); } catch (_e) {} });
-  figma.getLocalTextStyles().forEach(s => { try { s.remove(); } catch (_e) {} });
 }
 
 function tokensExist(): boolean {
@@ -531,7 +529,45 @@ function buildFromScratch(
 
 // ─── JSON EXPORT (stub — implemented in Task 4) ───────────────────
 
-function exportVariablesToJSON(): string { return '{}'; }
+function exportVariablesToJSON(): string {
+  const collections = figma.variables.getLocalVariableCollections();
+  const result: { [key: string]: unknown } = {};
+  const colorToHex = (c: { r: number; g: number; b: number }) => {
+    const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
+    return `#${h(c.r)}${h(c.g)}${h(c.b)}`.toUpperCase();
+  };
+  const toCamelCase = (str: string) => str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
+
+  collections.forEach(col => {
+    const vars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === col.id);
+    vars.forEach(v => {
+      const mode = col.modes[0];
+      const val = v.valuesByMode[mode.modeId];
+      const parts = v.name.split('/');
+      let current: any = result;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = toCamelCase(parts[i]);
+        if (!current[key]) current[key] = {};
+        current = current[key];
+      }
+      const lastKey = toCamelCase(parts[parts.length - 1]);
+      let type = 'unknown';
+      let value: any = val;
+      if (v.resolvedType === 'COLOR' && val && (val as any).r !== undefined) {
+        value = colorToHex(val as any);
+        type = 'color';
+      } else if (v.resolvedType === 'FLOAT') {
+        value = val;
+        type = 'dimension';
+      } else if (typeof val === 'object' && (val as any).type === 'VARIABLE_ALIAS') {
+        type = 'color';
+        value = val;
+      }
+      current[lastKey] = { value, type };
+    });
+  });
+  return JSON.stringify(result, null, 2);
+}
 
 // ─── ORCHESTRATION ────────────────────────────────────────────────
 
