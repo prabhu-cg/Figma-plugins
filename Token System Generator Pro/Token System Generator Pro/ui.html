@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Token System Generator Pro</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23EE661D'/><rect x='4' y='6.5' width='24' height='6' rx='2' fill='white'/><rect x='11' y='14.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.75'/><rect x='11' y='21.5' width='10' height='5' rx='1.5' fill='white' fill-opacity='.5'/></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; }
+    body { font-family: Inter, sans-serif; background: #fafafa; display: flex; flex-direction: column; }
+
+    /* ── Wizard shell ── */
+    .wizard { position: relative; flex: 1; overflow: hidden; }
+
+    /* ── Screens ── */
+    .screen {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      transition: transform 0.28s ease, opacity 0.22s ease;
+    }
+    .screen.slide-out-left  { transform: translateX(-100%); opacity: 0; pointer-events: none; }
+    .screen.slide-out-right { transform: translateX(100%);  opacity: 0; pointer-events: none; }
+
+    /* ── Scrollable content + fixed footer ── */
+    .screen-body   { flex: 1; overflow-y: auto; padding: 20px 20px 0; }
+    .screen-footer { padding: 12px 20px 18px; flex-shrink: 0; }
+
+    /* ── Top nav ── */
+    .top-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px 0; flex-shrink: 0;
+    }
+    .back-btn {
+      font-size: 12px; font-weight: 500; color: #EE661D; cursor: pointer;
+      background: none; border: none; padding: 0; font-family: Inter, sans-serif;
+      transition: color .18s; display: flex; align-items: center; gap: 4px;
+    }
+    .back-btn:hover { color: #c84f10; }
+    .approach-badge {
+      font-size: 11px; color: #EE661D; background: #FFF9EB;
+      border: 1px solid #f5c8a0; border-radius: 20px; padding: 3px 10px; font-weight: 500;
+    }
+
+    /* ── Header ── */
+    .header { margin-bottom: 14px; }
+    .header h2 { font-size: 17px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    .header p  { font-size: 12px; color: #888; line-height: 1.5; }
+
+    /* ── Divider ── */
+    .divider { height: 1px; background: #eee; margin-bottom: 14px; }
+
+    /* ── Section heading ── */
+    .section-heading { margin-bottom: 12px; }
+    .section-heading strong { display: block; font-size: 14px; font-weight: 600; color: #111; margin-bottom: 3px; }
+    .section-heading p { font-size: 12px; color: #888; line-height: 1.5; }
+
+    /* ── Cards ── */
+    .cards { display: flex; gap: 12px; }
+    .card {
+      flex: 1; border-radius: 10px; padding: 14px; background: white;
+      border: 1.5px solid #eee; cursor: pointer;
+      transition: border-color .18s, background .18s, box-shadow .18s;
+      display: flex; flex-direction: column; gap: 8px;
+      position: relative; user-select: none;
+    }
+    .card:hover { border-color: #EE661D; box-shadow: 0 4px 14px rgba(0,0,0,.07); }
+    .card.selected { border-color: #EE661D; background: #FFF9EB; }
+    .card-icon-wrap {
+      width: 38px; height: 38px; border-radius: 9px; background: #f3f3f3;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background .18s;
+    }
+    .card:hover .card-icon-wrap,
+    .card.selected .card-icon-wrap { background: rgba(238,102,29,.12); }
+    .card-icon { color: #c0c0c0; transition: color .18s; display: block; }
+    .card:hover .card-icon,
+    .card.selected .card-icon { color: #EE661D; }
+    .card-title    { font-size: 13px; font-weight: 600; color: #111; padding-right: 22px; line-height: 1.4; }
+    .card-subtitle { font-size: 11px; font-weight: 400; color: #aaa; }
+    .card-desc     { font-size: 11.5px; color: #666; line-height: 1.6; }
+    .card-check {
+      display: none; position: absolute; top: 11px; right: 11px;
+      width: 18px; height: 18px; border-radius: 50%; background: #EE661D;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .card.selected .card-check { display: flex; }
+
+    /* ── Buttons ── */
+    .btn-primary {
+      width: 100%; height: 38px; border: none; border-radius: 8px;
+      font-size: 13px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; transition: background .2s; background: #EE661D; color: white;
+    }
+    .btn-primary:hover:not(:disabled) { background: #555; }
+    .btn-primary:disabled { background: #e0e0e0; color: #aaa; cursor: not-allowed; }
+    .btn-secondary {
+      flex: 1; height: 34px; border: 1.5px solid #EE661D; border-radius: 8px;
+      font-size: 12px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; transition: background .18s; background: white; color: #EE661D;
+    }
+    .btn-secondary:hover { background: #FFF9EB; }
+    .btn-ghost {
+      flex: 1; height: 32px; border: 1px solid #e0e0e0; border-radius: 8px;
+      font-size: 11px; font-family: Inter, sans-serif; font-weight: 500;
+      cursor: pointer; background: white; color: #888; transition: border-color .18s, color .18s;
+    }
+    .btn-ghost:hover { border-color: #888; color: #444; }
+
+    /* ── Hint ── */
+    .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
+
+    /* ── Starter info panel ── */
+    .starter-info {
+      display: none;
+      margin: 12px 0 0;
+      padding: 11px 13px;
+      background: #f5f7ff;
+      border: 1px solid #dde3f7;
+      border-left: 3px solid #6b8af5;
+      border-radius: 8px;
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .starter-info.visible {
+      display: block;
+    }
+    .starter-info.animate {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .starter-info-label {
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #6b8af5;
+      margin-bottom: 5px;
+    }
+    .starter-info-text {
+      font-size: 11.5px;
+      color: #555;
+      line-height: 1.6;
+      margin-bottom: 8px;
+    }
+    .starter-info-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .starter-info-tag {
+      font-size: 10.5px;
+      font-weight: 500;
+      color: #4a6ae8;
+      background: #eaeefd;
+      border-radius: 4px;
+      padding: 2px 7px;
+      white-space: nowrap;
+    }
+
+    /* ── Screen 2: color rows ── */
+    .color-section-label {
+      display: block; font-size: 12px; font-weight: 600; color: #111; margin: 14px 0 8px;
+    }
+    .color-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+    .color-swatch {
+      width: 28px; height: 28px; border-radius: 6px; flex-shrink: 0;
+      background: #eee; border: 1.5px solid transparent; transition: border-color .18s;
+      margin-top: 0;
+    }
+    .color-swatch.invalid { border-color: #ff4444 !important; }
+    .color-input:focus { border-color: #EE661D; }
+    .color-input.invalid { border-color: #ff4444; }
+
+    /* ── Screen 2: scale inputs ── */
+    .scale-section { margin-top: 16px; }
+    .scale-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+    .scale-row label { font-size: 12px; color: #555; width: 110px; flex-shrink: 0; padding-top: 6px; }
+    .scale-input-wrap { flex: 1; }
+    .scale-input {
+      height: 28px; width: 70px; border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none;
+      transition: border-color .18s;
+    }
+    .scale-input:focus { border-color: #EE661D; }
+    .scale-hint    { font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 4px; }
+
+    /* ── Spacing chips ── */
+    .preview-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .preview-chip  { font-size: 10px; color: #555; background: #f5f5f5; border: 1px solid #eaeaea; border-radius: 4px; padding: 2px 7px; font-family: 'Menlo','Consolas',monospace; }
+
+    /* ── Radius demos ── */
+    .radius-demos      { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; align-items: flex-end; }
+    .radius-demo-item  { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .radius-demo-box   { width: 28px; height: 28px; background: #efefef; border: 1.5px solid #ddd; }
+    .radius-demo-label { font-size: 9px; color: #aaa; font-family: 'Menlo','Consolas',monospace; }
+
+    /* ── Typography preview ── */
+    .type-preview     { margin-top: 10px; background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 10px 12px; }
+    .type-preview-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+    .type-lvl-name    { font-size: 10px; color: #777; width: 74px; flex-shrink: 0; font-family: 'Menlo','Consolas',monospace; }
+    .type-lvl-track   { flex: 1; height: 3px; background: #ebebeb; border-radius: 2px; overflow: hidden; }
+    .type-lvl-bar     { height: 100%; background: #c8c8c8; border-radius: 2px; }
+    .type-lvl-px      { font-size: 10px; color: #bbb; width: 34px; text-align: right; flex-shrink: 0; font-family: 'Menlo','Consolas',monospace; }
+    .type-divider     { height: 1px; background: #ebebeb; margin: 5px 0; }
+    .scale-input-row { display: flex; align-items: center; gap: 10px; }
+    .scale-select {
+      height: 28px; width: 100%; border: 1.5px solid #e0e0e0; border-radius: 6px;
+      padding: 0 28px 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none;
+      background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") no-repeat right 8px center;
+      color: #333; cursor: pointer; transition: border-color .18s; -webkit-appearance: none; appearance: none;
+    }
+    .scale-select:focus { border-color: #EE661D; }
+    .color-row label { font-size: 12px; color: #555; width: 80px; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; }
+    .label-note { font-size: 9px; font-weight: 400; color: #aaa; }
+    .label-note.opt { color: #c0c0c0; }
+    .color-input-wrap { flex: 1; }
+    .color-input { height: 28px; width: 100%; border: 1.5px solid #e0e0e0; border-radius: 6px; padding: 0 8px; font-size: 12px; font-family: Inter, sans-serif; outline: none; transition: border-color .18s; }
+    .color-desc    { font-size: 10.5px; color: #bbb; line-height: 1.4; margin-top: 3px; }
+
+    /* ── Screen 4: export ── */
+    .export-success {
+      display: flex; align-items: center; gap: 10px;
+      background: #f0fdf4; border: 1px solid #86efac;
+      border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;
+    }
+    .export-success span { font-size: 12px; color: #166534; font-weight: 500; }
+    .json-panel-label { font-size: 12px; font-weight: 600; color: #111; margin-bottom: 6px; }
+    .json-panel {
+      background: #1e1e2e; border-radius: 8px; padding: 12px;
+      flex: 1; min-height: 0; overflow-y: auto;
+      font-size: 11px; font-family: 'Menlo', 'Consolas', monospace;
+      color: #cdd6f4; line-height: 1.6; white-space: pre;
+    }
+    .export-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+    .export-footer  { display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+<div class="wizard">
+
+  <!-- ══════════════════════════════════════
+       SMART LANDING
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-left" id="screen-landing">
+    <div class="screen-body">
+      <div class="header" style="padding-top:6px">
+        <h2>Token System Generator Pro</h2>
+        <p>Your token variables are ready.</p>
+      </div>
+      <div class="divider"></div>
+      <div class="section-heading">
+        <strong>What would you like to do?</strong>
+        <p id="landing-summary">Found existing variable collections.</p>
+      </div>
+      <div class="cards">
+        <div class="card" id="card-export-landing" onclick="landingExport()">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M11 2v12M6 10l5 5 5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M3 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Export to JSON</div>
+          <div class="card-desc">Generate dev-ready Style Dictionary tokens from your current Figma variables.</div>
+        </div>
+        <div class="card" id="card-regenerate" onclick="goTo('screen1','left')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M2.5 7.5H16.5M13 3.5L17 7.5L13 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M19.5 14.5H5.5M9 10.5L5 14.5L9 18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="card-title">Regenerate Tokens</div>
+          <div class="card-desc">Start fresh — replace existing variables with a new token system.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 1 — Mode
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen1">
+    <div class="screen-body">
+      <div class="header">
+        <h2>Token System Generator Pro</h2>
+        <p>Create or convert your design system foundations in seconds.</p>
+      </div>
+      <div class="divider"></div>
+      <div class="section-heading">
+        <strong>Choose your approach</strong>
+        <p>How do you want to build your token system?</p>
+      </div>
+      <div class="cards" style="flex-direction:column; gap:8px;">
+
+        <div class="card" id="card-scratch" onclick="selectMode('scratch')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap" style="flex-shrink:0">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <circle cx="11" cy="11" r="4" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M11 3v2M11 17v2M3 11h2M17 11h2M5.6 5.6l1.4 1.4M15 15l1.4 1.4M5.6 16.4l1.4-1.4M15 7l1.4-1.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">From Scratch</div>
+            <div class="card-desc">Enter hex colors → auto-detects color names for Global primitives (e.g. Blue/500), maps them to semantic aliases (surface/primary), and creates local paint &amp; text styles with a full 13-level type scale.</div>
+          </div>
+        </div>
+
+        <div class="card" id="card-starter" onclick="selectMode('starter')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap" style="flex-shrink:0">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="1.5" width="19" height="19" rx="2.5" stroke="currentColor" stroke-width="1.7"/>
+              <line x1="1.5" y1="8.5" x2="20.5" y2="8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <line x1="11"  y1="8.5" x2="11"   y2="20.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">Starter System <span class="card-subtitle">(Boilerplate)</span></div>
+            <div class="card-desc">Scaffolds Global, Alias (+ Component for 3-tier) with placeholder values — brand color, spacing, border-radius, and body type. No color inputs needed; edit values in Figma to match your brand.</div>
+          </div>
+        </div>
+
+        <div class="card" id="card-convert" onclick="selectMode('convert')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap" style="flex-shrink:0">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <path d="M2.5 7.5H16.5M13 3.5L17 7.5L13 11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M19.5 14.5H5.5M9 10.5L5 14.5L9 18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">Smart Convert</div>
+            <div class="card-desc">Scans your file's existing paint &amp; text styles, organises them into Global primitives and Alias semantic tokens (+ Component for 3-tier). Best for teams migrating an existing system.</div>
+          </div>
+        </div>
+
+      </div>
+      <div class="hint" style="padding-bottom:12px">Click a card to continue</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 2 — Colors + Scale (From Scratch)
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen2">
+    <div class="top-nav">
+      <button class="back-btn" onclick="goTo('screen1','right')">← Change approach</button>
+      <span class="approach-badge">From Scratch</span>
+    </div>
+    <div class="screen-body" style="padding-top:12px">
+
+      <span class="color-section-label">Brand Colors</span>
+      <div class="color-row">
+        <label>Primary<span class="label-note">(required)</span></label>
+        <div class="color-swatch" id="sw-primary"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-primary" type="text" placeholder="#6600FF" oninput="onColorInput('primary')">
+          <p class="color-desc">Your main brand color — used for primary buttons, links, and key UI actions.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Secondary<span class="label-note">(required)</span></label>
+        <div class="color-swatch" id="sw-secondary"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-secondary" type="text" placeholder="#00AAFF" oninput="onColorInput('secondary')">
+          <p class="color-desc">A complementary brand color — used for secondary actions and supporting elements.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Tertiary<span class="label-note opt">(optional)</span></label>
+        <div class="color-swatch" id="sw-tertiary"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-tertiary" type="text" placeholder="#FF6600" oninput="onColorInput('tertiary')">
+          <p class="color-desc">A third brand color — used for highlights, decorative elements, or tertiary CTAs.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Accent<span class="label-note">(required)</span></label>
+        <div class="color-swatch" id="sw-accent"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-accent" type="text" placeholder="#F59E0B" oninput="onColorInput('accent')">
+          <p class="color-desc">A bold contrasting color — used for badges, callouts, notifications, or promotional moments.</p>
+        </div>
+      </div>
+
+      <span class="color-section-label" style="margin-top:16px">Semantic Colors</span>
+      <div class="color-row">
+        <label>Info</label>
+        <div class="color-swatch" id="sw-info" style="background:#0066FF"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-info" type="text" value="#0066FF" oninput="onColorInput('info')">
+          <p class="color-desc">Communicates informational messages, tips, and neutral notifications.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Success</label>
+        <div class="color-swatch" id="sw-success" style="background:#00BB66"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-success" type="text" value="#00BB66" oninput="onColorInput('success')">
+          <p class="color-desc">Confirms completed actions, valid states, and positive outcomes.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Error</label>
+        <div class="color-swatch" id="sw-error" style="background:#FF3333"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-error" type="text" value="#FF3333" oninput="onColorInput('error')">
+          <p class="color-desc">Signals errors, destructive actions, and critical failures requiring immediate attention.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Warning</label>
+        <div class="color-swatch" id="sw-warning" style="background:#FFAA00"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-warning" type="text" value="#FFAA00" oninput="onColorInput('warning')">
+          <p class="color-desc">Alerts users to potential issues or reversible actions that need attention.</p>
+        </div>
+      </div>
+      <div class="color-row">
+        <label>Neutral</label>
+        <div class="color-swatch" id="sw-neutral" style="background:#6B7280"></div>
+        <div class="color-input-wrap">
+          <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
+          <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
+        </div>
+      </div>
+
+      <div class="scale-section">
+        <span class="color-section-label">Spacing</span>
+        <div class="scale-row">
+          <label>Base unit (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-spacing" type="number" min="1" max="32" value="4" oninput="onSpacingInput()">
+            </div>
+            <div class="scale-hint">Use 4 or 8 for grid-friendly layouts. Your base unit is the smallest spacing step.</div>
+            <div class="preview-chips" id="preview-spacing"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Border Radius</span>
+        <div class="scale-row">
+          <label>Base radius (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-radius" type="number" min="0" max="64" value="4" oninput="onRadiusInput()">
+            </div>
+            <div class="scale-hint">Controls rounding feel: 0 = sharp, 4 = subtle, 8 = friendly, 16 = soft.</div>
+            <div class="radius-demos" id="preview-radius"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Border Width</span>
+        <div class="scale-row">
+          <label>Base width (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-width" type="number" min="1" max="16" value="1" oninput="onWidthInput()">
+            </div>
+            <div class="scale-hint">Base stroke width. 1px works for most UIs; 2px for heavier visual style.</div>
+            <div class="radius-demos" id="preview-width"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Typography</span>
+        <div class="scale-row">
+          <label>Base size (px)</label>
+          <div class="scale-input-wrap">
+            <div class="scale-input-row">
+              <input class="scale-input" id="inp-font-base" type="number" min="10" max="24" value="16" oninput="onTypoInput()">
+            </div>
+            <div class="scale-hint">The body text size your entire scale is built from. 16px is the web standard.</div>
+          </div>
+        </div>
+        <div class="scale-row">
+          <label>Scale ratio</label>
+          <div class="scale-input-wrap">
+            <select class="scale-select" id="inp-ratio" onchange="onTypoInput()">
+              <option value="major-second">Major Second — 1.125×</option>
+              <option value="minor-third">Minor Third — 1.200×</option>
+              <option value="major-third" selected>Major Third — 1.250×</option>
+              <option value="perfect-fourth">Perfect Fourth — 1.333×</option>
+              <option value="aug-fourth">√2 / Aug. Fourth — 1.414×</option>
+            </select>
+            <div class="scale-hint" id="ratio-feel">Compact — clean product UI</div>
+          </div>
+        </div>
+        <div class="scale-row">
+          <label>Font family</label>
+          <div class="scale-input-wrap">
+            <select class="scale-select" id="inp-font-family">
+              <option value="Inter" selected>Inter</option>
+            </select>
+            <div class="scale-hint">Choose the font for your typography system. Defaults to Inter.</div>
+          </div>
+        </div>
+        <div class="type-preview" id="type-preview"></div>
+      </div>
+
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" id="btn-next2" disabled onclick="goTo('screen3','left')">Next: Choose Architecture →</button>
+      <div class="hint" id="hint-next2">Fill in Primary, Secondary &amp; Accent to continue</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 3 — Architecture
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen3">
+    <div class="top-nav">
+      <button class="back-btn" onclick="backFromScreen3()">← Change approach</button>
+      <span class="approach-badge" id="badge3"></span>
+    </div>
+    <div class="screen-body" style="padding-top:14px">
+      <div class="section-heading">
+        <strong>Choose architecture</strong>
+        <p>How many layers should your token system have?</p>
+      </div>
+      <div class="cards">
+
+        <div class="card" id="card-2tier" onclick="selectArch('2tier')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="12"  width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="1.5" width="19" height="8.5" rx="2.2" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </div>
+          <div class="card-title">2 Tier System</div>
+          <div class="card-desc">A lightweight setup using Global and Alias layers only. Ideal for smaller projects or teams just beginning their design token journey.</div>
+        </div>
+
+        <div class="card" id="card-3tier" onclick="selectArch('3tier')">
+          <div class="card-check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="card-icon-wrap">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none">
+              <rect x="1.5" y="15.5" width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="8.3"  width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+              <rect x="1.5" y="1"    width="19" height="5.5" rx="1.8" stroke="currentColor" stroke-width="1.7"/>
+            </svg>
+          </div>
+          <div class="card-title">3 Tier System</div>
+          <div class="card-desc">A full-scale setup with Global, Alias, and Component layers. Built for mature design systems that need component-level semantic control.</div>
+        </div>
+
+      </div>
+
+      <div class="starter-info" id="starter-info">
+        <div class="starter-info-label">What gets generated</div>
+        <div class="starter-info-text">A complete token system built from a curated default palette — ready to use immediately or customise directly in Figma.</div>
+        <div class="starter-info-tags">
+          <span class="starter-info-tag">9 color ramps × 10 stops</span>
+          <span class="starter-info-tag">Spacing scale (base 4)</span>
+          <span class="starter-info-tag">Border radius scale (base 4)</span>
+          <span class="starter-info-tag">Border width scale (base 1)</span>
+          <span class="starter-info-tag">13-level type scale · Major Third</span>
+        </div>
+      </div>
+
+    </div>
+    <div class="screen-footer">
+      <button class="btn-primary" id="btn-generate" disabled onclick="doGenerate()">Generate Tokens</button>
+      <div class="hint" id="hint-generate">Select an architecture above to generate</div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       SCREEN 4 — Done + Export
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen4">
+    <div style="padding: 20px 20px 0; flex-shrink: 0;">
+      <div class="export-success">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+          <circle cx="9" cy="9" r="8" fill="#22c55e"/>
+          <polyline points="5,9 8,12 13,6" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="export-summary">Tokens created successfully.</span>
+      </div>
+      <div class="json-panel-label">
+        JSON Export
+        <span style="font-size:10px;font-weight:400;color:#aaa;margin-left:4px">(Style Dictionary v3)</span>
+      </div>
+    </div>
+    <div class="json-panel" id="json-panel" style="margin: 0 20px;"></div>
+    <div class="screen-footer">
+      <div class="export-actions">
+        <button class="btn-secondary" id="btn-copy" onclick="copyJSON()">Copy to clipboard</button>
+        <button class="btn-secondary" onclick="downloadJSON()">Download tokens.json</button>
+      </div>
+      <div class="export-footer">
+        <button class="btn-ghost" onclick="refreshJSON()">↺ Refresh JSON</button>
+        <button class="btn-ghost" onclick="startOver()">← Start over</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /.wizard -->
+
+<script>
+  // ── State ──────────────────────────────────────────────────────
+  let selectedMode = null;
+  let selectedArch = null;
+  let currentJSON  = '';
+  let availableFonts = [];
+
+  const REQUIRED_COLORS  = ['primary', 'secondary', 'accent'];
+  const ALL_COLOR_FIELDS = ['primary','secondary','tertiary','accent','info','success','error','warning','neutral'];
+
+  // ── Load available fonts ────────────────────────────────────────
+  window.addEventListener('load', () => {
+    parent.postMessage({ pluginMessage: { type: 'get-fonts' } }, '*');
+  });
+
+  // ── Transitions ────────────────────────────────────────────────
+  function goTo(targetId, exitDirection) {
+    const current = document.querySelector('.screen:not(.slide-out-left):not(.slide-out-right)');
+    if (current) current.classList.add(exitDirection === 'left' ? 'slide-out-left' : 'slide-out-right');
+    const target = document.getElementById(targetId);
+    target.classList.remove('slide-out-left', 'slide-out-right');
+  }
+
+  // ── Smart Landing ──────────────────────────────────────────────
+  function landingExport() {
+    parent.postMessage({ pluginMessage: { type: 'export-json' } }, '*');
+  }
+
+  // ── Screen 1: Mode ─────────────────────────────────────────────
+  function selectMode(value) {
+    selectedMode = value;
+    selectedArch = null;
+
+    ['scratch','starter','convert'].forEach(id =>
+      document.getElementById('card-' + id).classList.toggle('selected', id === value)
+    );
+    ['2tier','3tier'].forEach(id =>
+      document.getElementById('card-' + id).classList.remove('selected')
+    );
+    document.getElementById('btn-generate').disabled = true;
+    document.getElementById('hint-generate').textContent = 'Select an architecture above to generate';
+    document.getElementById('starter-info').classList.remove('visible', 'animate');
+
+    const labels = { scratch: 'From Scratch', starter: 'Starter System', convert: 'Smart Convert' };
+    document.getElementById('badge3').textContent = labels[value];
+
+    setTimeout(() => {
+      if (value === 'scratch') goTo('screen2', 'left');
+      else goTo('screen3', 'left');
+    }, 200);
+  }
+
+  // ── Typography scale constants ─────────────────────────────────
+  const SCALE_RATIOS = {
+    'major-second':   { ratio: 1.125, feel: 'Very tight — compact UIs with minimal hierarchy' },
+    'minor-third':    { ratio: 1.200, feel: 'Subtle — works well for dense data products' },
+    'major-third':    { ratio: 1.250, feel: 'Compact — clean product UI' },
+    'perfect-fourth': { ratio: 1.333, feel: 'Balanced — editorial and marketing sites' },
+    'aug-fourth':     { ratio: 1.414, feel: 'Bold — high-contrast display hierarchy' },
+  };
+  const TYPE_LEVELS = [
+    { name: 'display-lg', step: 10 },
+    { name: 'display-md', step:  9 },
+    { name: 'display-sm', step:  8 },
+    { name: 'h1',         step:  7 },
+    { name: 'h2',         step:  6 },
+    { name: 'h3',         step:  5 },
+    { name: 'h4',         step:  4 },
+    { name: 'h5',         step:  3 },
+    { name: 'h6',         step:  2 },
+    { name: 'body-lg',    step:  1 },
+    { name: 'body',       step:  0 },
+    { name: 'caption',    step: -1 },
+    { name: 'xs',         step: -2 },
+  ];
+  function calcTypeScale(base, ratio) {
+    return TYPE_LEVELS.map(({ name, step }) => ({
+      name, size: Math.round(base * Math.pow(ratio, step) / 4) * 4,
+    }));
+  }
+  const TYPE_GROUPS = new Set(['h1', 'body-lg']); // divider before these
+
+  function onTypoInput() {
+    const base = parseInt(document.getElementById('inp-font-base').value) || 16;
+    const key  = document.getElementById('inp-ratio').value;
+    const { ratio, feel } = SCALE_RATIOS[key];
+    document.getElementById('ratio-feel').textContent = feel;
+    const scale  = calcTypeScale(base, ratio);
+    const maxPx  = scale[0].size;
+    document.getElementById('type-preview').innerHTML = scale.map(s => {
+      const divider = TYPE_GROUPS.has(s.name) ? '<div class="type-divider"></div>' : '';
+      const pct     = Math.round(s.size / maxPx * 100);
+      return divider +
+        `<div class="type-preview-row">
+          <span class="type-lvl-name">${s.name}</span>
+          <div class="type-lvl-track"><div class="type-lvl-bar" style="width:${pct}%"></div></div>
+          <span class="type-lvl-px">${s.size}px</span>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Screen 2: Colors + Scales ──────────────────────────────────
+  function isValidHex(hex) { return /^#[0-9A-Fa-f]{6}$/.test(hex); }
+
+  function normalizeHex(val) {
+    val = (val || '').trim();
+    return val.startsWith('#') ? val : '#' + val;
+  }
+
+  function onColorInput(field) {
+    const input  = document.getElementById('inp-' + field);
+    const swatch = document.getElementById('sw-' + field);
+    const val    = normalizeHex(input.value);
+    const valid  = isValidHex(val);
+    swatch.style.background = valid ? val : '#eee';
+    swatch.classList.toggle('invalid', !valid);
+    input.classList.toggle('invalid', input.value !== '' && !valid);
+    validateScreen2();
+  }
+
+  function onSpacingInput() {
+    const base  = parseInt(document.getElementById('inp-spacing').value) || 0;
+    const mults = [1,2,3,4,5,6,8,10,12,16];
+    document.getElementById('preview-spacing').innerHTML = base > 0
+      ? mults.map(m => `<span class="preview-chip">${m * base}</span>`).join('')
+      : '';
+    validateScreen2();
+  }
+
+  function onRadiusInput() {
+    const base = parseInt(document.getElementById('inp-radius').value);
+    const el   = document.getElementById('preview-radius');
+    if (isNaN(base)) { el.innerHTML = ''; return; }
+    const sm = Math.max(1, Math.round(base / 2));
+    const steps = [
+      { label: 'none', r: 0       },
+      { label: 'sm',   r: sm      },
+      { label: 'md',   r: base    },
+      { label: 'lg',   r: base*2  },
+      { label: 'xl',   r: base*4  },
+      { label: '2xl',  r: base*6  },
+      { label: 'full', r: 9999    },
+    ];
+    el.innerHTML = steps.map(s =>
+      `<div class="radius-demo-item">
+        <div class="radius-demo-box" style="border-radius:${s.r}px"></div>
+        <span class="radius-demo-label">${s.label}</span>
+      </div>`
+    ).join('');
+    validateScreen2();
+  }
+
+  function onWidthInput() {
+    const base = parseInt(document.getElementById('inp-width').value);
+    const el   = document.getElementById('preview-width');
+    if (isNaN(base) || base < 1) { el.innerHTML = ''; validateScreen2(); return; }
+    const steps = [
+      { label: 'none', w: 0        },
+      { label: 'sm',   w: base     },
+      { label: 'md',   w: base * 2 },
+      { label: 'lg',   w: base * 4 },
+      { label: 'xl',   w: base * 8 },
+    ];
+    el.innerHTML = steps.map(s =>
+      `<div class="radius-demo-item">
+        <div class="radius-demo-box" style="${s.w === 0
+          ? 'border:1.5px dashed #ddd;background:#f5f5f5'
+          : `border:${s.w}px solid #888;background:white`}"></div>
+        <span class="radius-demo-label">${s.label}</span>
+      </div>`
+    ).join('');
+    validateScreen2();
+  }
+
+  function validateScreen2() {
+    const allBrandValid = REQUIRED_COLORS.every(f => isValidHex(normalizeHex(document.getElementById('inp-' + f).value)));
+    const spacingOk = parseInt(document.getElementById('inp-spacing').value) >= 1;
+    const radiusOk  = parseInt(document.getElementById('inp-radius').value)  >= 0;
+    const widthOk   = parseInt(document.getElementById('inp-width').value)   >= 1;
+    const ok = allBrandValid && spacingOk && radiusOk && widthOk;
+    document.getElementById('btn-next2').disabled = !ok;
+    document.getElementById('hint-next2').textContent = ok
+      ? 'Ready — click Next to choose architecture'
+      : 'Fill in Primary, Secondary & Accent to continue';
+  }
+
+  function backFromScreen3() {
+    if (selectedMode === 'scratch') goTo('screen2', 'right');
+    else goTo('screen1', 'right');
+  }
+
+  // ── Screen 3: Architecture ─────────────────────────────────────
+  function selectArch(value) {
+    selectedArch = value;
+    document.getElementById('card-2tier').classList.toggle('selected', value === '2tier');
+    document.getElementById('card-3tier').classList.toggle('selected', value === '3tier');
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('hint-generate').textContent = 'Ready — click Generate Tokens';
+
+    var info = document.getElementById('starter-info');
+    if (selectedMode === 'starter') {
+      info.classList.add('visible');
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() { info.classList.add('animate'); });
+      });
+    } else {
+      info.classList.remove('visible', 'animate');
+    }
+  }
+
+  // ── Generate ───────────────────────────────────────────────────
+  function buildScratchPayload() {
+    return {
+      colors: {
+        primary:   normalizeHex(document.getElementById('inp-primary').value),
+        secondary: normalizeHex(document.getElementById('inp-secondary').value),
+        tertiary:  normalizeHex(document.getElementById('inp-tertiary').value),
+        accent:    normalizeHex(document.getElementById('inp-accent').value),
+        info:      normalizeHex(document.getElementById('inp-info').value),
+        success:   normalizeHex(document.getElementById('inp-success').value),
+        error:     normalizeHex(document.getElementById('inp-error').value),
+        warning:   normalizeHex(document.getElementById('inp-warning').value),
+        neutral:   normalizeHex(document.getElementById('inp-neutral').value),
+      },
+      spacingBase: parseInt(document.getElementById('inp-spacing').value),
+      radiusBase:  parseInt(document.getElementById('inp-radius').value),
+      widthBase:   parseInt(document.getElementById('inp-width').value)   || 1,
+      fontBase:    parseInt(document.getElementById('inp-font-base').value) || 16,
+      ratioKey:    document.getElementById('inp-ratio').value,
+      fontFamily:  document.getElementById('inp-font-family').value || 'Inter',
+    };
+  }
+
+  function doGenerate() {
+    if (!selectedMode || !selectedArch) return;
+    const msg = { type: 'generate', approach: selectedArch, mode: selectedMode };
+    if (selectedMode === 'scratch') Object.assign(msg, buildScratchPayload());
+    parent.postMessage({ pluginMessage: msg }, '*');
+  }
+
+  // ── Screen 4: Export ───────────────────────────────────────────
+  function showExport(json, total, cols) {
+    currentJSON = json;
+    document.getElementById('json-panel').textContent = json;
+    document.getElementById('export-summary').textContent =
+      `${total} variable${total !== 1 ? 's' : ''} created across ${cols} collection${cols !== 1 ? 's' : ''}.`;
+    goTo('screen4', 'left');
+  }
+
+  function copyJSON() {
+    const btn = document.getElementById('btn-copy');
+    navigator.clipboard.writeText(currentJSON).then(() => {
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000);
+    });
+  }
+
+  function downloadJSON() {
+    const blob = new Blob([currentJSON], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'tokens.json'; a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function refreshJSON() {
+    parent.postMessage({ pluginMessage: { type: 'export-json' } }, '*');
+  }
+
+  function startOver() {
+    selectedMode = null; selectedArch = null; currentJSON = '';
+    ['scratch','starter','convert','2tier','3tier'].forEach(id => {
+      const el = document.getElementById('card-' + id);
+      if (el) el.classList.remove('selected');
+    });
+    goTo('screen1', 'right');
+  }
+
+  // ── Messages from code.js ──────────────────────────────────────
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg) return;
+
+    if (msg.type === 'tokens-status') {
+      if (msg.exists) {
+        document.getElementById('landing-summary').textContent =
+          `Found ${msg.total} variable${msg.total !== 1 ? 's' : ''} across ${msg.cols} collection${msg.cols !== 1 ? 's' : ''}.`;
+        goTo('screen-landing', 'left');
+      } else {
+        goTo('screen1', 'right');
+      }
+    }
+
+    if (msg.type === 'confirm-replace') {
+      const ok = confirm('⚠️ Tokens already exist.\n\nClick OK to replace them or Cancel to stop.');
+      if (ok) {
+        const m = { type: 'confirm-continue', approach: selectedArch, mode: selectedMode };
+        if (selectedMode === 'scratch') Object.assign(m, buildScratchPayload());
+        parent.postMessage({ pluginMessage: m }, '*');
+      }
+    }
+
+    if (msg.type === 'generation-complete' || msg.type === 'export-ready') {
+      showExport(msg.json, msg.total, msg.cols);
+    }
+
+    if (msg.type === 'fonts-list') {
+      availableFonts = msg.fonts || [];
+      const select = document.getElementById('inp-font-family');
+      select.innerHTML = '';
+      availableFonts.forEach(font => {
+        const option = document.createElement('option');
+        option.value = font;
+        option.textContent = font;
+        if (font === 'Inter') option.selected = true;
+        select.appendChild(option);
+      });
+    }
+  };
+
+  // ── Bootstrap ─────────────────────────────────────────────────
+  onSpacingInput();
+  onRadiusInput();
+  onWidthInput();
+  onTypoInput();
+  parent.postMessage({ pluginMessage: { type: 'check-tokens' } }, '*');
+</script>
+</body>
+</html>

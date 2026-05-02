@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 960"
+  font-family="Inter, system-ui, -apple-system, sans-serif">
+
+  <defs>
+
+    <!-- Background gradient: warm dark -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="960" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#0D1117"/>
+      <stop offset="100%" stop-color="#1A1A2A"/>
+    </linearGradient>
+
+    <!-- Orange radial glow (left side, behind ramps) -->
+    <radialGradient id="glow" cx="430" cy="360" r="500" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#EE661D" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#EE661D" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Architecture bar gradients -->
+    <linearGradient id="bar-global" x1="60" y1="0" x2="820" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#EE661D"/>
+    </linearGradient>
+    <linearGradient id="bar-alias" x1="170" y1="0" x2="670" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#EE661D"/>
+      <stop offset="100%" stop-color="#F43F5E"/>
+    </linearGradient>
+    <linearGradient id="bar-component" x1="260" y1="0" x2="620" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#F43F5E"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+
+    <!-- Bottom accent bar -->
+    <linearGradient id="accent-bar" x1="0" y1="0" x2="1920" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FBBF24"/>
+      <stop offset="40%"  stop-color="#EE661D"/>
+      <stop offset="70%"  stop-color="#F43F5E"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+
+    <!-- 500-stop column glow (orange, behind the 500 swatches) -->
+    <linearGradient id="col-glow" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#EE661D" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#EE661D" stop-opacity="0.06"/>
+    </linearGradient>
+
+  </defs>
+
+
+  <!-- ─── Background ─── -->
+  <rect width="1920" height="960" fill="url(#bg)"/>
+  <ellipse cx="430" cy="360" rx="520" ry="430" fill="url(#glow)"/>
+
+  <!-- Subtle concentric rings (depth) -->
+  <circle cx="430" cy="360" r="330" fill="none" stroke="#EE661D" stroke-opacity="0.05" stroke-width="1.5"/>
+  <circle cx="430" cy="360" r="500" fill="none" stroke="#EE661D" stroke-opacity="0.03" stroke-width="1"/>
+
+
+  <!-- ─── LEFT: Color Ramp Showcase ─── -->
+
+  <!-- Section label -->
+  <text x="60" y="192" fill="white" fill-opacity="0.30" font-size="15" font-weight="600" letter-spacing="3.5">COLOR RAMPS — 10 STOPS EACH</text>
+
+  <!-- Stop number column labels -->
+  <text x="95"  y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">50</text>
+  <text x="171" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">100</text>
+  <text x="247" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">200</text>
+  <text x="323" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">300</text>
+  <text x="399" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">400</text>
+  <text x="475" y="222" fill="#EE661D" fill-opacity="0.80" font-size="12" text-anchor="middle" font-weight="700" font-family="Menlo, Consolas, monospace">500</text>
+  <text x="551" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">600</text>
+  <text x="627" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">700</text>
+  <text x="703" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">800</text>
+  <text x="779" y="222" fill="white" fill-opacity="0.22" font-size="12" text-anchor="middle" font-family="Menlo, Consolas, monospace">900</text>
+
+  <!-- 500-column glow background (spans all 4 ramp rows) -->
+  <rect x="435" y="230" width="80" height="255" rx="6" fill="url(#col-glow)"/>
+
+  <!-- ── Row 1: Cobalt (blue) ── y=234, height=50 -->
+  <rect x="60"  y="234" width="70" height="50" rx="8"  fill="#EBF2FF"/>
+  <rect x="136" y="234" width="70" height="50" rx="8"  fill="#BFDBFE"/>
+  <rect x="212" y="234" width="70" height="50" rx="8"  fill="#93C5FD"/>
+  <rect x="288" y="234" width="70" height="50" rx="8"  fill="#60A5FA"/>
+  <rect x="364" y="234" width="70" height="50" rx="8"  fill="#4A90E2"/>
+  <rect x="440" y="234" width="70" height="50" rx="8"  fill="#3B6BE8" stroke="white" stroke-opacity="0.28" stroke-width="2"/>
+  <rect x="516" y="234" width="70" height="50" rx="8"  fill="#2D55C0"/>
+  <rect x="592" y="234" width="70" height="50" rx="8"  fill="#1E3E98"/>
+  <rect x="668" y="234" width="70" height="50" rx="8"  fill="#132870"/>
+  <rect x="744" y="234" width="70" height="50" rx="8"  fill="#080D3D"/>
+
+  <!-- ── Row 2: Violet (purple) ── y=299 -->
+  <rect x="60"  y="299" width="70" height="50" rx="8"  fill="#F5F3FF"/>
+  <rect x="136" y="299" width="70" height="50" rx="8"  fill="#EDE9FE"/>
+  <rect x="212" y="299" width="70" height="50" rx="8"  fill="#DDD6FE"/>
+  <rect x="288" y="299" width="70" height="50" rx="8"  fill="#C4B5FD"/>
+  <rect x="364" y="299" width="70" height="50" rx="8"  fill="#A78BFA"/>
+  <rect x="440" y="299" width="70" height="50" rx="8"  fill="#7C3AED" stroke="white" stroke-opacity="0.28" stroke-width="2"/>
+  <rect x="516" y="299" width="70" height="50" rx="8"  fill="#6D28D9"/>
+  <rect x="592" y="299" width="70" height="50" rx="8"  fill="#5B21B6"/>
+  <rect x="668" y="299" width="70" height="50" rx="8"  fill="#4C1D95"/>
+  <rect x="744" y="299" width="70" height="50" rx="8"  fill="#2E1065"/>
+
+  <!-- ── Row 3: Coral / brand orange ── y=364 -->
+  <rect x="60"  y="364" width="70" height="50" rx="8"  fill="#FFF7ED"/>
+  <rect x="136" y="364" width="70" height="50" rx="8"  fill="#FFEDD5"/>
+  <rect x="212" y="364" width="70" height="50" rx="8"  fill="#FED7AA"/>
+  <rect x="288" y="364" width="70" height="50" rx="8"  fill="#FDBA74"/>
+  <rect x="364" y="364" width="70" height="50" rx="8"  fill="#FB923C"/>
+  <rect x="440" y="364" width="70" height="50" rx="8"  fill="#EE661D" stroke="white" stroke-opacity="0.32" stroke-width="2"/>
+  <rect x="516" y="364" width="70" height="50" rx="8"  fill="#C44F14"/>
+  <rect x="592" y="364" width="70" height="50" rx="8"  fill="#9A3B0C"/>
+  <rect x="668" y="364" width="70" height="50" rx="8"  fill="#7C2D12"/>
+  <rect x="744" y="364" width="70" height="50" rx="8"  fill="#431407"/>
+
+  <!-- ── Row 4: Emerald (green) ── y=429 -->
+  <rect x="60"  y="429" width="70" height="50" rx="8"  fill="#F0FDF4"/>
+  <rect x="136" y="429" width="70" height="50" rx="8"  fill="#DCFCE7"/>
+  <rect x="212" y="429" width="70" height="50" rx="8"  fill="#BBF7D0"/>
+  <rect x="288" y="429" width="70" height="50" rx="8"  fill="#86EFAC"/>
+  <rect x="364" y="429" width="70" height="50" rx="8"  fill="#4ADE80"/>
+  <rect x="440" y="429" width="70" height="50" rx="8"  fill="#22C55E" stroke="white" stroke-opacity="0.28" stroke-width="2"/>
+  <rect x="516" y="429" width="70" height="50" rx="8"  fill="#16A34A"/>
+  <rect x="592" y="429" width="70" height="50" rx="8"  fill="#15803D"/>
+  <rect x="668" y="429" width="70" height="50" rx="8"  fill="#166534"/>
+  <rect x="744" y="429" width="70" height="50" rx="8"  fill="#14532D"/>
+
+  <!-- Thin separator -->
+  <line x1="60" y1="512" x2="820" y2="512" stroke="white" stroke-opacity="0.07" stroke-width="1"/>
+
+
+  <!-- ─── LEFT: Token Architecture ─── -->
+
+  <text x="60" y="546" fill="white" fill-opacity="0.30" font-size="15" font-weight="600" letter-spacing="3.5">TOKEN ARCHITECTURE</text>
+
+  <!-- 01 Global — wide bar -->
+  <rect x="60" y="562" width="760" height="68" rx="13" fill="url(#bar-global)"/>
+  <text x="100" y="606" fill="white" fill-opacity="0.92" font-weight="700" font-size="25" letter-spacing="0.5">01 · Global</text>
+
+  <!-- Connector: Global → Alias -->
+  <rect x="438" y="630" width="4" height="38" rx="2" fill="white" fill-opacity="0.14"/>
+
+  <!-- 02 Alias — indented -->
+  <rect x="170" y="668" width="500" height="60" rx="11" fill="url(#bar-alias)"/>
+  <text x="208" y="706" fill="white" fill-opacity="0.92" font-weight="700" font-size="22" letter-spacing="0.5">02 · Alias</text>
+
+  <!-- Connector: Alias → Component -->
+  <rect x="418" y="728" width="4" height="36" rx="2" fill="white" fill-opacity="0.14"/>
+
+  <!-- 03 Component — most indented -->
+  <rect x="265" y="764" width="350" height="54" rx="10" fill="url(#bar-component)"/>
+  <text x="296" y="799" fill="white" fill-opacity="0.88" font-weight="700" font-size="20" letter-spacing="0.5">03 · Component</text>
+
+  <!-- Figma Variables watermark -->
+  <text x="440" y="868" fill="white" fill-opacity="0.10" font-size="14" text-anchor="middle" font-weight="500" letter-spacing="4">FIGMA VARIABLES</text>
+
+
+  <!-- ─── Vertical divider ─── -->
+  <line x1="886" y1="70" x2="886" y2="890"
+    stroke="white" stroke-opacity="0.05" stroke-width="1.5"/>
+
+
+  <!-- ─── RIGHT: Text content ─── -->
+
+  <!-- FREE badge -->
+  <rect x="960" y="148" width="140" height="50" rx="12" fill="#22C55E"/>
+  <text x="1030" y="183" fill="white" font-weight="800" font-size="23" text-anchor="middle" letter-spacing="1">FREE</text>
+
+  <!-- FREE sub-label -->
+  <text x="1116" y="183" fill="#4ADE80" font-size="19" font-weight="500">100% · All Figma plans · No limits</text>
+
+  <!-- Main headline -->
+  <text x="960" y="318" fill="white"   font-weight="800" font-size="98" letter-spacing="-2">Token System</text>
+  <text x="960" y="428" fill="#EE661D" font-weight="800" font-size="98" letter-spacing="-2">Generator Pro</text>
+
+  <!-- Tagline -->
+  <text x="960" y="490" fill="#94A3B8" font-size="25" font-weight="400">From hex to dev-ready token systems in seconds — not hours.</text>
+
+  <!-- ── Mode chips (row 1) ── -->
+
+  <!-- From Scratch -->
+  <rect x="960"  y="526" width="186" height="48" rx="24" fill="#EE661D" fill-opacity="0.12" stroke="#EE661D" stroke-opacity="0.50" stroke-width="1.5"/>
+  <text x="1053" y="556" fill="#EE661D" font-size="19" font-weight="600" text-anchor="middle">From Scratch</text>
+
+  <!-- Starter System -->
+  <rect x="1160" y="526" width="196" height="48" rx="24" fill="#FBBF24" fill-opacity="0.08" stroke="#FBBF24" stroke-opacity="0.40" stroke-width="1.5"/>
+  <text x="1258" y="556" fill="#FBBF24" font-size="19" font-weight="600" text-anchor="middle">Starter System</text>
+
+  <!-- Smart Convert -->
+  <rect x="1370" y="526" width="200" height="48" rx="24" fill="#34D399" fill-opacity="0.08" stroke="#34D399" stroke-opacity="0.40" stroke-width="1.5"/>
+  <text x="1470" y="556" fill="#34D399" font-size="19" font-weight="600" text-anchor="middle">Smart Convert</text>
+
+  <!-- ── Architecture + Export chips (row 2) ── -->
+
+  <!-- 2 Tier -->
+  <rect x="960"  y="590" width="118" height="44" rx="22" fill="#EE661D" fill-opacity="0.08" stroke="#EE661D" stroke-opacity="0.35" stroke-width="1.5"/>
+  <text x="1019" y="618" fill="#EE661D" font-size="17" font-weight="600" text-anchor="middle">2 Tier</text>
+
+  <!-- 3 Tier -->
+  <rect x="1092" y="590" width="118" height="44" rx="22" fill="#EE661D" fill-opacity="0.08" stroke="#EE661D" stroke-opacity="0.35" stroke-width="1.5"/>
+  <text x="1151" y="618" fill="#EE661D" font-size="17" font-weight="600" text-anchor="middle">3 Tier</text>
+
+  <!-- JSON Export -->
+  <rect x="1224" y="590" width="180" height="44" rx="22" fill="#818CF8" fill-opacity="0.08" stroke="#818CF8" stroke-opacity="0.40" stroke-width="1.5"/>
+  <text x="1314" y="618" fill="#818CF8" font-size="17" font-weight="600" text-anchor="middle">JSON Export</text>
+
+  <!-- Features line -->
+  <text x="960" y="682" fill="#475569" font-size="17" font-weight="500">Colors  ·  Spacing  ·  Typography  ·  2/3-Tier  ·  Collection-Aware JSON</text>
+
+
+  <!-- ─── Bottom accent bar ─── -->
+  <rect x="0" y="918" width="1920" height="42" fill="url(#accent-bar)" fill-opacity="0.50"/>
+
+</svg>

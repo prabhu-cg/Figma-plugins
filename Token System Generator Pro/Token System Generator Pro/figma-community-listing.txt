@@ -1,0 +1,189 @@
+================================================================================
+TOKEN SYSTEM GENERATOR PRO — FIGMA COMMUNITY LISTING
+================================================================================
+
+
+SHORT DESCRIPTION
+-----------------
+Generate a complete design token system — colors, spacing, border radius, and
+typography — directly into Figma Variables in seconds. 100% free, forever.
+
+
+FULL DESCRIPTION
+----------------
+Token System Generator Pro is the fastest way to set up a professional, dev-
+ready design token system inside Figma — and it is completely free on every
+Figma plan, including Starter. No subscriptions, no paywalls, no feature locks.
+
+Design tokens are the foundation of any scalable design system. But building
+them by hand is slow, inconsistent, and painful. Token System Generator Pro
+automates the entire process: you define your brand colors and a few scale
+parameters, and the plugin generates hundreds of structured Figma Variables
+organized into a clean 2-tier or 3-tier token architecture — in under a minute.
+
+Whether you are starting a brand-new project, bootstrapping a design system
+prototype, or migrating a legacy file full of paint styles, Token System
+Generator Pro has a mode for you.
+
+WHAT GETS GENERATED:
+
+Color system
+  - Full 10-stop color ramps (50 → 900) for every brand and semantic color
+  - Auto-named by hue family — e.g. cobalt/500, violet/200, emerald/300
+  - Semantic alias tokens for interactive, secondary, accent, feedback states
+    (info, success, error, warning)
+
+Spacing
+  - Configurable base unit (default: 4px)
+  - 10 tokens at grid-friendly multipliers: 1×, 2×, 3×, 4×, 5×, 6×, 8×,
+    10×, 12×, 16×
+  - Live preview in the plugin as you type
+
+Border radius
+  - 7 semantic stops — none, sm, md, lg, xl, 2xl, full
+  - Scaled from your chosen base radius
+  - Visual demos update in real time
+
+Border width
+  - 5 semantic stops — none, sm, md, lg, xl
+  - Scaled from your chosen base width
+
+Typography
+  - 13-level scale: display-lg, display-md, display-sm, h1–h6, body-lg, body,
+    caption, xs
+  - 5 musical scale ratios: Major Second (1.125×), Minor Third (1.2×),
+    Major Third (1.25×), Perfect Fourth (1.333×), Aug. Fourth (1.414×)
+  - Font size, line height, and letter spacing for every level
+  - Live bar chart preview as you configure
+
+All variables are organized into named Figma Variable collections and follow
+consistent naming conventions compatible with Style Dictionary and most popular
+token tools.
+
+
+CHOOSE YOUR APPROACH
+--------------------
+When you open the plugin, choose the workflow that fits your situation:
+
+FROM SCRATCH
+  Best for: New projects where you already know your brand colors.
+  How it works: Enter hex values for your primary, secondary, optional tertiary,
+  and accent colors. Add your semantic colors (info, success, error, warning,
+  neutral) or keep the sensible defaults. Set your spacing base, border radius,
+  border width, and typography scale. The plugin generates complete 10-stop
+  color ramps for every color, auto-detects a descriptive name based on the hue
+  (e.g. "cobalt", "violet", "emerald"), and wires up semantic alias tokens on
+  top of the global primitives.
+
+STARTER SYSTEM (Boilerplate)
+  Best for: Rapid prototyping or teams just starting their design token journey.
+  How it works: No color inputs needed. The plugin scaffolds a full token system
+  using a curated default palette — 9 color ramps (brand blues, purples, teals,
+  oranges), spacing (base 4), border radius (base 4), border width (base 1),
+  and a 13-level Major Third type scale. Edit the values directly in Figma's
+  Variable panel to match your brand whenever you're ready.
+
+SMART CONVERT
+  Best for: Existing files with local paint styles and text styles you want to
+  migrate into a proper variable-based token system.
+  How it works: The plugin scans all local paint styles and text styles in your
+  file, maps solid colors into Global primitive variables, and creates an Alias
+  layer with semantic surface, text, and feedback tokens pointing back to them.
+  Typography styles are converted into font-size, line-height, letter-spacing,
+  and paragraph-spacing variables at both the Global and Alias layers. Choose
+  2-tier or 3-tier and get a Component layer wired up automatically.
+
+ARCHITECTURE CHOICE (applies to all modes)
+  After choosing an approach, select how many layers your token system needs:
+
+  2-Tier System — Global + Alias
+    Lightweight. Ideal for smaller projects or teams new to design tokens.
+    Global primitives hold raw values; Alias tokens hold semantic references.
+
+  3-Tier System — Global + Alias + Component
+    Full-scale. Built for mature design systems that need component-level
+    semantic control. Adds a Component collection with button, input, surface,
+    and text tokens pre-wired to the Alias layer.
+
+
+HOW TO USE
+----------
+1. Open the plugin from the Figma plugin menu (Plugins > Token System Generator
+   Pro).
+
+2. If your file has no variables yet, you'll go straight to mode selection.
+   If variables already exist, the Smart Landing screen lets you either export
+   the existing variables to JSON or start fresh.
+
+3. Choose your approach — From Scratch, Starter System, or Smart Convert.
+
+4. If you chose From Scratch, configure your colors and scale inputs on the
+   next screen. Color swatches update live as you type hex values. The Next
+   button unlocks once your primary, secondary, and accent colors are valid.
+
+5. Choose your architecture: 2-tier or 3-tier.
+
+6. Click Generate Tokens. The plugin creates all Figma Variable collections
+   and variables. A success screen confirms the count and shows the exported
+   JSON for developer handoff.
+
+7. Use Copy to clipboard or Download tokens.json to hand off Style Dictionary
+   v3-compatible JSON to your engineering team.
+
+8. If you later edit variables manually in Figma, re-open the plugin and click
+   Refresh JSON to get an up-to-date export without regenerating everything.
+
+TIP: To replace an existing token system, open the plugin and choose
+Regenerate Tokens from the Smart Landing screen. You'll be prompted to confirm
+before any existing variables are removed.
+
+
+LIMITATIONS
+-----------
+- Smart Convert maps colors to alias tokens using a brightness-based heuristic.
+  It works best when your existing styles have meaningful names and a clear
+  light-to-dark range. Highly custom or irregularly named style libraries may
+  need manual alias adjustments after conversion.
+
+- Only light mode tokens are generated. A single set of variable values is
+  created per collection (no separate light/dark modes within one collection).
+
+- Typography tokens cover font size, line height, and letter spacing only.
+  Font family and font weight are not yet included in the generated token set.
+
+- Shadow and elevation tokens are not generated in this version.
+
+- The plugin creates Figma Variables (the Variables API) only. It does not
+  generate or modify Figma Styles (paint styles, text styles) as part of the
+  token generation flow.
+
+- Smart Convert reads existing paint styles and text styles only. It does not
+  read or migrate existing Figma Variables.
+
+
+COMING SOON
+-----------
+- Dark mode support — generate light and dark mode values in a single Variable
+  collection with multiple modes
+- Full JSON export — complete Style Dictionary v3 JSON output covering all
+  generated variables, with alias references preserved as {dot.path} tokens
+- Font family and font weight tokens
+- Shadow and elevation token scale
+- Opacity token scale
+- Z-index / layer token scale
+- One-click publish to Tokens Studio / W3C DTCG format
+
+
+TAGS
+----
+design tokens, design system, variables, token generator, color ramp, spacing,
+typography, border radius, style dictionary, component tokens, design ops,
+variables API, token architecture, alias tokens, global tokens, primitive tokens,
+semantic tokens, color palette, type scale, design foundation
+
+
+CATEGORY
+--------
+Productivity / Design System Tools
+
+================================================================================
