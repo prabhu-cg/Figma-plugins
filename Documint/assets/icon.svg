@@ -1,0 +1,49 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="128" height="128" rx="22" fill="#1A1A1A"/>
+
+  <!-- Subtle warm glow behind document -->
+  <ellipse cx="64" cy="72" rx="52" ry="44" fill="#EE661D" opacity="0.06"/>
+
+  <!-- Document shadow -->
+  <path d="M30 28C30 25.24 32.24 23 35 23H82L98 39V100C98 102.76 95.76 105 93 105H35C32.24 105 30 102.76 30 100V28Z"
+        fill="white" opacity="0.06"/>
+  <path d="M30 28C30 25.24 32.24 23 35 23H82L98 39V100C98 102.76 95.76 105 93 105H35C32.24 105 30 102.76 30 100V28Z"
+        fill="white" opacity="0.06" transform="translate(2 2)"/>
+
+  <!-- Document body -->
+  <path d="M27 26C27 23.24 29.24 21 32 21H80L96 37V98C96 100.76 93.76 103 91 103H32C29.24 103 27 100.76 27 98V26Z"
+        fill="white"/>
+
+  <!-- Folded corner -->
+  <path d="M80 21L96 37H83C81.34 37 80 35.66 80 34V21Z" fill="#EE661D"/>
+
+  <!-- Corner shadow -->
+  <path d="M80 21L96 37H83C81.34 37 80 35.66 80 34V21Z" fill="#CC5510" opacity="0.3" transform="translate(1 1)"/>
+
+  <!-- Orange heading bar -->
+  <rect x="39" y="48" width="38" height="4.5" rx="2.25" fill="#EE661D"/>
+
+  <!-- Subheading hint -->
+  <rect x="39" y="56" width="24" height="3" rx="1.5" fill="#EE661D" opacity="0.35"/>
+
+  <!-- Section 1: text lines -->
+  <rect x="39" y="65" width="44" height="2.5" rx="1.25" fill="#DEDEDE"/>
+  <rect x="39" y="71" width="38" height="2.5" rx="1.25" fill="#DEDEDE"/>
+  <rect x="39" y="77" width="42" height="2.5" rx="1.25" fill="#DEDEDE"/>
+
+  <!-- Divider -->
+  <line x1="39" y1="85" x2="83" y2="85" stroke="#EEEEEE" stroke-width="1"/>
+
+  <!-- Section 2: shorter lines -->
+  <rect x="39" y="90" width="28" height="2.5" rx="1.25" fill="#DEDEDE"/>
+  <rect x="39" y="96" width="44" height="2.5" rx="1.25" fill="#DEDEDE"/>
+
+  <!-- Generation spark — small orange badge bottom-right -->
+  <circle cx="92" cy="92" r="16" fill="#EE661D"/>
+  <!-- Spark / asterisk lines inside badge -->
+  <line x1="92" y1="84" x2="92" y2="100" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="84" y1="92" x2="100" y2="92" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="86.34" y1="86.34" x2="97.66" y2="97.66" stroke="white" stroke-width="2" stroke-linecap="round"/>
+  <line x1="97.66" y1="86.34" x2="86.34" y2="97.66" stroke="white" stroke-width="2" stroke-linecap="round"/>
+</svg>
