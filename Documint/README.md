@@ -1,3 +1,5 @@
+<img width="1800" height="560" alt="thumbnail" src="https://github.com/user-attachments/assets/aed87722-ad69-4997-8479-38615ab07cbb" />
+
 # Documint
 
 **Extract and document your design system directly from Figma — no APIs, no subscriptions, no data leaving your machine.**
