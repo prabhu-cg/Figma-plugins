@@ -1,7 +1,7 @@
 import type {
   FoundationsSchema, ColorToken, TypographyToken, SpacingToken, GridToken,
   TokenSource, LineHeightUnit, TextCaseValue, TextDecorationValue,
-  GridType, BreakpointHint,
+  GridType, BreakpointHint, BorderRadiusToken, BorderWidthToken, ElevationToken,
 } from '@/types/schemas';
 import type { RawExtractionResult, RawGridStyle, RawVariable } from '@/types/raw';
 import { contrastOnWhite, contrastOnBlack, meetsWCAG_AA, meetsWCAG_AAA } from '@/plugin/inference/wcag';
@@ -115,6 +115,56 @@ export function buildSpacingToken(name: string, value: number): SpacingToken {
   };
 }
 
+export function buildBorderRadiusToken(name: string, value: number): BorderRadiusToken {
+  const parsed = parseTokenName(name);
+  return {
+    tokenName: name,
+    label: parsed.label,
+    value, unit: 'px',
+    usageHint: value > 0 ? `${value}px border radius for rounded corners` : 'No rounding (sharp corners)',
+  };
+}
+
+export function buildBorderWidthToken(name: string, value: number): BorderWidthToken {
+  const parsed = parseTokenName(name);
+  return {
+    tokenName: name,
+    label: parsed.label,
+    value, unit: 'px',
+    usageHint: value > 0 ? `${value}px stroke weight for borders` : 'Hairline or no border',
+  };
+}
+
+export function buildElevationToken(name: string, effects: any[]): ElevationToken | null {
+  if (!effects || effects.length === 0) return null;
+
+  const shadow = effects[0];
+  if (!shadow || shadow.type !== 'DROP_SHADOW') return null;
+
+  const { offset, blur, spread, color } = shadow;
+  const offsetX = offset?.x || 0;
+  const offsetY = offset?.y || 0;
+  const blurRadius = blur || 0;
+  const spreadRadius = spread || 0;
+
+  // Round RGBA values to 2 decimal places for readability
+  const r = Math.round(color?.r * 255 || 0);
+  const g = Math.round(color?.g * 255 || 0);
+  const b = Math.round(color?.b * 255 || 0);
+  const a = color?.a ? Math.round(color.a * 100) / 100 : 1;
+  const shadowColor = `rgba(${r}, ${g}, ${b}, ${a})`;
+
+  const shadowValue = `${offsetX}px ${offsetY}px ${blurRadius}px ${spreadRadius}px ${shadowColor}`;
+  const parsed = parseTokenName(name);
+
+  return {
+    tokenName: name,
+    label: parsed.label,
+    shadowValue,
+    usageHint: `Drop shadow: ${offsetX}px offset X, ${offsetY}px offset Y, ${blurRadius}px blur`,
+  };
+}
+
 function inferBreakpointHint(name: string): BreakpointHint {
   const lower = name.toLowerCase();
   if (lower.includes('mobile') || lower.includes('sm')) return 'mobile';
@@ -185,11 +235,33 @@ export function assembleFoundations(raw: RawExtractionResult): FoundationsSchema
       return buildSpacingToken(v.name, typeof value === 'number' ? value : 0);
     });
 
+  const borderRadius: BorderRadiusToken[] = raw.borderRadiusVariables
+    .filter(v => v.valuesByMode && Object.keys(v.valuesByMode).length > 0)
+    .map((v: RawVariable) => {
+      const entries = Object.entries(v.valuesByMode as Record<string, any>);
+      const [, value] = entries[0] ?? [];
+      return buildBorderRadiusToken(v.name, typeof value === 'number' ? value : 0);
+    });
+
+  const borderWidth: BorderWidthToken[] = raw.borderWidthVariables
+    .filter(v => v.valuesByMode && Object.keys(v.valuesByMode).length > 0)
+    .map((v: RawVariable) => {
+      const entries = Object.entries(v.valuesByMode as Record<string, any>);
+      const [, value] = entries[0] ?? [];
+      return buildBorderWidthToken(v.name, typeof value === 'number' ? value : 0);
+    });
+
+  const elevation: ElevationToken[] = raw.effectStyles
+    .flatMap((s) => {
+      const token = buildElevationToken(s.name, s.effects as any[]);
+      return token ? [token] : [];
+    });
+
   const grids: GridToken[] = raw.gridStyles.flatMap((s: RawGridStyle) => {
     const grid = (s.grids as any[])[0];
     if (!grid) return [];
     return [buildGridToken(s.name, grid.pattern ?? 'COLUMNS', grid.count ?? 12, grid.gutterSize ?? 0, grid.offset ?? 0, grid.sectionSize ?? 0)];
   });
 
-  return { colors, typography, spacing, grids };
+  return { colors, typography, spacing, borderRadius, borderWidth, elevation, grids };
 }

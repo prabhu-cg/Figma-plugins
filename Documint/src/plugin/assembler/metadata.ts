@@ -29,6 +29,6 @@ export function assembleMetadata(
       variants: components.components.reduce((sum, c) => sum + c.variants.length, 0),
       tokenBindings: totalBindings,
     },
-    exportFormats: ['figma-page', 'markdown', 'html', 'json'],
+    exportFormats: ['figma-page', 'markdown'],
   };
 }

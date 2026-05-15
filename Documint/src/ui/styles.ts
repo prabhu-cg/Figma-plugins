@@ -441,3 +441,45 @@ export const errorMessageStyle = {
   maxWidth: 280,
   lineHeight: 1.4,
 };
+
+export const toggleSwitchStyle = (isEnabled: boolean) => ({
+  position: 'relative' as const,
+  display: 'inline-flex' as const,
+  width: 40,
+  height: 24,
+  background: isEnabled ? colors.accent : colors.border,
+  border: 'none',
+  borderRadius: 12,
+  padding: 2,
+  cursor: 'pointer',
+  transition: 'background 0.2s ease',
+  flexShrink: 0,
+});
+
+export const toggleSwitchThumbStyle = (isEnabled: boolean) => ({
+  position: 'absolute' as const,
+  top: 2,
+  left: isEnabled ? 'calc(100% - 22px)' : 2,
+  width: 20,
+  height: 20,
+  background: '#ffffff',
+  borderRadius: '50%',
+  transition: 'left 0.2s ease',
+  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+});
+
+// Add global keyframe animation for spinner
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}

@@ -46,6 +46,7 @@ export interface RawComponentNode {
   id: string;
   name: string;
   description?: string;
+  pageName?: string;
   componentPropertyDefinitions?: ComponentPropertyDefinitions;
   children?: readonly any[];
   fills?: readonly Paint[];
@@ -69,6 +70,25 @@ export interface RawVariantNode {
   fillStyleId?: string;
   textStyleId?: string;
   effectStyleId?: string;
+  // Layout properties
+  layoutMode?: string;
+  itemSpacing?: number;
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+  constraints?: { horizontal?: string; vertical?: string };
+  width?: number;
+  height?: number;
+  cornerRadius?: number;
+  topLeftRadius?: number;
+  topRightRadius?: number;
+  bottomLeftRadius?: number;
+  bottomRightRadius?: number;
+  opacity?: number;
+  blendMode?: string;
+  primaryAxisAlignItems?: string;
+  primaryAxisSizingMode?: string;
 }
 
 export interface RawInstanceNode {
@@ -98,6 +118,8 @@ export interface RawExtractionResult {
   colorVariables: RawVariable[];
   typographyVariables: RawVariable[];
   spacingVariables: RawVariable[];
+  borderRadiusVariables: RawVariable[];
+  borderWidthVariables: RawVariable[];
   components: RawComponentNode[];
   variantsByComponentId: Record<string, RawVariantNode[]>;
   selectedNodeIds: string[];

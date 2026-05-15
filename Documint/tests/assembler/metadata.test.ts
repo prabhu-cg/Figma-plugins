@@ -69,8 +69,8 @@ describe('assembleMetadata', () => {
     expect(new Date(meta.generatedAt).toISOString()).toBe(meta.generatedAt);
   });
 
-  it('includes all four export formats', () => {
+  it('includes all export formats', () => {
     const meta = assembleMetadata(foundations, components, source);
-    expect(meta.exportFormats).toEqual(['figma-page', 'markdown', 'html', 'json']);
+    expect(meta.exportFormats).toEqual(['figma-page', 'markdown']);
   });
 });

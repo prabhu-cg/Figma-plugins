@@ -102,10 +102,36 @@ export interface GridToken {
   breakpointHint: BreakpointHint;
 }
 
+export interface BorderRadiusToken {
+  tokenName: string;
+  label: string;
+  value: number;
+  unit: 'px';
+  usageHint: string;
+}
+
+export interface BorderWidthToken {
+  tokenName: string;
+  label: string;
+  value: number;
+  unit: 'px';
+  usageHint: string;
+}
+
+export interface ElevationToken {
+  tokenName: string;
+  label: string;
+  shadowValue: string;
+  usageHint: string;
+}
+
 export interface FoundationsSchema {
   colors: ColorToken[];
   typography: TypographyToken[];
   spacing: SpacingToken[];
+  borderRadius: BorderRadiusToken[];
+  borderWidth: BorderWidthToken[];
+  elevation: ElevationToken[];
   grids: GridToken[];
 }
 
