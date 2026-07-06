@@ -87,7 +87,7 @@ export function Header() {
         </p>
       </div>
 
-      {status === 'ready' && allQuestions.length > 0 && (
+      {status === 'ready' && progress.percentComplete > 0 && (
         <div className="px-4 pt-3">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-canvas-subtle">
             <div
