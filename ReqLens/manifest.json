@@ -1,0 +1,27 @@
+{
+  "name": "ReqLens",
+  "id": "reqlens-local-dev",
+  "api": "1.0.0",
+  "main": "dist/main/index.js",
+  "ui": "dist/ui/index.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  },
+  "capabilities": [],
+  "permissions": [],
+  "menu": [
+    {
+      "name": "Analyze selection",
+      "command": "analyze"
+    },
+    {
+      "separator": true
+    },
+    {
+      "name": "Open ReqLens",
+      "command": "open"
+    }
+  ]
+}
