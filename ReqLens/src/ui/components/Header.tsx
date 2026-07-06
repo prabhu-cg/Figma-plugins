@@ -73,8 +73,10 @@ export function Header() {
         )}
       </div>
 
-      <div className="px-4 pt-3">
-        <p className="text-xxs text-gray-500">
+      <div
+        className={`flex items-center justify-between gap-3 px-4 pt-3 ${progress.percentComplete > 0 ? 'pb-3' : 'pb-4'}`}
+      >
+        <p className="min-w-0 truncate text-xxs text-gray-500">
           {status === 'ready' && analysis
             ? `${frameSummaries.length} frame${frameSummaries.length === 1 ? '' : 's'} · ${analysis.totalComponents} components · ${allQuestions.length} questions`
             : status === 'analyzing'
@@ -85,35 +87,35 @@ export function Header() {
                   ? 'Analysis error'
                   : 'Waiting for selection…'}
         </p>
+
+        {status === 'ready' && analysis && (
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+            >
+              {copyState === 'copied' ? 'Copied!' : copyState === 'failed' ? 'Copy failed' : 'Copy report'}
+            </button>
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="rounded-lg border border-canvas-border px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-canvas-subtle"
+            >
+              Download .md
+            </button>
+          </div>
+        )}
       </div>
 
       {status === 'ready' && progress.percentComplete > 0 && (
-        <div className="px-4 pt-3">
+        <div className="px-4 pb-4">
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-canvas-subtle">
             <div
               className="h-full rounded-full bg-brand-600 transition-all duration-300"
               style={{ width: `${progress.percentComplete}%` }}
             />
           </div>
-        </div>
-      )}
-
-      {status === 'ready' && analysis && (
-        <div className="flex gap-2 px-4 pb-4 pt-3">
-          <button
-            type="button"
-            onClick={handleCopy}
-            className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
-          >
-            {copyState === 'copied' ? 'Copied!' : copyState === 'failed' ? 'Copy failed' : 'Copy report'}
-          </button>
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="rounded-lg border border-canvas-border px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-canvas-subtle"
-          >
-            Download .md
-          </button>
         </div>
       )}
     </header>
