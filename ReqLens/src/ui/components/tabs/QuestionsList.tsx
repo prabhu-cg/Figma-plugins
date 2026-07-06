@@ -22,40 +22,44 @@ export function QuestionsList() {
   const statusFilter = useAppStore((s) => s.questionStatusFilter);
   const groupFilter = useAppStore((s) => s.questionGroupFilter);
 
-  const allQuestions = useMemo(() => [...questions, ...customQuestions], [questions, customQuestions]);
+  const allQuestions = useMemo(() => [...customQuestions, ...questions], [questions, customQuestions]);
   const filtered = filterQuestions(allQuestions, responses, { search, status: statusFilter, group: groupFilter });
   const showFrameName = Boolean(analysis?.multiFrame);
   const defaultGroup = groupFilter === 'all' ? 'functional' : groupFilter;
 
   return (
-    <div className="flex flex-1 min-w-[450px] flex-col gap-5 overflow-y-auto p-4">
-      <AddQuestionForm defaultGroup={defaultGroup} />
+    <div className="flex flex-1 min-w-[450px] flex-col overflow-hidden">
+      <div className="border-b border-canvas-border bg-white p-4">
+        <AddQuestionForm defaultGroup={defaultGroup} />
+      </div>
 
-      {filtered.length === 0 ? (
-        <p className="py-6 text-center text-xxs text-gray-400">No questions match the current filters.</p>
-      ) : groupFilter === 'all' ? (
-        GROUP_ORDER.map((group) => {
-          const items = filtered.filter((q) => q.group === group);
-          if (items.length === 0) return null;
-          return (
-            <div key={group} className="flex flex-col gap-2">
-              <SectionHeading title={GROUP_LABELS[group]} count={items.length} />
-              <div className="flex flex-col gap-2">
-                {items.map((question) => (
-                  <QuestionCard key={question.id} question={question} showFrameName={showFrameName} />
-                ))}
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
+        {filtered.length === 0 ? (
+          <p className="py-6 text-center text-xxs text-gray-400">No questions match the current filters.</p>
+        ) : groupFilter === 'all' ? (
+          GROUP_ORDER.map((group) => {
+            const items = filtered.filter((q) => q.group === group);
+            if (items.length === 0) return null;
+            return (
+              <div key={group} className="flex flex-col gap-2">
+                <SectionHeading title={GROUP_LABELS[group]} count={items.length} />
+                <div className="flex flex-col gap-2">
+                  {items.map((question) => (
+                    <QuestionCard key={question.id} question={question} showFrameName={showFrameName} />
+                  ))}
+                </div>
               </div>
-            </div>
-          );
-        })
-      ) : (
-        <div className="flex flex-col gap-2">
-          <SectionHeading title={GROUP_LABELS[groupFilter]} count={filtered.length} />
-          {filtered.map((question) => (
-            <QuestionCard key={question.id} question={question} showFrameName={showFrameName} />
-          ))}
-        </div>
-      )}
+            );
+          })
+        ) : (
+          <div className="flex flex-col gap-2">
+            <SectionHeading title={GROUP_LABELS[groupFilter]} count={filtered.length} />
+            {filtered.map((question) => (
+              <QuestionCard key={question.id} question={question} showFrameName={showFrameName} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

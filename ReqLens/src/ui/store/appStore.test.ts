@@ -30,6 +30,14 @@ describe('appStore custom questions', () => {
     expect(customQuestionsDirty).toBe(true);
   });
 
+  it('adds new custom questions to the top of the list', () => {
+    useAppStore.getState().addCustomQuestion({ text: 'First', group: 'business', priority: 'low' });
+    useAppStore.getState().addCustomQuestion({ text: 'Second', group: 'business', priority: 'low' });
+    useAppStore.getState().addCustomQuestion({ text: 'Third', group: 'business', priority: 'low' });
+
+    expect(useAppStore.getState().customQuestions.map((q) => q.text)).toEqual(['Third', 'Second', 'First']);
+  });
+
   it('updates the priority of an existing custom question', () => {
     useAppStore.getState().addCustomQuestion({ text: 'Q', group: 'business', priority: 'low' });
     const id = useAppStore.getState().customQuestions[0]!.id;

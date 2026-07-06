@@ -152,7 +152,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         frameId: 'custom',
         frameName: 'General',
       };
-      return { customQuestions: [...state.customQuestions, question], customQuestionsDirty: true };
+      return { customQuestions: [question, ...state.customQuestions], customQuestionsDirty: true };
     }),
 
   removeCustomQuestion: (questionId) =>

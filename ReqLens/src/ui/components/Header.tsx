@@ -20,7 +20,7 @@ export function Header() {
   const selectionSignature = useAppStore((s) => s.selectionSignature);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
-  const allQuestions = useMemo(() => [...questions, ...customQuestions], [questions, customQuestions]);
+  const allQuestions = useMemo(() => [...customQuestions, ...questions], [questions, customQuestions]);
   const progress = computeProgress(allQuestions, responses);
 
   const markdown = useMemo(() => {

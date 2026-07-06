@@ -44,7 +44,7 @@ export function QuestionsSidebar() {
   const setQuestionStatusFilter = useAppStore((s) => s.setQuestionStatusFilter);
   const setQuestionGroupFilter = useAppStore((s) => s.setQuestionGroupFilter);
 
-  const allQuestions = useMemo(() => [...questions, ...customQuestions], [questions, customQuestions]);
+  const allQuestions = useMemo(() => [...customQuestions, ...questions], [questions, customQuestions]);
   // Counts reflect search/status only, so switching groups never changes another group's count.
   const matching = filterQuestions(allQuestions, responses, { search, status: statusFilter });
 
