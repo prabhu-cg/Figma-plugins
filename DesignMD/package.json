@@ -1,0 +1,45 @@
+{
+  "name": "designmd",
+  "version": "1.0.0",
+  "description": "Figma plugin that deterministically extracts a design system into developer-ready documentation and token files (design.md, component docs, tokens.json, css-tokens.json) with no AI or backend services.",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev:ui": "vite --config vite.config.ui.ts",
+    "build:ui": "vite build --config vite.config.ui.ts",
+    "build:code": "vite build --config vite.config.code.ts",
+    "build": "npm run build:ui && npm run build:code",
+    "watch:ui": "vite build --config vite.config.ui.ts --watch",
+    "watch:code": "vite build --config vite.config.code.ts --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.plugin.json",
+    "lint": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.100.0",
+    "@types/file-saver": "^2.0.7",
+    "@types/node": "^26.1.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "prettier": "^3.4.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-singlefile": "^2.1.0",
+    "vitest": "^2.1.8"
+  }
+}

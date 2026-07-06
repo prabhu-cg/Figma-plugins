@@ -1,0 +1,426 @@
+:root {
+  --dmd-accent: #e8622c;
+  --dmd-accent-hover: #d5551f;
+  --dmd-accent-bg: #fdf1e1;
+  --dmd-bg: #ffffff;
+  --dmd-bg-secondary: #f7f7f7;
+  --dmd-text: #1a1a1a;
+  --dmd-text-secondary: #6b6b6b;
+  --dmd-border: #e5e5e5;
+  --dmd-border-strong: #d8d8d8;
+  --dmd-success: #14ae5c;
+  --dmd-error-bg: #fdecea;
+  --dmd-error-text: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dmd-accent: #ff7d47;
+    --dmd-accent-hover: #ff9463;
+    --dmd-accent-bg: #3a2a1c;
+    --dmd-bg: #2b2b2b;
+    --dmd-bg-secondary: #333333;
+    --dmd-text: #f2f2f2;
+    --dmd-text-secondary: #a3a3a3;
+    --dmd-border: #444444;
+    --dmd-border-strong: #545454;
+    --dmd-error-bg: #4a2523;
+    --dmd-error-text: #ff8a80;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 12px;
+  color: var(--dmd-text);
+  background: var(--dmd-bg);
+}
+
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ---------- App shell: fixed header, scrolling content, fixed footer ----------
+   Pinned via position:fixed + inset:0 rather than percentage heights, so the
+   shell always matches the iframe's real viewport regardless of how any
+   ancestor (html/body/#root) ends up sizing itself — no dependency on a
+   percentage-height chain resolving correctly. */
+
+.dmd-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--dmd-bg);
+}
+
+.dmd-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+}
+
+.dmd-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dmd-subtitle {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dmd-text-secondary);
+  max-width: 34ch;
+}
+
+.dmd-icon-btn {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  color: var(--dmd-text-secondary);
+  cursor: pointer;
+}
+
+.dmd-icon-btn:hover:not(:disabled) {
+  color: var(--dmd-text);
+  border-color: var(--dmd-border-strong);
+}
+
+.dmd-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.dmd-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.dmd-footer {
+  flex: 0 0 auto;
+  padding: 16px 24px 20px;
+  border-top: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dmd-footer-status {
+  text-align: center;
+  font-size: 12px;
+  color: var(--dmd-text-secondary);
+}
+
+/* ---------- Sections ---------- */
+
+.dmd-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dmd-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.dmd-section-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 32px 8px;
+  text-align: center;
+  color: var(--dmd-text-secondary);
+}
+
+/* ---------- Summary stat tiles ---------- */
+
+.dmd-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.dmd-stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--dmd-bg-secondary);
+  border: 1px solid var(--dmd-border);
+}
+
+.dmd-stat-value {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dmd-stat-label {
+  font-size: 10px;
+  color: var(--dmd-text-secondary);
+}
+
+/* ---------- Export settings field ---------- */
+
+.dmd-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.dmd-field span {
+  font-weight: 600;
+}
+
+.dmd-field input[type='text'] {
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  color: inherit;
+  font-size: 13px;
+}
+
+.dmd-field input[type='text']:focus {
+  outline: none;
+  border-color: var(--dmd-accent);
+}
+
+/* ---------- Option cards (Output Selection) ---------- */
+
+.dmd-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dmd-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.12s ease,
+    background-color 0.12s ease;
+}
+
+.dmd-option-card:hover {
+  border-color: var(--dmd-border-strong);
+}
+
+.dmd-option-card.is-checked {
+  border-color: var(--dmd-accent);
+  background: var(--dmd-accent-bg);
+}
+
+.dmd-option-icon {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  color: var(--dmd-text);
+}
+
+.dmd-option-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dmd-option-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dmd-text);
+}
+
+.dmd-option-description {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-option-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--dmd-border-strong);
+  background-color: var(--dmd-bg);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 12px 12px;
+  cursor: pointer;
+}
+
+.dmd-option-checkbox:checked {
+  border-color: var(--dmd-accent);
+  background-color: var(--dmd-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 9.5 17 19 6.5'/%3E%3C/svg%3E");
+}
+
+.dmd-option-checkbox:focus-visible {
+  outline: 2px solid var(--dmd-accent);
+  outline-offset: 2px;
+}
+
+.dmd-option-divider {
+  border: none;
+  border-top: 1px solid var(--dmd-border);
+  margin: 2px 0;
+}
+
+/* ---------- Buttons ---------- */
+
+.dmd-btn {
+  border: none;
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dmd-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dmd-btn-full {
+  width: 100%;
+}
+
+.dmd-btn-primary {
+  background: var(--dmd-accent);
+  color: #ffffff;
+}
+
+.dmd-btn-primary:hover:not(:disabled) {
+  background: var(--dmd-accent-hover);
+}
+
+.dmd-btn-success {
+  background: var(--dmd-success);
+  color: #fff;
+}
+
+/* ---------- Progress ---------- */
+
+.dmd-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dmd-progress-label {
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--dmd-bg-secondary);
+  overflow: hidden;
+}
+
+.dmd-progress-fill {
+  height: 100%;
+  background: var(--dmd-accent);
+  transition: width 0.2s ease;
+}
+
+/* ---------- Error banner ---------- */
+
+.dmd-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--dmd-error-bg);
+  color: var(--dmd-error-text);
+  font-size: 12px;
+}
+
+.dmd-btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  color: inherit;
+}
+
+/* ---------- Warnings ---------- */
+
+.dmd-warnings {
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-warnings summary {
+  cursor: pointer;
+}
+
+.dmd-warnings ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
