@@ -1,0 +1,32 @@
+{
+  "name": "designlens",
+  "version": "0.1.0",
+  "description": "DesignLens — a free, local, enterprise-grade Design System Auditor for Figma.",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n ui,code -c blue,magenta \"vite build --watch\" \"node esbuild.config.mjs --watch\"",
+    "build": "npm run build:ui && npm run build:code",
+    "build:ui": "vite build",
+    "build:code": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.plugin.json",
+    "lint": "eslint src --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.100.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@typescript-eslint/eslint-plugin": "^8.15.0",
+    "@typescript-eslint/parser": "^8.15.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.1.0",
+    "esbuild": "^0.24.0",
+    "eslint": "^8.57.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-singlefile": "^2.1.0"
+  }
+}
