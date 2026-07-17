@@ -9,7 +9,8 @@
     "build:ui": "vite build",
     "build:code": "node esbuild.config.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.plugin.json",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "publish:monorepo": "bash scripts/publish-to-monorepo.sh"
   },
   "dependencies": {
     "react": "^18.3.1",
