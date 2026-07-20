@@ -3,6 +3,7 @@ import type { PluginToUIMessage, UIToPluginMessage } from '@shared/messages';
 import { extractDesignSystem } from './extraction';
 import { generateOutputs } from './generators';
 import { transformToDesignSystem } from './transform';
+import { filterDesignSystemByPages } from './transform/pageFilter';
 
 figma.showUI(__html__, { width: 480, height: 700, themeColors: true });
 
@@ -43,7 +44,8 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       return;
     }
 
-    const files = generateOutputs(cachedDesignSystem, options.options);
+    const designSystem = filterDesignSystemByPages(cachedDesignSystem, options.excludedPages);
+    const files = generateOutputs(designSystem, options.options);
 
     if (files.length === 0) {
       post({

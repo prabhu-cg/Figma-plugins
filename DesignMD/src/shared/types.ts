@@ -73,6 +73,8 @@ export interface VariableToken {
   codeSyntax: Partial<Record<'WEB' | 'ANDROID' | 'iOS', string>>;
   /** e.g. --color-primary-500 */
   cssName: string;
+  /** Names of components/component sets that bind this variable, derived from ComponentDoc.boundVariableIds. */
+  usedByComponents: string[];
 }
 
 export interface TextStyleProperties {

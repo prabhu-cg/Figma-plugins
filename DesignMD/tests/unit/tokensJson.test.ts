@@ -32,6 +32,14 @@ describe('generateTokensJson', () => {
     expect(parsed.semantic.Color.Danger.$value).toBe('{Color.Primary.500}');
   });
 
+  it('lists the components that bind a variable under $extensions.figma.usedBy', () => {
+    const file = generateTokensJson(makeDesignSystem());
+    const parsed = JSON.parse(file.content);
+
+    expect(parsed.color.Primary['500'].$extensions.figma.usedBy).toEqual(['Button']);
+    expect(parsed.semantic.Color.Danger.$extensions.figma.usedBy).toEqual([]);
+  });
+
   it('falls back to color styles when no color variables exist', () => {
     const ds = makeDesignSystem();
     ds.variables = ds.variables.filter((v) => v.category !== 'color' && v.category !== 'semantic');

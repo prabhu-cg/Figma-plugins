@@ -20,6 +20,7 @@ type JsonLeaf = {
       cssName: string;
       scopes?: string[];
       modes?: Record<string, string | number | boolean | null>;
+      usedBy?: string[];
     };
   };
 };
@@ -68,6 +69,7 @@ function variableToLeaf(
           cssName: variable.cssName,
           scopes: variable.scopes,
           modes,
+          usedBy: variable.usedByComponents,
         },
       },
     },

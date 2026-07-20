@@ -20,6 +20,7 @@ describe('generateDesignMd', () => {
       '## Effect Tokens',
       '## Grid Tokens',
       '## Components',
+      '## Token Usage',
       '## Accessibility Notes',
       '## Naming Conventions',
       '## Design Principles',
@@ -52,5 +53,36 @@ describe('generateDesignMd', () => {
     const { content } = generateDesignMd(ds);
     expect(content).toContain('Falling back to Color Styles');
     expect(content).toContain('#ffffff');
+  });
+
+  it('lists the fixture component under Referenced Variables for the token it binds', () => {
+    const { content } = generateDesignMd(makeDesignSystem());
+    expect(content).toMatch(/Color\/Primary\/500.*Button/);
+  });
+
+  it('lists variables no component binds under Unused Variables', () => {
+    const { content } = generateDesignMd(makeDesignSystem());
+    expect(content).toContain('Semantic/Color/Danger');
+  });
+
+  it('reports every variable as unused when there are no components', () => {
+    const ds = makeDesignSystem();
+    ds.components = [];
+    ds.variables = ds.variables.map((v) => ({ ...v, usedByComponents: [] }));
+    const { content } = generateDesignMd(ds);
+    expect(content).toContain('0 of 2 variables (0%)');
+  });
+
+  it('breaks down component counts by page, counting each variant', () => {
+    const { content } = generateDesignMd(makeDesignSystem());
+    expect(content).toContain('### Components by Page');
+    // The fixture's Button is a component set with 2 variants on the "Components" page.
+    expect(content).toMatch(/\| Components \| 2 \|/);
+  });
+
+  it('lists each component’s source page in the full table', () => {
+    const { content } = generateDesignMd(makeDesignSystem());
+    expect(content).toContain('### All Components');
+    expect(content).toMatch(/\| Button \| Component Set \| Components \|/);
   });
 });

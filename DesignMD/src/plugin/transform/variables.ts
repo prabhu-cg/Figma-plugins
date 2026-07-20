@@ -68,6 +68,7 @@ export function transformVariables(
       })),
       codeSyntax: v.codeSyntax,
       cssName: toCssVarName(path),
+      usedByComponents: [],
     };
   });
 }

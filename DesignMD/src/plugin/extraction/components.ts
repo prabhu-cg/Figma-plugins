@@ -16,6 +16,29 @@ function findPageName(node: BaseNode): string {
   return 'Unknown Page';
 }
 
+/** Minimal shape needed to walk an ancestor chain, kept duck-typed so this is unit-testable without a Figma runtime. */
+export interface NamedAncestor {
+  name: string;
+  type: string;
+  parent: NamedAncestor | null;
+}
+
+/**
+ * Mirrors Figma's own "hide from publishing" convention: a component, style, frame,
+ * section, or page whose name starts with "." is excluded from the library, and that
+ * exclusion cascades to everything nested inside it. Checked up to and including the
+ * containing page — the document root's name (the file name) is never treated as a hide signal.
+ */
+export function isHiddenFromPublishing(node: NamedAncestor): boolean {
+  let current: NamedAncestor | null = node;
+  while (current) {
+    if (current.name.trim().startsWith('.')) return true;
+    if (current.type === 'PAGE') return false;
+    current = current.parent;
+  }
+  return false;
+}
+
 function scanDescendantBoundVariableIds(node: SceneNode): string[] {
   const ids = new Set<string>();
   let scanned = 0;
@@ -77,10 +100,25 @@ export async function extractComponents(
   );
 
   const allNodes = nodes ?? [];
-  const componentSets = allNodes.filter((n): n is ComponentSetNode => n.type === 'COMPONENT_SET');
-  const standaloneComponents = allNodes.filter(
+  const componentSetsAll = allNodes.filter(
+    (n): n is ComponentSetNode => n.type === 'COMPONENT_SET',
+  );
+  const standaloneComponentsAll = allNodes.filter(
     (n): n is ComponentNode => n.type === 'COMPONENT' && n.parent?.type !== 'COMPONENT_SET',
   );
+
+  const componentSets = componentSetsAll.filter((n) => !isHiddenFromPublishing(n));
+  const standaloneComponents = standaloneComponentsAll.filter((n) => !isHiddenFromPublishing(n));
+
+  const hiddenCount =
+    componentSetsAll.length - componentSets.length +
+    (standaloneComponentsAll.length - standaloneComponents.length);
+  if (hiddenCount > 0) {
+    warn(
+      `Skipped ${hiddenCount} component(s)/component set(s) hidden from publishing ` +
+        '(name, or an ancestor frame/section/page, starts with ".").',
+    );
+  }
 
   const fromSets = await processInBatches(
     componentSets,

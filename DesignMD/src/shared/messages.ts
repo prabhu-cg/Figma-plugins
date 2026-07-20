@@ -11,8 +11,8 @@ export interface ExportOptions {
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   designMd: true,
   componentDocs: true,
-  tokensJson: true,
-  cssTokensJson: true,
+  tokensJson: false,
+  cssTokensJson: false,
   zip: true,
 };
 
@@ -22,7 +22,9 @@ export interface GeneratedFile {
   content: string;
 }
 
-export type UIToPluginMessage = { type: 'extract' } | { type: 'generate'; options: ExportOptions };
+export type UIToPluginMessage =
+  | { type: 'extract' }
+  | { type: 'generate'; options: ExportOptions; excludedPages: string[] };
 
 export type PluginToUIMessage =
   | { type: 'progress'; stage: string; percent: number; message?: string }

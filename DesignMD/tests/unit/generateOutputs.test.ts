@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { generateOutputs } from '../../src/plugin/generators';
-import { DEFAULT_EXPORT_OPTIONS } from '../../src/shared/messages';
 import { makeDesignSystem } from './fixtures';
 
 describe('generateOutputs', () => {
   it('generates all four output kinds when every option is enabled', () => {
-    const files = generateOutputs(makeDesignSystem(), DEFAULT_EXPORT_OPTIONS);
+    const files = generateOutputs(makeDesignSystem(), {
+      designMd: true,
+      componentDocs: true,
+      tokensJson: true,
+      cssTokensJson: true,
+      zip: true,
+    });
     const paths = files.map((f) => f.path);
     expect(paths).toContain('design.md');
     expect(paths).toContain('tokens.json');

@@ -61,16 +61,6 @@ export function ArchiveIcon({ className }: IconProps) {
   );
 }
 
-export function RefreshIcon({ className }: IconProps) {
-  return (
-    <svg {...base} className={className} width={16} height={16}>
-      <path d="M4 4v5h5" />
-      <path d="M20 20v-5h-5" />
-      <path d="M5.5 15a7.5 7.5 0 0 0 13-4.5M18.5 9A7.5 7.5 0 0 0 5.5 13.5" />
-    </svg>
-  );
-}
-
 export function CheckIcon({ className }: IconProps) {
   return (
     <svg {...base} width={13} height={13} strokeWidth={2.4} className={className}>

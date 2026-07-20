@@ -182,6 +182,25 @@ function gridTokensSection(ds: DesignSystem): string {
   ]);
 }
 
+function componentsByPageSection(ds: DesignSystem): string {
+  const countsByPage = new Map<string, number>();
+  for (const c of ds.components) {
+    const count = c.isComponentSet ? c.variants.length : 1;
+    countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
+  }
+  const rows = Array.from(countsByPage.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([page, count]) => [page, String(count)]);
+
+  return joinSections([
+    mdHeading(3, 'Components by Page'),
+    'Full document scan, including any draft, playground, or example pages — not just pages ' +
+      "intended for publishing. Compare against Figma's own library/publish count if this " +
+      'total looks higher than expected.\n',
+    mdTable(['Page', 'Component Count'], rows),
+  ]);
+}
+
 function componentsSection(ds: DesignSystem): string {
   if (ds.components.length === 0) {
     return joinSections([
@@ -192,6 +211,7 @@ function componentsSection(ds: DesignSystem): string {
   const rows = ds.components.map((c) => [
     c.name,
     c.isComponentSet ? 'Component Set' : 'Component',
+    c.pageName,
     String(c.variants.length),
     c.states.join(', ') || '—',
     c.sizes.join(', ') || '—',
@@ -200,7 +220,51 @@ function componentsSection(ds: DesignSystem): string {
   return joinSections([
     mdHeading(2, 'Components'),
     'Full per-component documentation lives in `/components`. See individual files for variants, properties, and token references.\n',
-    mdTable(['Component', 'Type', 'Variants', 'States', 'Sizes', 'Docs'], rows),
+    componentsByPageSection(ds),
+    mdHeading(3, 'All Components'),
+    mdTable(['Component', 'Type', 'Page', 'Variants', 'States', 'Sizes', 'Docs'], rows),
+  ]);
+}
+
+function formatUsedBy(names: string[], max = 5): string {
+  if (names.length === 0) return '—';
+  if (names.length <= max) return names.join(', ');
+  return `${names.slice(0, max).join(', ')}, +${names.length - max} more`;
+}
+
+function tokenUsageSection(ds: DesignSystem): string {
+  if (ds.variables.length === 0) {
+    return joinSections([
+      mdHeading(2, 'Token Usage'),
+      '_No variables to cross-reference against components._\n',
+    ]);
+  }
+
+  const used = ds.variables.filter((v) => v.usedByComponents.length > 0);
+  const unused = ds.variables.filter((v) => v.usedByComponents.length === 0);
+  const percent = Math.round((used.length / ds.variables.length) * 100);
+
+  const usedRows = [...used]
+    .sort((a, b) => b.usedByComponents.length - a.usedByComponents.length)
+    .map((v) => [v.name, v.cssName, String(v.usedByComponents.length), formatUsedBy(v.usedByComponents)]);
+
+  const unusedTable =
+    unused.length === 0
+      ? '_Every variable is referenced by at least one component._\n'
+      : mdTable(
+          ['Token', 'CSS Variable', 'Category', 'Collection'],
+          unused.map((v) => [v.name, v.cssName, v.category, v.collectionName]),
+        );
+
+  return joinSections([
+    mdHeading(2, 'Token Usage'),
+    `${used.length} of ${ds.variables.length} variables (${percent}%) are referenced by at least one ` +
+      "component in this file. Usage is derived from bound variables detected in each component's node " +
+      'tree — Style bindings applied directly to nodes (not via Variables) are not tracked here.\n',
+    mdHeading(3, 'Referenced Variables'),
+    mdTable(['Token', 'CSS Variable', 'Used By', 'Components'], usedRows),
+    mdHeading(3, 'Unused Variables'),
+    unusedTable,
   ]);
 }
 
@@ -279,6 +343,7 @@ export function generateDesignMd(ds: DesignSystem): GeneratedFile {
     effectTokensSection(ds),
     gridTokensSection(ds),
     componentsSection(ds),
+    tokenUsageSection(ds),
     accessibilitySection(ds),
     namingConventionsSection(ds),
     designPrinciplesSection(),

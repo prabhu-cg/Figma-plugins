@@ -3,6 +3,7 @@ import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type GeneratedFile } from '
 import type { DesignSystem } from '@shared/types';
 import { Header } from './components/Header';
 import { SummaryPanel } from './components/SummaryPanel';
+import { PageFilter } from './components/PageFilter';
 import { ExportSettings } from './components/ExportSettings';
 import { OutputSelection } from './components/OutputSelection';
 import { GenerateButton } from './components/GenerateButton';
@@ -32,6 +33,7 @@ export default function App() {
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
+  const [excludedPages, setExcludedPages] = useState<Set<string>>(new Set());
   const [baseName, setBaseName] = useState('designmd-export');
   const [error, setError] = useState<string | null>(null);
 
@@ -42,6 +44,7 @@ export default function App() {
         break;
       case 'extraction-complete':
         setDesignSystem(message.designSystem);
+        setExcludedPages(new Set());
         setStatus('ready');
         setProgress(null);
         if (!baseNameWasCustomized(baseName)) {
@@ -70,8 +73,8 @@ export default function App() {
   const handleGenerate = useCallback(() => {
     setError(null);
     setStatus('generating');
-    postToPlugin({ type: 'generate', options });
-  }, [options]);
+    postToPlugin({ type: 'generate', options, excludedPages: Array.from(excludedPages) });
+  }, [options, excludedPages]);
 
   const handleDownload = useCallback(async () => {
     if (!files) return;
@@ -112,6 +115,11 @@ export default function App() {
           <>
             <SummaryPanel summary={designSystem.summary} />
             <WarningsList warnings={designSystem.warnings} />
+            <PageFilter
+              components={designSystem.components}
+              excludedPages={excludedPages}
+              onChange={setExcludedPages}
+            />
             <ExportSettings baseName={baseName} onBaseNameChange={setBaseName} />
             <OutputSelection options={options} onChange={setOptions} />
           </>
