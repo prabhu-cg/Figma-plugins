@@ -22,6 +22,7 @@ describe('generateDesignMd', () => {
       '## Components',
       '## Token Usage',
       '## Accessibility Notes',
+      '### Color Contrast',
       '## Naming Conventions',
       '## Design Principles',
     ];

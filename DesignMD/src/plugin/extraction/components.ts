@@ -111,7 +111,8 @@ export async function extractComponents(
   const standaloneComponents = standaloneComponentsAll.filter((n) => !isHiddenFromPublishing(n));
 
   const hiddenCount =
-    componentSetsAll.length - componentSets.length +
+    componentSetsAll.length -
+    componentSets.length +
     (standaloneComponentsAll.length - standaloneComponents.length);
   if (hiddenCount > 0) {
     warn(

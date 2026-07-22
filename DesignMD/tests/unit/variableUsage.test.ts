@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { computeVariableUsage } from '../../src/plugin/transform/usage';
 import { makeColorVariable, makeCollection, makeComponent } from './fixtures';
 import { transformComponents } from '../../src/plugin/transform/components';
-import { transformVariableCollections, transformVariables } from '../../src/plugin/transform/variables';
+import {
+  transformVariableCollections,
+  transformVariables,
+} from '../../src/plugin/transform/variables';
 
 describe('computeVariableUsage', () => {
   it('attaches component names to a variable they bind, deduped and sorted', () => {

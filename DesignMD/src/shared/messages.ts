@@ -23,8 +23,7 @@ export interface GeneratedFile {
 }
 
 export type UIToPluginMessage =
-  | { type: 'extract' }
-  | { type: 'generate'; options: ExportOptions; excludedPages: string[] };
+  { type: 'extract' } | { type: 'generate'; options: ExportOptions; excludedPages: string[] };
 
 export type PluginToUIMessage =
   | { type: 'progress'; stage: string; percent: number; message?: string }

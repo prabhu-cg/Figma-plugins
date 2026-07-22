@@ -42,8 +42,8 @@ export function PageFilter({ components, excludedPages, onChange }: PageFilterPr
     <section className="dmd-section">
       <h2 className="dmd-section-title">Include pages</h2>
       <p className="dmd-section-subtitle">
-        {includedCount} of {totalCount} components selected — uncheck draft, example, or
-        playground pages you don&apos;t want documented.
+        {includedCount} of {totalCount} components selected — uncheck draft, example, or playground
+        pages you don&apos;t want documented.
       </p>
       <div className="dmd-page-list">
         {pages.map((p) => (

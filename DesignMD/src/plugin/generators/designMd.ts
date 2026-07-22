@@ -1,6 +1,7 @@
 import type { DesignSystem, VariableToken } from '@shared/types';
 import type { GeneratedFile } from '@shared/messages';
 import { joinSections, mdHeading, mdList, mdTable } from './markdown';
+import { computeContrastReport, type ContrastPair, type FallbackContrastCheck } from './contrast';
 
 function defaultValueLabel(v: VariableToken): string {
   const first = v.valuesByMode[0]?.value;
@@ -246,7 +247,12 @@ function tokenUsageSection(ds: DesignSystem): string {
 
   const usedRows = [...used]
     .sort((a, b) => b.usedByComponents.length - a.usedByComponents.length)
-    .map((v) => [v.name, v.cssName, String(v.usedByComponents.length), formatUsedBy(v.usedByComponents)]);
+    .map((v) => [
+      v.name,
+      v.cssName,
+      String(v.usedByComponents.length),
+      formatUsedBy(v.usedByComponents),
+    ]);
 
   const unusedTable =
     unused.length === 0
@@ -268,6 +274,82 @@ function tokenUsageSection(ds: DesignSystem): string {
   ]);
 }
 
+function formatRatio(ratio: number): string {
+  return `${ratio.toFixed(2)}:1`;
+}
+
+function contrastPairsTable(pairs: ContrastPair[]): string {
+  const rows = pairs.map((p) => [
+    p.foreground.name,
+    p.background.name,
+    formatRatio(p.ratio),
+    p.passesAANormal ? 'Pass' : 'Fail',
+    p.passesAALarge ? 'Pass' : 'Fail',
+  ]);
+  return mdTable(
+    ['Foreground', 'Background', 'Ratio', 'AA Normal (4.5:1)', 'AA Large (3:1)'],
+    rows,
+  );
+}
+
+function fallbackChecksTable(checks: FallbackContrastCheck[]): string {
+  const rows = checks.map((c) => [
+    c.token.name,
+    c.token.cssName,
+    `${formatRatio(c.ratioOnWhite)} (${c.passesOnWhite ? 'Pass' : 'Fail'})`,
+    `${formatRatio(c.ratioOnBlack)} (${c.passesOnBlack ? 'Pass' : 'Fail'})`,
+  ]);
+  return mdTable(['Token', 'CSS Variable', 'On White', 'On Black'], rows);
+}
+
+function colorContrastSection(ds: DesignSystem): string {
+  const report = computeContrastReport(ds);
+  const notes: string[] = [];
+  if (report.skippedTranslucentCount > 0) {
+    notes.push(
+      `${report.skippedTranslucentCount} color token(s) were skipped — partial opacity makes their ` +
+        'effective contrast depend on whatever they end up composited over.',
+    );
+  }
+
+  if (report.totalColorTokensChecked === 0) {
+    return joinSections([
+      mdHeading(3, 'Color Contrast'),
+      '_No opaque color tokens available to check._\n',
+    ]);
+  }
+
+  if (report.pairs.length > 0) {
+    const passingNormal = report.pairs.filter((p) => p.passesAANormal).length;
+    const failing = report.pairs.filter((p) => !p.passesAALarge);
+    notes.unshift(
+      `Checked ${report.pairs.length} foreground/background token pair(s), inferred from naming ` +
+        'conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs ' +
+        `FRAME_FILL/SHAPE_FILL scopes). ${passingNormal} of ${report.pairs.length} pair(s) meet WCAG AA ` +
+        'for normal text (4.5:1).',
+    );
+    return joinSections([
+      mdHeading(3, 'Color Contrast'),
+      mdList(notes),
+      mdHeading(4, 'Pairs Failing AA Large (below 3:1)'),
+      failing.length > 0
+        ? contrastPairsTable(failing)
+        : '_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n',
+    ]);
+  }
+
+  notes.unshift(
+    'No foreground/background roles could be inferred from token names or scopes, so every opaque ' +
+      `color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`,
+  );
+  return joinSections([
+    mdHeading(3, 'Color Contrast'),
+    mdList(notes),
+    mdHeading(4, 'All Tokens vs. White / Black'),
+    fallbackChecksTable(report.fallbackChecks),
+  ]);
+}
+
 function accessibilitySection(ds: DesignSystem): string {
   const smallTextStyles = ds.styles.text.filter(
     (s) => (s.textProperties?.fontSize ?? 0) > 0 && (s.textProperties?.fontSize ?? 100) < 12,
@@ -278,7 +360,8 @@ function accessibilitySection(ds: DesignSystem): string {
   ];
 
   const notes: string[] = [
-    'This section lists deterministic, rule-based checks only — it does not perform AI or contrast-ratio analysis.',
+    'This section lists deterministic, rule-based checks only — no AI is involved. The Color Contrast ' +
+      'subsection below computes real WCAG 2.1 contrast ratios from token color values.',
   ];
   if (smallTextStyles.length > 0) {
     notes.push(
@@ -293,10 +376,15 @@ function accessibilitySection(ds: DesignSystem): string {
     );
   }
   notes.push(
-    'Verify color contrast against WCAG 2.1 AA (4.5:1 for body text, 3:1 for large text) using your own contrast tooling before shipping.',
+    'Contrast ratios are computed only for token pairs (or white/black substitutes) inferred from naming ' +
+      '— always confirm against the actual foreground/background combinations used in your UI before shipping.',
   );
 
-  return joinSections([mdHeading(2, 'Accessibility Notes'), mdList(notes)]);
+  return joinSections([
+    mdHeading(2, 'Accessibility Notes'),
+    mdList(notes),
+    colorContrastSection(ds),
+  ]);
 }
 
 function namingConventionsSection(ds: DesignSystem): string {

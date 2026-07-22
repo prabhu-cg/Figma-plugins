@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { filterDesignSystemByPages } from '../../src/plugin/transform/pageFilter';
 import { makeColorVariable, makeCollection, makeComponent } from './fixtures';
 import { transformComponents } from '../../src/plugin/transform/components';
-import { transformVariableCollections, transformVariables } from '../../src/plugin/transform/variables';
+import {
+  transformVariableCollections,
+  transformVariables,
+} from '../../src/plugin/transform/variables';
 import { computeVariableUsage } from '../../src/plugin/transform/usage';
 import { buildSummary } from '../../src/plugin/transform/summary';
 import type { DesignSystem } from '../../src/shared/types';
@@ -11,8 +14,18 @@ function makeSystem(): DesignSystem {
   const collections = transformVariableCollections([makeCollection()]);
   const rawVariables = transformVariables([makeColorVariable()], collections);
   const components = transformComponents([
-    makeComponent({ id: 'c:1', name: 'Button', pageName: 'Components', boundVariableIds: ['var:1'] }),
-    makeComponent({ id: 'c:2', name: 'Playground Card', pageName: 'Playground', boundVariableIds: [] }),
+    makeComponent({
+      id: 'c:1',
+      name: 'Button',
+      pageName: 'Components',
+      boundVariableIds: ['var:1'],
+    }),
+    makeComponent({
+      id: 'c:2',
+      name: 'Playground Card',
+      pageName: 'Playground',
+      boundVariableIds: [],
+    }),
   ]);
   const variables = computeVariableUsage(rawVariables, components);
   const styles = { text: [], color: [], effect: [], grid: [] };

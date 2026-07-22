@@ -24,7 +24,10 @@ export function transformToDesignSystem(raw: ExtractionResult, fileName: string)
   };
 
   const components = transformComponents(raw.components);
-  const variables = computeVariableUsage(transformVariables(raw.variables, collections), components);
+  const variables = computeVariableUsage(
+    transformVariables(raw.variables, collections),
+    components,
+  );
 
   const base = { collections, variables, styles, components };
 

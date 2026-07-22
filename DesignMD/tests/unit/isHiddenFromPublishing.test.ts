@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  isHiddenFromPublishing,
-  type NamedAncestor,
-} from '../../src/plugin/extraction/components';
+import { isHiddenFromPublishing, type NamedAncestor } from '../../src/plugin/extraction/components';
 
 function node(name: string, type: string, parent: NamedAncestor | null = null): NamedAncestor {
   return { name, type, parent };
