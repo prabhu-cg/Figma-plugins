@@ -1,3 +1,5 @@
+import { LogoIcon } from './icons';
+
 interface HeaderProps {
   onRescan: () => void;
   rescanDisabled: boolean;
@@ -7,13 +9,16 @@ interface HeaderProps {
 export function Header({ onRescan, rescanDisabled, showRescan }: HeaderProps) {
   return (
     <header className="dmd-header">
-      <div>
-        <h1>
-          Design<span className="dmd-logo-highlight">MD</span>
-        </h1>
-        <p className="dmd-subtitle">
-          Extract and document your design system from Figma in seconds
-        </p>
+      <div className="dmd-header-title">
+        <LogoIcon className="dmd-logo-icon" />
+        <div>
+          <h1>
+            Design<span className="dmd-logo-highlight">MD</span>
+          </h1>
+          <p className="dmd-subtitle">
+            Extract and document your design system from Figma in seconds
+          </p>
+        </div>
       </div>
       {showRescan && (
         <button

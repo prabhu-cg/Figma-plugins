@@ -79,6 +79,17 @@ body {
   background: var(--dmd-bg);
 }
 
+.dmd-header-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dmd-logo-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
 .dmd-header h1 {
   margin: 0;
   font-size: 20px;
