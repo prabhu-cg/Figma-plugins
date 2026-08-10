@@ -1,4 +1,8 @@
-import { STORAGE_CHUNK_SIZE, STORAGE_SCHEMA_VERSION } from "@shared/constants/storage";
+import {
+  STORAGE_CHUNK_SIZE_CLIENT,
+  STORAGE_CHUNK_SIZE_PLUGIN_DATA,
+  STORAGE_SCHEMA_VERSION,
+} from "@shared/constants/storage";
 import type { Baseline, Project, Settings } from "@shared/types/project";
 import { createEmptyProject, DEFAULT_SETTINGS } from "@shared/types/project";
 import type { ChangeSet } from "@shared/types/change";
@@ -92,7 +96,7 @@ export async function saveProject(project: Project): Promise<void> {
   };
 
   await Promise.all([
-    writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE),
-    writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE),
+    writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT),
+    writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA),
   ]);
 }

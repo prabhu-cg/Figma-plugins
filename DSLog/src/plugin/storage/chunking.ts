@@ -4,18 +4,61 @@ interface ChunkIndex {
   count: number;
 }
 
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+
+function isUtf8ContinuationByte(byte: number): boolean {
+  return (byte & 0b11000000) === 0b10000000;
+}
+
+/**
+ * Splits a UTF-8 byte array into chunks no larger than `chunkSizeBytes`,
+ * never cutting inside a multi-byte character. Design system names can
+ * contain non-ASCII text, so a naive character-count split (1 JS string
+ * unit is not 1 byte) can silently produce a chunk larger than the
+ * platform's byte-based per-entry limit; this walks each cut point back to
+ * the start of a character when it would otherwise land mid-sequence.
+ */
+function splitUtf8Bytes(bytes: Uint8Array, chunkSizeBytes: number): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < bytes.length) {
+    let end = Math.min(start + chunkSizeBytes, bytes.length);
+    while (end > start && end < bytes.length && isUtf8ContinuationByte(bytes[end] ?? 0)) {
+      end--;
+    }
+    if (end <= start) {
+      // The character starting at `start` is longer than chunkSizeBytes
+      // itself (only possible with a pathologically small chunk size).
+      // Extend forward to include the whole character rather than cut it
+      // — correctness over the nominal size cap in this rare case.
+      end = start + 1;
+      while (end < bytes.length && isUtf8ContinuationByte(bytes[end] ?? 0)) {
+        end++;
+      }
+    }
+    chunks.push(decoder.decode(bytes.subarray(start, end)));
+    start = end;
+  }
+  return chunks;
+}
+
 /**
  * Splits JSON-serialized data across multiple keys so any single value stays
  * under platform per-key size limits (clientStorage and plugin data both
- * cap individual values). Old chunks are cleared first so a shrinking blob
- * doesn't leave stale trailing chunks behind.
+ * cap individual values — plugin data caps each entry at 100 kB, measured
+ * in UTF-8 bytes). Old chunks are cleared first so a shrinking blob doesn't
+ * leave stale trailing chunks behind.
  */
-export async function writeChunked(store: KVStore, prefix: string, data: unknown, chunkSize: number): Promise<void> {
+export async function writeChunked(
+  store: KVStore,
+  prefix: string,
+  data: unknown,
+  chunkSizeBytes: number,
+): Promise<void> {
   const serialized = JSON.stringify(data);
-  const chunks: string[] = [];
-  for (let i = 0; i < serialized.length; i += chunkSize) {
-    chunks.push(serialized.slice(i, i + chunkSize));
-  }
+  const bytes = encoder.encode(serialized);
+  const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
   if (chunks.length === 0) chunks.push("");
 
   const existingKeys = await store.keys();

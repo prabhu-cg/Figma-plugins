@@ -65,4 +65,57 @@ describe("chunking", () => {
     await store.set("test:index", "{not json");
     expect(await readChunked(store, "test")).toBeUndefined();
   });
+
+  it("never writes a chunk larger than the requested byte size, even with multi-byte characters", async () => {
+    const store = createMemoryStore();
+    const encoder = new TextEncoder();
+    // Mix of CJK (3 bytes/char in UTF-8) and emoji (4 bytes) so naive
+    // character-count slicing would exceed the byte budget and/or split a
+    // character across chunk boundaries.
+    const payload = { text: "设计系统令牌🎨".repeat(200) };
+    const chunkSizeBytes = 37;
+    await writeChunked(store, "test", payload, chunkSizeBytes);
+
+    const chunkKeys = Array.from(store.data.keys()).filter((k) => k.startsWith("test:chunk:"));
+    expect(chunkKeys.length).toBeGreaterThan(1);
+    for (const key of chunkKeys) {
+      const bytes = encoder.encode(store.data.get(key) ?? "");
+      expect(bytes.length).toBeLessThanOrEqual(chunkSizeBytes);
+    }
+
+    const result = await readChunked<typeof payload>(store, "test");
+    expect(result).toEqual(payload);
+  });
+
+  it("round-trips correctly regardless of where the byte budget falls relative to character boundaries", async () => {
+    const store = createMemoryStore();
+    const payload = { text: "🎨".repeat(50) };
+    // Try every chunk size from 1..20 bytes — since each emoji is a 4-byte
+    // surrogate pair, most of these force a cut point that would otherwise
+    // land mid-character.
+    for (let chunkSizeBytes = 1; chunkSizeBytes <= 20; chunkSizeBytes++) {
+      await writeChunked(store, "test", payload, chunkSizeBytes);
+      const result = await readChunked<typeof payload>(store, "test");
+      expect(result).toEqual(payload);
+    }
+  });
+
+  it("stays within the real 100 kB Figma pluginData entry limit at realistic scan sizes", async () => {
+    const store = createMemoryStore();
+    const encoder = new TextEncoder();
+    // Roughly approximates one baseline's worth of component/token names.
+    const bigPayload = {
+      components: Array.from({ length: 1000 }, (_, i) => ({ id: `c${i}`, name: `设计组件 Component ${i} 🔘` })),
+    };
+    const PLUGIN_DATA_LIMIT_BYTES = 100_000;
+    const chunkSizeBytes = 40_000;
+    await writeChunked(store, "test", bigPayload, chunkSizeBytes);
+
+    for (const [key, value] of store.data) {
+      if (!key.startsWith("test:chunk:")) continue;
+      expect(encoder.encode(value).length).toBeLessThan(PLUGIN_DATA_LIMIT_BYTES);
+    }
+
+    expect(await readChunked(store, "test")).toEqual(bigPayload);
+  });
 });
