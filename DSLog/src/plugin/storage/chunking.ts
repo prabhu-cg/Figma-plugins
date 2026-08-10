@@ -1,11 +1,9 @@
+import { utf8Decode, utf8Encode } from "@shared/utils/utf8";
 import type { KVStore } from "./kvStore";
 
 interface ChunkIndex {
   count: number;
 }
-
-const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
 function isUtf8ContinuationByte(byte: number): boolean {
   return (byte & 0b11000000) === 0b10000000;
@@ -37,7 +35,7 @@ function splitUtf8Bytes(bytes: Uint8Array, chunkSizeBytes: number): string[] {
         end++;
       }
     }
-    chunks.push(decoder.decode(bytes.subarray(start, end)));
+    chunks.push(utf8Decode(bytes.subarray(start, end)));
     start = end;
   }
   return chunks;
@@ -57,7 +55,7 @@ export async function writeChunked(
   chunkSizeBytes: number,
 ): Promise<void> {
   const serialized = JSON.stringify(data);
-  const bytes = encoder.encode(serialized);
+  const bytes = utf8Encode(serialized);
   const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
   if (chunks.length === 0) chunks.push("");
 
