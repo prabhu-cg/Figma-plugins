@@ -1,0 +1,620 @@
+:root {
+  --dslog-primary: #c74504;
+  --dslog-secondary: #444444;
+  --dslog-bg: #ffffff;
+  --dslog-bg-subtle: #f7f6f5;
+  --dslog-border: #e5e2df;
+  --dslog-text: #1c1c1c;
+  --dslog-text-muted: #6b6b6b;
+  --dslog-success-bg: #fff3ec;
+  --dslog-danger: #b3261e;
+  --dslog-radius: 6px;
+  font-family:
+    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--dslog-bg);
+  color: var(--dslog-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dslog-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.dslog-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: var(--dslog-text-muted);
+}
+
+.dslog-nav {
+  display: flex;
+  border-bottom: 1px solid var(--dslog-border);
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.dslog-nav__item {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dslog-text-muted);
+  cursor: pointer;
+}
+
+.dslog-nav__item.is-active {
+  color: var(--dslog-primary);
+  border-bottom-color: var(--dslog-primary);
+}
+
+.dslog-main {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.dslog-page {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dslog-header {
+  margin-bottom: 4px;
+}
+
+.dslog-wordmark__text {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.dslog-wordmark--sm .dslog-wordmark__text {
+  font-size: 14px;
+}
+
+.dslog-wordmark__ds {
+  color: var(--dslog-secondary);
+}
+
+.dslog-wordmark__log {
+  color: var(--dslog-primary);
+}
+
+.dslog-wordmark__tagline {
+  display: block;
+  font-size: 11px;
+  color: var(--dslog-secondary);
+  margin-top: 2px;
+}
+
+.dslog-card {
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  padding: 12px;
+}
+
+.dslog-card--success {
+  background: var(--dslog-success-bg);
+  border-color: #f3d3bd;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dslog-card--success h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.dslog-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dslog-text-muted);
+  font-weight: 600;
+}
+
+.dslog-value {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.dslog-value--lg {
+  font-size: 22px;
+}
+
+.dslog-stat-row {
+  display: flex;
+  gap: 24px;
+  margin-top: 6px;
+}
+
+.dslog-stat-num {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.dslog-stat-name {
+  font-size: 10px;
+  color: var(--dslog-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dslog-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.dslog-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.dslog-btn {
+  appearance: none;
+  border-radius: var(--dslog-radius);
+  border: 1px solid var(--dslog-border);
+  background: var(--dslog-bg);
+  color: var(--dslog-text);
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.dslog-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dslog-btn--primary {
+  background: var(--dslog-primary);
+  border-color: var(--dslog-primary);
+  color: #fff;
+}
+
+.dslog-btn--ghost {
+  border-color: transparent;
+}
+
+.dslog-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 24px 4px;
+}
+
+.dslog-empty h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.dslog-empty p {
+  margin: 0;
+  color: var(--dslog-text-muted);
+}
+
+.dslog-progress {
+  margin-bottom: 8px;
+}
+
+.dslog-progress__label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--dslog-text-muted);
+  margin-bottom: 4px;
+}
+
+.dslog-progress__track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--dslog-bg-subtle);
+  overflow: hidden;
+}
+
+.dslog-progress__fill {
+  height: 100%;
+  background: var(--dslog-primary);
+  transition: width 120ms ease;
+}
+
+.dslog-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--dslog-border);
+}
+
+.dslog-tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--dslog-text-muted);
+  cursor: pointer;
+}
+
+.dslog-tab.is-active {
+  color: var(--dslog-primary);
+  border-bottom-color: var(--dslog-primary);
+}
+
+.dslog-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dslog-section--form {
+  border-top: 1px solid var(--dslog-border);
+  padding-top: 12px;
+}
+
+.dslog-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dslog-radio {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  cursor: pointer;
+}
+
+.dslog-radio__label {
+  font-weight: 500;
+}
+
+.dslog-radio__desc {
+  color: var(--dslog-text-muted);
+  font-size: 10.5px;
+}
+
+.dslog-row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dslog-link {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--dslog-primary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.dslog-checklist {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  padding: 8px;
+}
+
+.dslog-checklist__group {
+  font-size: 10px;
+  color: var(--dslog-text-muted);
+  text-transform: uppercase;
+  margin-top: 8px;
+  margin-bottom: 2px;
+}
+
+.dslog-checklist__group:first-child {
+  margin-top: 0;
+}
+
+.dslog-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+
+.dslog-hint {
+  color: var(--dslog-text-muted);
+  font-size: 10.5px;
+  margin: 0;
+}
+
+.dslog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.dslog-field span {
+  color: var(--dslog-text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dslog-field input,
+.dslog-field textarea,
+.dslog-export-textarea {
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  padding: 6px 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--dslog-text);
+  resize: vertical;
+}
+
+.dslog-field input:focus,
+.dslog-field textarea:focus {
+  outline: 2px solid var(--dslog-primary);
+  outline-offset: -1px;
+}
+
+.dslog-filters {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dslog-filter {
+  appearance: none;
+  border: 1px solid var(--dslog-border);
+  background: var(--dslog-bg);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 10.5px;
+  cursor: pointer;
+  color: var(--dslog-text-muted);
+}
+
+.dslog-filter.is-active {
+  background: var(--dslog-secondary);
+  border-color: var(--dslog-secondary);
+  color: #fff;
+}
+
+.dslog-change-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dslog-change-group__title {
+  font-weight: 600;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
+
+.dslog-change {
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.dslog-change.is-reviewed {
+  opacity: 0.7;
+}
+
+.dslog-change__summary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.dslog-change__text {
+  flex: 1;
+}
+
+.dslog-change__detail {
+  padding: 10px;
+  border-top: 1px solid var(--dslog-border);
+  background: var(--dslog-bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dslog-before-after {
+  display: flex;
+  gap: 12px;
+}
+
+.dslog-before-after > div {
+  flex: 1;
+}
+
+.dslog-code {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+  background: #fff;
+  border: 1px solid var(--dslog-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  word-break: break-word;
+}
+
+.dslog-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dslog-mode-row__name {
+  font-weight: 600;
+  font-size: 10.5px;
+}
+
+.dslog-mode-row__diff {
+  display: flex;
+  gap: 6px;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 10.5px;
+}
+
+.dslog-mode-row__diff--nochange {
+  color: var(--dslog-text-muted);
+  font-family: inherit;
+}
+
+.dslog-badge {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--dslog-bg-subtle);
+  color: var(--dslog-secondary);
+  white-space: nowrap;
+}
+
+.dslog-badge--added {
+  background: #eaf6ec;
+  color: #1e7a34;
+}
+
+.dslog-badge--removed {
+  background: #fbeaea;
+  color: var(--dslog-danger);
+}
+
+.dslog-badge--modified {
+  background: #eef1fb;
+  color: #3949ab;
+}
+
+.dslog-badge--deprecated {
+  background: #f2f2f2;
+  color: var(--dslog-text-muted);
+}
+
+.dslog-badge--breaking {
+  background: var(--dslog-danger);
+  color: #fff;
+}
+
+.dslog-badge--potential {
+  background: #fdece0;
+  color: var(--dslog-primary);
+}
+
+.dslog-badge--reviewed {
+  background: var(--dslog-bg-subtle);
+  color: var(--dslog-text-muted);
+}
+
+.dslog-skipped {
+  font-size: 10.5px;
+  color: var(--dslog-text-muted);
+}
+
+.dslog-skipped ul {
+  margin: 6px 0 0;
+  padding-left: 16px;
+}
+
+.dslog-release-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dslog-release-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  padding: 8px 10px;
+}
+
+.dslog-release-row__title {
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.dslog-export-panel {
+  border: 1px solid var(--dslog-border);
+  border-radius: var(--dslog-radius);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--dslog-bg-subtle);
+}
+
+.dslog-export-textarea {
+  width: 100%;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.dslog-toasts {
+  position: fixed;
+  bottom: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dslog-toast {
+  border-radius: var(--dslog-radius);
+  padding: 8px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.dslog-toast--info {
+  background: var(--dslog-secondary);
+  color: #fff;
+}
+
+.dslog-toast--error {
+  background: var(--dslog-danger);
+  color: #fff;
+}

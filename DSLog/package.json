@@ -1,0 +1,31 @@
+{
+  "name": "dslog",
+  "version": "1.0.0",
+  "description": "DSLog — Design System Change tracker for Figma. Local-first, no backend, no AI, no telemetry.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --config vite.config.ts",
+    "build": "tsc -p tsconfig.json --noEmit && vite build --config vite.config.ts && vite build --config vite.ui.config.ts && node scripts/inline-ui.mjs",
+    "build:plugin": "vite build --config vite.config.ts",
+    "build:ui": "vite build --config vite.ui.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.101.0",
+    "@types/node": "^26.2.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vite-plugin-singlefile": "^2.1.0",
+    "vitest": "^2.1.8"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
