@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
-import { Button } from "@ui/components/Button";
-import { EmptyState } from "@ui/components/EmptyState";
+import { CheckCircleIcon, CloseIcon, CopyIcon, TrackIcon } from "@ui/components/Icons";
 import type { PageId } from "@ui/App";
 
 export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
@@ -20,16 +19,15 @@ export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => voi
 
   if (!project.currentBaselineId) {
     return (
-      <div className="dslog-page">
-        <EmptyState
-          title="No baseline yet"
-          description="Create a baseline before creating a release."
-          action={
-            <Button variant="primary" onClick={() => onNavigate("track")}>
-              Create baseline
-            </Button>
-          }
-        />
+      <div className="state-screen">
+        <div className="state-icon">
+          <TrackIcon style={{ width: 24, height: 24 }} />
+        </div>
+        <div className="state-title">No baseline yet</div>
+        <div className="state-body">Create a baseline before creating a release.</div>
+        <button className="btn btn-primary" onClick={() => onNavigate("track")}>
+          Create baseline
+        </button>
       </div>
     );
   }
@@ -63,110 +61,146 @@ export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   };
 
   return (
-    <div className="dslog-page">
+    <div className="view">
+      <div className="view-header">
+        <div>
+          <div className="view-title">Releases</div>
+          <div className="view-subtitle">Bundle reviewed changes into a named version with a changelog</div>
+        </div>
+      </div>
+
       {exportContent && (
-        <div className="dslog-export-panel">
-          <div className="dslog-row-between">
-            <span className="dslog-label">
-              {exportContent.format === "markdown" ? "Markdown" : "JSON"} export
-            </span>
-            <button className="dslog-link" onClick={clearExportContent}>
-              Close
+        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
+          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+            <span className="card-title">{exportContent.format === "markdown" ? "Markdown" : "JSON"} export</span>
+            <button className="btn btn-ghost btn-sm" onClick={clearExportContent}>
+              <CloseIcon style={{ width: 14, height: 14 }} />
             </button>
           </div>
-          <textarea className="dslog-export-textarea" readOnly value={exportContent.content} rows={10} />
-          <div className="dslog-actions">
-            <Button onClick={copyToClipboard}>Copy to clipboard</Button>
-            {copyStatus && <span className="dslog-hint">{copyStatus}</span>}
+          <textarea className="textarea" readOnly value={exportContent.content} rows={10} style={{ fontFamily: "monospace", fontSize: 11 }} />
+          <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+            <button className="btn btn-secondary btn-sm" onClick={copyToClipboard}>
+              <CopyIcon style={{ width: 14, height: 14 }} />
+              Copy to clipboard
+            </button>
+            {copyStatus && <span className="text-tertiary" style={{ fontSize: 11.5 }}>{copyStatus}</span>}
           </div>
         </div>
       )}
 
       {lastRelease ? (
-        <div className="dslog-card dslog-card--success">
-          <h3>Release created</h3>
-          <div className="dslog-label">Version {lastRelease.version}</div>
-          <div className="dslog-actions">
-            <Button onClick={() => send({ type: "export", format: "markdown", releaseId: lastRelease.id })}>
+        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
+          <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+            <div className="state-icon" style={{ width: 32, height: 32, background: "var(--color-success-soft)", color: "var(--color-success)" }}>
+              <CheckCircleIcon style={{ width: 18, height: 18 }} />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 14 }}>Release created</div>
+              <div className="text-secondary" style={{ fontSize: 12 }}>Version {lastRelease.version}</div>
+            </div>
+          </div>
+          <div className="flex gap-2 wrap">
+            <button className="btn btn-secondary btn-sm" onClick={() => send({ type: "export", format: "markdown", releaseId: lastRelease.id })}>
               Export Markdown
-            </Button>
-            <Button onClick={() => send({ type: "export", format: "json", releaseId: lastRelease.id })}>
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => send({ type: "export", format: "json", releaseId: lastRelease.id })}>
               Export JSON
-            </Button>
-            <Button variant="primary" onClick={clearLastRelease}>
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={clearLastRelease}>
               Done
-            </Button>
+            </button>
           </div>
         </div>
       ) : (
-        <div className="dslog-section dslog-section--form">
-          <div className="dslog-label">Create release</div>
-          <label className="dslog-field">
-            <span>Version</span>
-            <input value={version} onChange={(e) => setVersion(e.target.value)} />
-          </label>
-          <label className="dslog-field">
-            <span>Release title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Button updates" />
-          </label>
-          <label className="dslog-field">
-            <span>Description</span>
-            <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </label>
+        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
+          <div className="card-title" style={{ marginBottom: 12 }}>
+            Create release
+          </div>
+          <div className="flex flex-col gap-3">
+            <label className="field">
+              <span className="field-label">Version</span>
+              <input className="input" value={version} onChange={(e) => setVersion(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-label">Release title</span>
+              <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Button updates" />
+            </label>
+            <label className="field">
+              <span className="field-label">Description</span>
+              <textarea className="textarea" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </label>
 
-          <div className="dslog-label">Include</div>
-          <label className="dslog-checkbox">
-            <input type="checkbox" checked={includeComponents} onChange={(e) => setIncludeComponents(e.target.checked)} />
-            <span>Components</span>
-          </label>
-          <label className="dslog-checkbox">
-            <input type="checkbox" checked={includeTokens} onChange={(e) => setIncludeTokens(e.target.checked)} />
-            <span>Tokens</span>
-          </label>
-          <label className="dslog-checkbox">
-            <input type="checkbox" checked={includeBreaking} onChange={(e) => setIncludeBreaking(e.target.checked)} />
-            <span>Breaking changes</span>
-          </label>
-          <label className="dslog-checkbox">
-            <input type="checkbox" checked={includeMigration} onChange={(e) => setIncludeMigration(e.target.checked)} />
-            <span>Migration notes</span>
-          </label>
+            <div>
+              <div className="field-label" style={{ marginBottom: 4 }}>
+                Include
+              </div>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={includeComponents} onChange={(e) => setIncludeComponents(e.target.checked)} />
+                <span style={{ fontSize: 12.5 }}>Components</span>
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={includeTokens} onChange={(e) => setIncludeTokens(e.target.checked)} />
+                <span style={{ fontSize: 12.5 }}>Tokens</span>
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={includeBreaking} onChange={(e) => setIncludeBreaking(e.target.checked)} />
+                <span style={{ fontSize: 12.5 }}>Breaking changes</span>
+              </label>
+              <label className="checkbox-row">
+                <input type="checkbox" checked={includeMigration} onChange={(e) => setIncludeMigration(e.target.checked)} />
+                <span style={{ fontSize: 12.5 }}>Migration notes</span>
+              </label>
+            </div>
 
-          <Button variant="primary" disabled={!canCreate || scanning} onClick={createRelease}>
-            {scanning ? "Working…" : "Create release"}
-          </Button>
+            <div>
+              <button className="btn btn-primary" disabled={!canCreate || scanning} onClick={createRelease}>
+                {scanning ? "Working…" : "Create release"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {project.releases.length > 0 && (
-        <div className="dslog-section">
-          <div className="dslog-label">Past releases</div>
-          <div className="dslog-release-list">
-            {[...project.releases].reverse().map((release) => (
-              <div key={release.id} className="dslog-release-row">
-                <div>
-                  <div className="dslog-release-row__title">
-                    v{release.version} — {release.title}
-                  </div>
-                  <div className="dslog-hint">{new Date(release.createdAt).toLocaleString()}</div>
-                </div>
-                <div className="dslog-actions">
-                  <button
-                    className="dslog-link"
-                    onClick={() => send({ type: "export", format: "markdown", releaseId: release.id })}
-                  >
-                    Markdown
-                  </button>
-                  <button
-                    className="dslog-link"
-                    onClick={() => send({ type: "export", format: "json", releaseId: release.id })}
-                  >
-                    JSON
-                  </button>
-                </div>
-              </div>
-            ))}
+        <div className="card">
+          <div className="card-title" style={{ marginBottom: 12 }}>
+            Past releases
           </div>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Title</th>
+                <th>Date</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...project.releases].reverse().map((release) => (
+                <tr key={release.id}>
+                  <td style={{ fontWeight: 700 }}>v{release.version}</td>
+                  <td>{release.title}</td>
+                  <td className="text-tertiary">{new Date(release.createdAt).toLocaleDateString()}</td>
+                  <td>
+                    <div className="flex gap-2">
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => send({ type: "export", format: "markdown", releaseId: release.id })}
+                      >
+                        Markdown
+                      </button>
+                      <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => send({ type: "export", format: "json", releaseId: release.id })}
+                      >
+                        JSON
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

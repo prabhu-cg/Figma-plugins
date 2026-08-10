@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
-import { Button } from "@ui/components/Button";
+import { Tabs } from "@ui/components/Tabs";
 import type { ComponentScanScope } from "@shared/types/scan";
 import type { PageId } from "@ui/App";
+import { CheckCircleIcon } from "@ui/components/Icons";
 
 type Tab = "components" | "tokens";
 
@@ -70,131 +71,154 @@ export function TrackPage({ onNavigate }: { onNavigate: (page: PageId) => void }
 
   if (lastBaseline) {
     return (
-      <div className="dslog-page">
-        <div className="dslog-card dslog-card--success">
-          <h3>Baseline created</h3>
-          <div className="dslog-stat-row">
-            <div>
-              <div className="dslog-stat-num">{lastBaseline.snapshot.components.length}</div>
-              <div className="dslog-stat-name">Components</div>
+      <div className="view">
+        <div className="state-screen" style={{ height: "auto", paddingTop: "var(--space-6)" }}>
+          <div className="state-icon" style={{ background: "var(--color-success-soft)", color: "var(--color-success)" }}>
+            <CheckCircleIcon style={{ width: 24, height: 24 }} />
+          </div>
+          <div className="state-title">Baseline created</div>
+          <div className="grid grid-cols-2" style={{ width: 320 }}>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="stat-value">{lastBaseline.snapshot.components.length}</div>
+              <div className="stat-label">Components</div>
             </div>
-            <div>
-              <div className="dslog-stat-num">{lastBaseline.snapshot.tokens.length}</div>
-              <div className="dslog-stat-name">Tokens</div>
+            <div className="card" style={{ textAlign: "center" }}>
+              <div className="stat-value">{lastBaseline.snapshot.tokens.length}</div>
+              <div className="stat-label">Tokens</div>
             </div>
           </div>
-          <div className="dslog-label">Version {lastBaseline.version}</div>
-          <Button
-            variant="primary"
+          <div className="text-secondary">Version {lastBaseline.version}</div>
+          <button
+            className="btn btn-primary"
             onClick={() => {
               clearLastBaseline();
               onNavigate("overview");
             }}
           >
             View baseline
-          </Button>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="dslog-page">
-      <div className="dslog-tabs">
-        <button className={`dslog-tab ${tab === "components" ? "is-active" : ""}`} onClick={() => setTab("components")}>
-          Components
-        </button>
-        <button className={`dslog-tab ${tab === "tokens" ? "is-active" : ""}`} onClick={() => setTab("tokens")}>
-          Tokens
-        </button>
+    <div className="view">
+      <div className="view-header">
+        <div>
+          <div className="view-title">Track</div>
+          <div className="view-subtitle">Choose what DSLog tracks, then create a baseline</div>
+        </div>
       </div>
 
+      <Tabs
+        tabs={[
+          { id: "components", label: "Components" },
+          { id: "tokens", label: "Tokens" },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
       {tab === "components" && (
-        <div className="dslog-section">
-          <div className="dslog-label">Scope</div>
-          <div className="dslog-radio-group">
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-3">
             {SCOPE_OPTIONS.map((opt) => (
-              <label key={opt.id} className="dslog-radio">
-                <input
-                  type="radio"
-                  name="scope"
-                  checked={scope === opt.id}
-                  onChange={() => setScope(opt.id)}
-                />
-                <div>
-                  <div className="dslog-radio__label">{opt.label}</div>
-                  <div className="dslog-radio__desc">{opt.description}</div>
+              <button
+                key={opt.id}
+                onClick={() => setScope(opt.id)}
+                className="card"
+                style={{
+                  textAlign: "left",
+                  cursor: "pointer",
+                  border: `1px solid ${scope === opt.id ? "var(--color-primary)" : "var(--color-border)"}`,
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span style={{ fontWeight: 800, fontSize: 13 }}>{opt.label}</span>
+                  {scope === opt.id && <span className="badge badge-success">Selected</span>}
                 </div>
-              </label>
+                <div className="text-secondary" style={{ fontSize: 12, marginTop: 6 }}>
+                  {opt.description}
+                </div>
+              </button>
             ))}
           </div>
 
-          <Button onClick={discover} disabled={scanning}>
-            Find components
-          </Button>
+          <div>
+            <button className="btn btn-primary btn-sm" onClick={discover} disabled={scanning}>
+              Find components
+            </button>
+          </div>
 
           {hasDiscovered && (
-            <>
-              <div className="dslog-row-between">
-                <span className="dslog-label">{discovered.length} components found</span>
-                <div>
-                  <button
-                    className="dslog-link"
-                    onClick={() => setSelectedIds(allSelected ? new Set() : new Set(discovered.map((c) => c.id)))}
-                  >
-                    {allSelected ? "Clear all" : "Select all"}
-                  </button>
-                </div>
+            <div className="card">
+              <div className="flex items-center justify-between" style={{ marginBottom: "var(--space-2)" }}>
+                <span className="card-title">{discovered.length} components found</span>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setSelectedIds(allSelected ? new Set() : new Set(discovered.map((c) => c.id)))}
+                >
+                  {allSelected ? "Clear all" : "Select all"}
+                </button>
               </div>
 
-              <div className="dslog-checklist">
+              <div style={{ maxHeight: 260, overflowY: "auto" }}>
                 {Array.from(grouped.entries()).map(([pageName, items]) => (
                   <div key={pageName}>
-                    <div className="dslog-checklist__group">{pageName}</div>
+                    <div className="text-tertiary" style={{ fontSize: 10, textTransform: "uppercase", marginTop: 10, marginBottom: 2 }}>
+                      {pageName}
+                    </div>
                     {items.map((item) => (
-                      <label key={item.id} className="dslog-checkbox">
+                      <label key={item.id} className="checkbox-row">
                         <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggle(item.id)} />
-                        <span>{item.name}</span>
+                        <span style={{ fontSize: 12.5 }}>{item.name}</span>
                       </label>
                     ))}
                   </div>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       )}
 
       {tab === "tokens" && (
-        <div className="dslog-section">
-          <label className="dslog-checkbox">
+        <div className="card">
+          <label className="checkbox-row">
             <input type="checkbox" checked={tokensEnabled} onChange={(e) => setTokensEnabled(e.target.checked)} />
-            <span>Track variables (design tokens)</span>
+            <span style={{ fontWeight: 700, fontSize: 13 }}>Track variables (design tokens)</span>
           </label>
-          <p className="dslog-hint">
+          <p className="text-secondary" style={{ fontSize: 12.5, marginTop: 8 }}>
             All local variable collections in this file will be tracked — color, number, string, and boolean
             variables across every mode.
           </p>
         </div>
       )}
 
-      <div className="dslog-section dslog-section--form">
-        <div className="dslog-label">Create baseline</div>
-        <label className="dslog-field">
-          <span>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="dslog-field">
-          <span>Version</span>
-          <input value={version} onChange={(e) => setVersion(e.target.value)} />
-        </label>
-        <label className="dslog-field">
-          <span>Description</span>
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
-        </label>
-        <Button variant="primary" disabled={!canCreateBaseline || scanning} onClick={createBaseline}>
-          {scanning ? "Scanning…" : "Create baseline"}
-        </Button>
+      <div className="card" style={{ marginTop: "var(--space-3)" }}>
+        <div className="card-title" style={{ marginBottom: 12 }}>
+          Create baseline
+        </div>
+        <div className="flex flex-col gap-3">
+          <label className="field">
+            <span className="field-label">Name</span>
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Version</span>
+            <input className="input" value={version} onChange={(e) => setVersion(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">Description</span>
+            <textarea className="textarea" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
+          </label>
+          <div>
+            <button className="btn btn-primary" disabled={!canCreateBaseline || scanning} onClick={createBaseline}>
+              {scanning ? "Scanning…" : "Create baseline"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -7,7 +7,7 @@ import { diffSnapshots } from "@plugin/diff";
 import { generateJson, generateMarkdown } from "@plugin/export";
 import { postToUi } from "@plugin/utils/postMessage";
 
-figma.showUI(__html__, { width: 420, height: 640, themeColors: true });
+figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
 
 let project: Project;
 let latestScannedSnapshot: DesignSystemSnapshot | undefined;
