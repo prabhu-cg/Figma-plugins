@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite build --watch --config vite.config.ts",
-    "build": "tsc -p tsconfig.json --noEmit && vite build --config vite.config.ts && vite build --config vite.ui.config.ts && node scripts/inline-ui.mjs",
+    "build": "tsc -p tsconfig.json --noEmit && vite build --config vite.config.ts && node scripts/verify-sandbox-globals.mjs && vite build --config vite.ui.config.ts && node scripts/inline-ui.mjs",
     "build:plugin": "vite build --config vite.config.ts",
     "build:ui": "vite build --config vite.ui.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
