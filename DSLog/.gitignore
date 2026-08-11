@@ -1,5 +1,4 @@
 node_modules
-dist
 dist-ui
 *.log
 .DS_Store

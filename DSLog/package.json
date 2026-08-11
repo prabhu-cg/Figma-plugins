@@ -11,7 +11,8 @@
     "build:ui": "vite build --config vite.ui.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "publish:monorepo": "bash scripts/publish-to-monorepo.sh"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.101.0",
