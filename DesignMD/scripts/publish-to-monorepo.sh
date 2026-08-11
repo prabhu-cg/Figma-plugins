@@ -4,6 +4,10 @@
 # plain `git push` from here isn't possible (it would try to overwrite everything else
 # on main with just this folder) — this script keeps a persistent clone of the monorepo
 # and copies only this project's tracked files into its DesignMD/ subfolder each run.
+#
+# Builds and includes dist/ (unlike this script's original version, which excluded it):
+# DesignMD gets loaded on machines that can't run npm via "Download ZIP" of the
+# monorepo, so the monorepo copy needs a pre-built dist/code.js + dist/ui.html.
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -16,13 +20,15 @@ if [ ! -d "$MONOREPO_DIR/.git" ]; then
   exit 1
 fi
 
+cd "$SOURCE_DIR"
+npm run build
+
 cd "$MONOREPO_DIR"
 git checkout main
 git pull --ff-only origin main
 
 rsync -a --delete \
   --exclude 'node_modules' \
-  --exclude 'dist' \
   --exclude '.git' \
   --exclude '.claude' \
   --exclude '.DS_Store' \

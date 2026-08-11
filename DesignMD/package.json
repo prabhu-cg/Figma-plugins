@@ -15,7 +15,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.plugin.json",
     "lint": "eslint . --ext .ts,.tsx",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "publish:monorepo": "bash scripts/publish-to-monorepo.sh"
   },
   "dependencies": {
     "file-saver": "^2.0.5",

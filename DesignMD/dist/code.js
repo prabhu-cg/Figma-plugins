@@ -192,6 +192,15 @@
     }
     return "Unknown Page";
   }
+  function isHiddenFromPublishing(node) {
+    let current = node;
+    while (current) {
+      if (current.name.trim().startsWith(".")) return true;
+      if (current.type === "PAGE") return false;
+      current = current.parent;
+    }
+    return false;
+  }
   function scanDescendantBoundVariableIds(node) {
     const ids = /* @__PURE__ */ new Set();
     let scanned = 0;
@@ -240,13 +249,23 @@
       (err) => warn(`Failed to scan document for components: ${String(err)}`)
     );
     const allNodes = nodes ?? [];
-    const componentSets = allNodes.filter((n) => n.type === "COMPONENT_SET");
-    const standaloneComponents = allNodes.filter(
+    const componentSetsAll = allNodes.filter(
+      (n) => n.type === "COMPONENT_SET"
+    );
+    const standaloneComponentsAll = allNodes.filter(
       (n) => {
         var _a;
         return n.type === "COMPONENT" && ((_a = n.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET";
       }
     );
+    const componentSets = componentSetsAll.filter((n) => !isHiddenFromPublishing(n));
+    const standaloneComponents = standaloneComponentsAll.filter((n) => !isHiddenFromPublishing(n));
+    const hiddenCount = componentSetsAll.length - componentSets.length + (standaloneComponentsAll.length - standaloneComponents.length);
+    if (hiddenCount > 0) {
+      warn(
+        `Skipped ${hiddenCount} component(s)/component set(s) hidden from publishing (name, or an ancestor frame/section/page, starts with ".").`
+      );
+    }
     const fromSets = await processInBatches(
       componentSets,
       COMPONENT_BATCH_SIZE,
@@ -670,6 +689,141 @@
       content: JSON.stringify(output, null, 2)
     };
   }
+  const AA_NORMAL_MIN_RATIO = 4.5;
+  const AA_LARGE_MIN_RATIO = 3;
+  const WHITE = { r: 1, g: 1, b: 1 };
+  const BLACK = { r: 0, g: 0, b: 0 };
+  const FOREGROUND_HINTS = ["text", "content", "foreground", "label", "icon", "on-", "on_"];
+  const BACKGROUND_HINTS = ["background", "surface", "bg", "fill", "container", "canvas", "backdrop"];
+  const FOREGROUND_SCOPES = ["TEXT_FILL"];
+  const BACKGROUND_SCOPES = ["FRAME_FILL", "SHAPE_FILL"];
+  function nameHasHint$1(name, hints) {
+    const lower = name.toLowerCase();
+    return hints.some((hint) => lower.includes(hint));
+  }
+  function classifyColorRole(name, scopes) {
+    if (scopes.some((s) => FOREGROUND_SCOPES.includes(s)) || nameHasHint$1(name, FOREGROUND_HINTS)) {
+      return "foreground";
+    }
+    if (scopes.some((s) => BACKGROUND_SCOPES.includes(s)) || nameHasHint$1(name, BACKGROUND_HINTS)) {
+      return "background";
+    }
+    return "unknown";
+  }
+  function relativeLuminance(color) {
+    const linearize = (channel) => channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
+    const r = linearize(color.r);
+    const g = linearize(color.g);
+    const b = linearize(color.b);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+  function contrastRatio(a, b) {
+    const l1 = relativeLuminance(a);
+    const l2 = relativeLuminance(b);
+    const lighter = Math.max(l1, l2);
+    const darker = Math.min(l1, l2);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+  function resolveVariableColor(variable, variablesById, depth = 0) {
+    var _a;
+    if (depth > 10) return null;
+    const value = (_a = variable.valuesByMode[0]) == null ? void 0 : _a.value;
+    if (!value) return null;
+    if (value.kind === "color") return value.color;
+    if (value.kind === "alias") {
+      const next = variablesById.get(value.variableId);
+      if (!next) return null;
+      return resolveVariableColor(next, variablesById, depth + 1);
+    }
+    return null;
+  }
+  function collectColorTokens(ds) {
+    const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
+    const tokens = [];
+    let skippedTranslucentCount = 0;
+    const seenNames = /* @__PURE__ */ new Set();
+    for (const v of ds.variables) {
+      if (v.category !== "color" && v.category !== "semantic") continue;
+      if (v.resolvedType !== "COLOR") continue;
+      const color = resolveVariableColor(v, variablesById);
+      if (!color) continue;
+      if (color.a < 0.999) {
+        skippedTranslucentCount += 1;
+        continue;
+      }
+      if (seenNames.has(v.name)) continue;
+      seenNames.add(v.name);
+      tokens.push({
+        name: v.name,
+        cssName: v.cssName,
+        color,
+        role: classifyColorRole(v.name, v.scopes)
+      });
+    }
+    for (const s of ds.styles.color) {
+      if (!s.paint || s.paintIsGradientOrImage) continue;
+      if (seenNames.has(s.name)) continue;
+      if (s.paint.a < 0.999) {
+        skippedTranslucentCount += 1;
+        continue;
+      }
+      seenNames.add(s.name);
+      tokens.push({
+        name: s.name,
+        cssName: s.cssName,
+        color: s.paint,
+        role: classifyColorRole(s.name, [])
+      });
+    }
+    return { tokens, skippedTranslucentCount };
+  }
+  function computeContrastReport(ds) {
+    const { tokens, skippedTranslucentCount } = collectColorTokens(ds);
+    const foregrounds = tokens.filter((t) => t.role === "foreground");
+    const backgrounds = tokens.filter((t) => t.role === "background");
+    if (foregrounds.length > 0 && backgrounds.length > 0) {
+      const pairs = [];
+      for (const foreground of foregrounds) {
+        for (const background of backgrounds) {
+          if (foreground.name === background.name) continue;
+          const ratio = contrastRatio(foreground.color, background.color);
+          pairs.push({
+            foreground,
+            background,
+            ratio,
+            passesAANormal: ratio >= AA_NORMAL_MIN_RATIO,
+            passesAALarge: ratio >= AA_LARGE_MIN_RATIO
+          });
+        }
+      }
+      pairs.sort((a, b) => a.ratio - b.ratio);
+      return {
+        pairs,
+        fallbackChecks: [],
+        totalColorTokensChecked: tokens.length,
+        skippedTranslucentCount
+      };
+    }
+    const fallbackChecks = tokens.map((token) => {
+      const ratioOnWhite = contrastRatio(token.color, WHITE);
+      const ratioOnBlack = contrastRatio(token.color, BLACK);
+      return {
+        token,
+        ratioOnWhite,
+        ratioOnBlack,
+        passesOnWhite: ratioOnWhite >= AA_NORMAL_MIN_RATIO,
+        passesOnBlack: ratioOnBlack >= AA_NORMAL_MIN_RATIO
+      };
+    }).sort(
+      (a, b) => Math.max(b.ratioOnWhite, b.ratioOnBlack) - Math.max(a.ratioOnWhite, a.ratioOnBlack)
+    );
+    return {
+      pairs: [],
+      fallbackChecks,
+      totalColorTokensChecked: tokens.length,
+      skippedTranslucentCount
+    };
+  }
   function defaultValueLabel(v) {
     var _a;
     const first = (_a = v.valuesByMode[0]) == null ? void 0 : _a.value;
@@ -837,6 +991,19 @@
       mdTable(["Style", "CSS Variable", "Pattern", "Description"], rows)
     ]);
   }
+  function componentsByPageSection(ds) {
+    const countsByPage = /* @__PURE__ */ new Map();
+    for (const c of ds.components) {
+      const count = c.isComponentSet ? c.variants.length : 1;
+      countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
+    }
+    const rows = Array.from(countsByPage.entries()).sort((a, b) => b[1] - a[1]).map(([page, count]) => [page, String(count)]);
+    return joinSections([
+      mdHeading(3, "Components by Page"),
+      "Full document scan, including any draft, playground, or example pages — not just pages intended for publishing. Compare against Figma's own library/publish count if this total looks higher than expected.\n",
+      mdTable(["Page", "Component Count"], rows)
+    ]);
+  }
   function componentsSection(ds) {
     if (ds.components.length === 0) {
       return joinSections([
@@ -847,6 +1014,7 @@
     const rows = ds.components.map((c) => [
       c.name,
       c.isComponentSet ? "Component Set" : "Component",
+      c.pageName,
       String(c.variants.length),
       c.states.join(", ") || "—",
       c.sizes.join(", ") || "—",
@@ -855,7 +1023,106 @@
     return joinSections([
       mdHeading(2, "Components"),
       "Full per-component documentation lives in `/components`. See individual files for variants, properties, and token references.\n",
-      mdTable(["Component", "Type", "Variants", "States", "Sizes", "Docs"], rows)
+      componentsByPageSection(ds),
+      mdHeading(3, "All Components"),
+      mdTable(["Component", "Type", "Page", "Variants", "States", "Sizes", "Docs"], rows)
+    ]);
+  }
+  function formatUsedBy(names, max = 5) {
+    if (names.length === 0) return "—";
+    if (names.length <= max) return names.join(", ");
+    return `${names.slice(0, max).join(", ")}, +${names.length - max} more`;
+  }
+  function tokenUsageSection(ds) {
+    if (ds.variables.length === 0) {
+      return joinSections([
+        mdHeading(2, "Token Usage"),
+        "_No variables to cross-reference against components._\n"
+      ]);
+    }
+    const used = ds.variables.filter((v) => v.usedByComponents.length > 0);
+    const unused = ds.variables.filter((v) => v.usedByComponents.length === 0);
+    const percent = Math.round(used.length / ds.variables.length * 100);
+    const usedRows = [...used].sort((a, b) => b.usedByComponents.length - a.usedByComponents.length).map((v) => [
+      v.name,
+      v.cssName,
+      String(v.usedByComponents.length),
+      formatUsedBy(v.usedByComponents)
+    ]);
+    const unusedTable = unused.length === 0 ? "_Every variable is referenced by at least one component._\n" : mdTable(
+      ["Token", "CSS Variable", "Category", "Collection"],
+      unused.map((v) => [v.name, v.cssName, v.category, v.collectionName])
+    );
+    return joinSections([
+      mdHeading(2, "Token Usage"),
+      `${used.length} of ${ds.variables.length} variables (${percent}%) are referenced by at least one component in this file. Usage is derived from bound variables detected in each component's node tree — Style bindings applied directly to nodes (not via Variables) are not tracked here.
+`,
+      mdHeading(3, "Referenced Variables"),
+      mdTable(["Token", "CSS Variable", "Used By", "Components"], usedRows),
+      mdHeading(3, "Unused Variables"),
+      unusedTable
+    ]);
+  }
+  function formatRatio(ratio) {
+    return `${ratio.toFixed(2)}:1`;
+  }
+  function contrastPairsTable(pairs) {
+    const rows = pairs.map((p) => [
+      p.foreground.name,
+      p.background.name,
+      formatRatio(p.ratio),
+      p.passesAANormal ? "Pass" : "Fail",
+      p.passesAALarge ? "Pass" : "Fail"
+    ]);
+    return mdTable(
+      ["Foreground", "Background", "Ratio", "AA Normal (4.5:1)", "AA Large (3:1)"],
+      rows
+    );
+  }
+  function fallbackChecksTable(checks) {
+    const rows = checks.map((c) => [
+      c.token.name,
+      c.token.cssName,
+      `${formatRatio(c.ratioOnWhite)} (${c.passesOnWhite ? "Pass" : "Fail"})`,
+      `${formatRatio(c.ratioOnBlack)} (${c.passesOnBlack ? "Pass" : "Fail"})`
+    ]);
+    return mdTable(["Token", "CSS Variable", "On White", "On Black"], rows);
+  }
+  function colorContrastSection(ds) {
+    const report = computeContrastReport(ds);
+    const notes = [];
+    if (report.skippedTranslucentCount > 0) {
+      notes.push(
+        `${report.skippedTranslucentCount} color token(s) were skipped — partial opacity makes their effective contrast depend on whatever they end up composited over.`
+      );
+    }
+    if (report.totalColorTokensChecked === 0) {
+      return joinSections([
+        mdHeading(3, "Color Contrast"),
+        "_No opaque color tokens available to check._\n"
+      ]);
+    }
+    if (report.pairs.length > 0) {
+      const passingNormal = report.pairs.filter((p) => p.passesAANormal).length;
+      const failing = report.pairs.filter((p) => !p.passesAALarge);
+      notes.unshift(
+        `Checked ${report.pairs.length} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${passingNormal} of ${report.pairs.length} pair(s) meet WCAG AA for normal text (4.5:1).`
+      );
+      return joinSections([
+        mdHeading(3, "Color Contrast"),
+        mdList(notes),
+        mdHeading(4, "Pairs Failing AA Large (below 3:1)"),
+        failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n"
+      ]);
+    }
+    notes.unshift(
+      `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
+    );
+    return joinSections([
+      mdHeading(3, "Color Contrast"),
+      mdList(notes),
+      mdHeading(4, "All Tokens vs. White / Black"),
+      fallbackChecksTable(report.fallbackChecks)
     ]);
   }
   function accessibilitySection(ds) {
@@ -870,7 +1137,7 @@
       ...ds.styles.color.filter((s) => !s.description)
     ];
     const notes = [
-      "This section lists deterministic, rule-based checks only — it does not perform AI or contrast-ratio analysis."
+      "This section lists deterministic, rule-based checks only — no AI is involved. The Color Contrast subsection below computes real WCAG 2.1 contrast ratios from token color values."
     ];
     if (smallTextStyles.length > 0) {
       notes.push(
@@ -883,9 +1150,13 @@
       );
     }
     notes.push(
-      "Verify color contrast against WCAG 2.1 AA (4.5:1 for body text, 3:1 for large text) using your own contrast tooling before shipping."
+      "Contrast ratios are computed only for token pairs (or white/black substitutes) inferred from naming — always confirm against the actual foreground/background combinations used in your UI before shipping."
     );
-    return joinSections([mdHeading(2, "Accessibility Notes"), mdList(notes)]);
+    return joinSections([
+      mdHeading(2, "Accessibility Notes"),
+      mdList(notes),
+      colorContrastSection(ds)
+    ]);
   }
   function namingConventionsSection(ds) {
     const allNames = [
@@ -920,6 +1191,7 @@
       effectTokensSection(ds),
       gridTokensSection(ds),
       componentsSection(ds),
+      tokenUsageSection(ds),
       accessibilitySection(ds),
       namingConventionsSection(ds),
       designPrinciplesSection()
@@ -1001,7 +1273,8 @@
             collection: variable.collectionName,
             cssName: variable.cssName,
             scopes: variable.scopes,
-            modes
+            modes,
+            usedBy: variable.usedByComponents
           }
         }
       }
@@ -1305,11 +1578,27 @@
           value: toTokenValue(vbm.value, variableNamesById)
         })),
         codeSyntax: v.codeSyntax,
-        cssName: toCssVarName(path)
+        cssName: toCssVarName(path),
+        usedByComponents: []
       };
     });
   }
-  const PLUGIN_VERSION = "1.0.0";
+  function computeVariableUsage(variables, components) {
+    const namesByVariableId = /* @__PURE__ */ new Map();
+    for (const component of components) {
+      for (const variableId of component.boundVariableIds) {
+        const names = namesByVariableId.get(variableId);
+        if (names) names.add(component.name);
+        else namesByVariableId.set(variableId, /* @__PURE__ */ new Set([component.name]));
+      }
+    }
+    return variables.map((variable) => ({
+      ...variable,
+      usedByComponents: Array.from(namesByVariableId.get(variable.id) ?? []).sort(
+        (a, b) => a.localeCompare(b)
+      )
+    }));
+  }
   function buildSummary(system) {
     const modeIds = new Set(system.collections.flatMap((c) => c.modes.map((m) => m.modeId)));
     return {
@@ -1327,9 +1616,9 @@
       modesCount: modeIds.size
     };
   }
+  const PLUGIN_VERSION = "1.0.0";
   function transformToDesignSystem(raw, fileName) {
     const collections = transformVariableCollections(raw.collections);
-    const variables = transformVariables(raw.variables, collections);
     const styles = {
       text: transformTextStyles(raw.textStyles),
       color: transformPaintStyles(raw.paintStyles),
@@ -1337,6 +1626,10 @@
       grid: transformGridStyles(raw.gridStyles)
     };
     const components = transformComponents(raw.components);
+    const variables = computeVariableUsage(
+      transformVariables(raw.variables, collections),
+      components
+    );
     const base = { collections, variables, styles, components };
     return {
       metadata: {
@@ -1347,6 +1640,20 @@
       ...base,
       summary: buildSummary(base),
       warnings: raw.warnings
+    };
+  }
+  function filterDesignSystemByPages(ds, excludedPages) {
+    const excluded = excludedPages instanceof Set ? excludedPages : new Set(excludedPages);
+    if (excluded.size === 0) return ds;
+    const components = ds.components.filter((c) => !excluded.has(c.pageName));
+    if (components.length === ds.components.length) return ds;
+    const variables = computeVariableUsage(ds.variables, components);
+    const base = { collections: ds.collections, variables, styles: ds.styles, components };
+    return {
+      ...ds,
+      variables,
+      components,
+      summary: buildSummary(base)
     };
   }
   figma.showUI(__html__, { width: 480, height: 700, themeColors: true });
@@ -1381,7 +1688,8 @@
         });
         return;
       }
-      const files = generateOutputs(cachedDesignSystem, options.options);
+      const designSystem = filterDesignSystemByPages(cachedDesignSystem, options.excludedPages);
+      const files = generateOutputs(designSystem, options.options);
       if (files.length === 0) {
         post({
           type: "error",
