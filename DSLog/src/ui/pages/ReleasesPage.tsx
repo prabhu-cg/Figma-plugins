@@ -1,18 +1,32 @@
 import React, { useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
-import { CheckCircleIcon, CloseIcon, CopyIcon, TrackIcon } from "@ui/components/Icons";
+import { Banner, OptionCard } from "@ui/components/Shared";
+import { Tabs } from "@ui/components/Tabs";
+import {
+  AlertIcon,
+  CheckCircleIcon,
+  ChecklistIcon,
+  CloseIcon,
+  ComponentGlyphIcon,
+  CopyIcon,
+  TokenGlyphIcon,
+  TrackIcon,
+} from "@ui/components/Icons";
 import type { PageId } from "@ui/App";
+
+type Tab = "create" | "past";
 
 export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const { project, send, scanning, exportContent, clearExportContent, lastRelease, clearLastRelease } =
     useProjectState();
+  const [tab, setTab] = useState<Tab>("create");
   const [version, setVersion] = useState("1.1.0");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [includeComponents, setIncludeComponents] = useState(true);
-  const [includeTokens, setIncludeTokens] = useState(true);
-  const [includeBreaking, setIncludeBreaking] = useState(true);
-  const [includeMigration, setIncludeMigration] = useState(true);
+  const [includeComponents, setIncludeComponents] = useState(false);
+  const [includeTokens, setIncludeTokens] = useState(false);
+  const [includeBreaking, setIncludeBreaking] = useState(false);
+  const [includeMigration, setIncludeMigration] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | undefined>(undefined);
 
   if (!project) return null;
@@ -33,6 +47,7 @@ export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   const canCreate = version.trim().length > 0 && title.trim().length > 0;
+  const includedCount = [includeComponents, includeTokens, includeBreaking, includeMigration].filter(Boolean).length;
 
   const createRelease = () => {
     send({
@@ -60,147 +75,207 @@ export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     setTimeout(() => setCopyStatus(undefined), 3000);
   };
 
+  const toggleChangelog = (releaseId: string) => {
+    if (exportContent?.releaseId === releaseId) {
+      clearExportContent();
+    } else {
+      send({ type: "export", format: "markdown", releaseId });
+    }
+  };
+
+  const changelogPanel = (
+    <div className="card" style={{ marginTop: 8, background: "var(--color-surface-alt)" }}>
+      <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
+        <span className="card-title">Markdown changelog</span>
+        <button className="btn btn-ghost btn-sm" onClick={clearExportContent} aria-label="Close">
+          <CloseIcon style={{ width: 14, height: 14 }} />
+        </button>
+      </div>
+      <textarea
+        className="textarea"
+        readOnly
+        value={exportContent?.content ?? ""}
+        rows={10}
+        style={{ fontFamily: "monospace", fontSize: 11 }}
+      />
+      <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+        <button className="btn btn-secondary btn-sm" onClick={copyToClipboard}>
+          <CopyIcon style={{ width: 14, height: 14 }} />
+          Copy to clipboard
+        </button>
+        {copyStatus && <span className="text-tertiary" style={{ fontSize: 11.5 }}>{copyStatus}</span>}
+      </div>
+    </div>
+  );
+
+  const showFooter = tab === "create" && !lastRelease;
+
   return (
-    <div className="view">
-      <div className="view-header">
-        <div>
-          <div className="view-title">Releases</div>
-          <div className="view-subtitle">Bundle reviewed changes into a named version with a changelog</div>
+    <div className="view" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
+      <div style={{ flex: "1 1 auto" }}>
+        <div className="view-header">
+          <div>
+            <div className="view-title">Releases</div>
+            <div className="view-subtitle">Bundle reviewed changes into a named version with a changelog</div>
+          </div>
         </div>
+
+        <Banner kind="info" style={{ marginBottom: "var(--space-3)" }}>
+          A release packages everything changed since your current baseline into a versioned changelog, then
+          becomes the new baseline — so your next scan compares against this point going forward.
+        </Banner>
+
+        <Tabs
+          tabs={[
+            { id: "create", label: "Create release" },
+            { id: "past", label: `Past releases${project.releases.length > 0 ? ` (${project.releases.length})` : ""}` },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+
+        {tab === "create" &&
+          (lastRelease ? (
+            <div className="card">
+              <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+                <div className="state-icon" style={{ width: 32, height: 32, background: "var(--color-success-soft)", color: "var(--color-success)" }}>
+                  <CheckCircleIcon style={{ width: 18, height: 18 }} />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>Release created</div>
+                  <div className="text-secondary" style={{ fontSize: 12 }}>Version {lastRelease.version}</div>
+                </div>
+              </div>
+              <div className="flex gap-2 wrap">
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    send({ type: "export", format: "markdown", releaseId: lastRelease.id });
+                    clearLastRelease();
+                    setTab("past");
+                  }}
+                >
+                  View changelog
+                </button>
+                <button className="btn btn-primary btn-sm" onClick={clearLastRelease}>
+                  Create another
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid" style={{ gridTemplateColumns: "1fr 360px" }}>
+              <div className="card-title">Include</div>
+              <div className="card-title">Release details</div>
+
+              <div className="flex flex-col gap-2">
+                <OptionCard
+                  icon={<ComponentGlyphIcon />}
+                  title="Components"
+                  description="Added, changed, and removed components in this release"
+                  selected={includeComponents}
+                  onSelect={() => setIncludeComponents((v) => !v)}
+                />
+                <OptionCard
+                  icon={<TokenGlyphIcon />}
+                  title="Tokens"
+                  description="Design token (variable) changes across every tracked collection"
+                  selected={includeTokens}
+                  onSelect={() => setIncludeTokens((v) => !v)}
+                />
+                <OptionCard
+                  icon={<AlertIcon />}
+                  title="Breaking changes"
+                  description="Call out changes that are confirmed or likely to break consumers"
+                  selected={includeBreaking}
+                  onSelect={() => setIncludeBreaking((v) => !v)}
+                />
+                <OptionCard
+                  icon={<ChecklistIcon />}
+                  title="Migration notes"
+                  description="Guidance for updating usages that hit a breaking change"
+                  selected={includeMigration}
+                  onSelect={() => setIncludeMigration((v) => !v)}
+                />
+              </div>
+
+              <div className="card">
+                <div className="flex flex-col gap-3">
+                  <label className="field">
+                    <span className="field-label">Version</span>
+                    <input className="input" value={version} onChange={(e) => setVersion(e.target.value)} />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Release title</span>
+                    <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Button updates" />
+                  </label>
+                  <label className="field">
+                    <span className="field-label">Description</span>
+                    <textarea className="textarea" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
+                  </label>
+                </div>
+              </div>
+            </div>
+          ))}
+
+        {tab === "past" &&
+          (project.releases.length === 0 ? (
+            <div className="card state-card">
+              <div className="text-secondary">No releases yet. Create your first one from the Create release tab.</div>
+            </div>
+          ) : (
+            <div className="card">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Version</th>
+                    <th>Title</th>
+                    <th style={{ textAlign: "right" }}>Date</th>
+                    <th style={{ textAlign: "right" }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...project.releases].reverse().map((release) => {
+                    const isOpen = exportContent?.releaseId === release.id;
+                    return (
+                      <React.Fragment key={release.id}>
+                        <tr>
+                          <td style={{ fontWeight: 700 }}>v{release.version}</td>
+                          <td>{release.title}</td>
+                          <td className="text-tertiary" style={{ textAlign: "right" }}>
+                            {new Date(release.createdAt).toLocaleDateString()}
+                          </td>
+                          <td style={{ textAlign: "right" }}>
+                            <button className="btn btn-ghost btn-sm" onClick={() => toggleChangelog(release.id)}>
+                              {isOpen ? "Hide changelog" : "View changelog"}
+                            </button>
+                          </td>
+                        </tr>
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={4} style={{ paddingTop: 0 }}>
+                              {changelogPanel}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
       </div>
 
-      {exportContent && (
-        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
-          <div className="flex items-center justify-between" style={{ marginBottom: 8 }}>
-            <span className="card-title">{exportContent.format === "markdown" ? "Markdown" : "JSON"} export</span>
-            <button className="btn btn-ghost btn-sm" onClick={clearExportContent}>
-              <CloseIcon style={{ width: 14, height: 14 }} />
+      {showFooter && (
+        <div className="card" style={{ marginTop: "var(--space-3)" }}>
+          <div className="flex items-center justify-between">
+            <span className="text-secondary" style={{ fontSize: 12.5 }}>
+              {includedCount} of 4 sections included
+            </span>
+            <button className="btn btn-primary" disabled={!canCreate || scanning} onClick={createRelease}>
+              {scanning ? "Working…" : "Create release"}
             </button>
           </div>
-          <textarea className="textarea" readOnly value={exportContent.content} rows={10} style={{ fontFamily: "monospace", fontSize: 11 }} />
-          <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
-            <button className="btn btn-secondary btn-sm" onClick={copyToClipboard}>
-              <CopyIcon style={{ width: 14, height: 14 }} />
-              Copy to clipboard
-            </button>
-            {copyStatus && <span className="text-tertiary" style={{ fontSize: 11.5 }}>{copyStatus}</span>}
-          </div>
-        </div>
-      )}
-
-      {lastRelease ? (
-        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
-          <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
-            <div className="state-icon" style={{ width: 32, height: 32, background: "var(--color-success-soft)", color: "var(--color-success)" }}>
-              <CheckCircleIcon style={{ width: 18, height: 18 }} />
-            </div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: 14 }}>Release created</div>
-              <div className="text-secondary" style={{ fontSize: 12 }}>Version {lastRelease.version}</div>
-            </div>
-          </div>
-          <div className="flex gap-2 wrap">
-            <button className="btn btn-secondary btn-sm" onClick={() => send({ type: "export", format: "markdown", releaseId: lastRelease.id })}>
-              Export Markdown
-            </button>
-            <button className="btn btn-secondary btn-sm" onClick={() => send({ type: "export", format: "json", releaseId: lastRelease.id })}>
-              Export JSON
-            </button>
-            <button className="btn btn-primary btn-sm" onClick={clearLastRelease}>
-              Done
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="card" style={{ marginBottom: "var(--space-3)" }}>
-          <div className="card-title" style={{ marginBottom: 12 }}>
-            Create release
-          </div>
-          <div className="flex flex-col gap-3">
-            <label className="field">
-              <span className="field-label">Version</span>
-              <input className="input" value={version} onChange={(e) => setVersion(e.target.value)} />
-            </label>
-            <label className="field">
-              <span className="field-label">Release title</span>
-              <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Button updates" />
-            </label>
-            <label className="field">
-              <span className="field-label">Description</span>
-              <textarea className="textarea" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
-            </label>
-
-            <div>
-              <div className="field-label" style={{ marginBottom: 4 }}>
-                Include
-              </div>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={includeComponents} onChange={(e) => setIncludeComponents(e.target.checked)} />
-                <span style={{ fontSize: 12.5 }}>Components</span>
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={includeTokens} onChange={(e) => setIncludeTokens(e.target.checked)} />
-                <span style={{ fontSize: 12.5 }}>Tokens</span>
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={includeBreaking} onChange={(e) => setIncludeBreaking(e.target.checked)} />
-                <span style={{ fontSize: 12.5 }}>Breaking changes</span>
-              </label>
-              <label className="checkbox-row">
-                <input type="checkbox" checked={includeMigration} onChange={(e) => setIncludeMigration(e.target.checked)} />
-                <span style={{ fontSize: 12.5 }}>Migration notes</span>
-              </label>
-            </div>
-
-            <div>
-              <button className="btn btn-primary" disabled={!canCreate || scanning} onClick={createRelease}>
-                {scanning ? "Working…" : "Create release"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {project.releases.length > 0 && (
-        <div className="card">
-          <div className="card-title" style={{ marginBottom: 12 }}>
-            Past releases
-          </div>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Version</th>
-                <th>Title</th>
-                <th>Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...project.releases].reverse().map((release) => (
-                <tr key={release.id}>
-                  <td style={{ fontWeight: 700 }}>v{release.version}</td>
-                  <td>{release.title}</td>
-                  <td className="text-tertiary">{new Date(release.createdAt).toLocaleDateString()}</td>
-                  <td>
-                    <div className="flex gap-2">
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => send({ type: "export", format: "markdown", releaseId: release.id })}
-                      >
-                        Markdown
-                      </button>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => send({ type: "export", format: "json", releaseId: release.id })}
-                      >
-                        JSON
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
     </div>

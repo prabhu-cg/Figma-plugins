@@ -1,5 +1,6 @@
 import React from "react";
 import type { ChangeCategory } from "@shared/types/change";
+import { CheckIcon } from "@ui/components/Icons";
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -35,17 +36,57 @@ export function BreakingBadge({ breaking, potential }: { breaking: boolean; pote
   return null;
 }
 
+export function OptionCard({
+  icon,
+  title,
+  description,
+  selected,
+  onSelect,
+  variant = "checkbox",
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  selected: boolean;
+  onSelect: () => void;
+  variant?: "checkbox" | "radio";
+}) {
+  return (
+    <button
+      type="button"
+      className={`option-card${selected ? " option-card-selected" : ""}`}
+      onClick={onSelect}
+      aria-pressed={selected}
+    >
+      <span className="option-card-icon">{icon}</span>
+      <span className="option-card-text">
+        <span className="option-card-title">{title}</span>
+        <span className="option-card-desc">{description}</span>
+      </span>
+      <span className={`option-card-indicator${variant === "radio" ? " option-card-indicator-radio" : ""}`}>
+        {selected && (variant === "radio" ? (
+          <span className="option-card-radio-dot" />
+        ) : (
+          <CheckIcon style={{ width: 12, height: 12 }} />
+        ))}
+      </span>
+    </button>
+  );
+}
+
 export function Banner({
   kind,
   children,
   onDismiss,
+  style,
 }: {
   kind: "info" | "error";
   children: React.ReactNode;
   onDismiss?: () => void;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div className={`banner banner-${kind}`}>
+    <div className={`banner banner-${kind}`} style={style}>
       <span>{children}</span>
       {onDismiss && (
         <button className="banner-close" onClick={onDismiss} aria-label="Dismiss">

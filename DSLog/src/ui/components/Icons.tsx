@@ -109,3 +109,58 @@ export const PlusIcon = (props: SVGProps<SVGSVGElement>) => (
     <line x1="5" y1="12" x2="19" y2="12" />
   </svg>
 );
+
+export const CheckIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <polyline points="5 13 10 18 19 7" />
+  </svg>
+);
+
+export const ComponentGlyphIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <path d="M12 3l9 9-9 9-9-9 9-9z" />
+  </svg>
+);
+
+export const TokenGlyphIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <line x1="4" y1="7" x2="20" y2="7" />
+    <circle cx="9" cy="7" r="1.8" fill="currentColor" stroke="none" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <circle cx="15" cy="12" r="1.8" fill="currentColor" stroke="none" />
+    <line x1="4" y1="17" x2="20" y2="17" />
+    <circle cx="11" cy="17" r="1.8" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const ChecklistIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <rect x="5" y="3" width="14" height="18" rx="1.5" />
+    <path d="M9 3.5V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v.5" />
+    <polyline points="8.5 11 10 12.5 13 9.5" />
+    <line x1="9" y1="16" x2="15" y2="16" />
+  </svg>
+);
+
+export const SelectionIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <rect x="3.5" y="3.5" width="17" height="17" rx="1.5" strokeDasharray="3.2 3.2" />
+    <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const PageGlyphIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <rect x="5" y="3" width="14" height="18" rx="1.5" />
+    <line x1="8.5" y1="8" x2="15.5" y2="8" />
+    <line x1="8.5" y1="12" x2="15.5" y2="12" />
+    <line x1="8.5" y1="16" x2="13" y2="16" />
+  </svg>
+);
+
+export const DocumentStackIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <rect x="7" y="3" width="14" height="14" rx="1.5" />
+    <path d="M3 7v13a1 1 0 0 0 1 1h13" />
+  </svg>
+);
