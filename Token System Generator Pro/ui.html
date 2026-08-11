@@ -496,6 +496,15 @@
             <div class="scale-hint" id="ratio-feel">Compact — clean product UI</div>
           </div>
         </div>
+        <div class="scale-row">
+          <label>Font family</label>
+          <div class="scale-input-wrap">
+            <select class="scale-select" id="inp-font-family">
+              <option value="Inter" selected>Inter</option>
+            </select>
+            <div class="scale-hint">Choose the font for your typography system. Defaults to Inter.</div>
+          </div>
+        </div>
         <div class="type-preview" id="type-preview"></div>
       </div>
 
@@ -604,9 +613,15 @@
   let selectedMode = null;
   let selectedArch = null;
   let currentJSON  = '';
+  let availableFonts = [];
 
   const REQUIRED_COLORS  = ['primary', 'secondary', 'accent'];
   const ALL_COLOR_FIELDS = ['primary','secondary','tertiary','accent','info','success','error','warning','neutral'];
+
+  // ── Load available fonts ────────────────────────────────────────
+  window.addEventListener('load', () => {
+    parent.postMessage({ pluginMessage: { type: 'get-fonts' } }, '*');
+  });
 
   // ── Transitions ────────────────────────────────────────────────
   function goTo(targetId, exitDirection) {
@@ -822,6 +837,7 @@
       widthBase:   parseInt(document.getElementById('inp-width').value)   || 1,
       fontBase:    parseInt(document.getElementById('inp-font-base').value) || 16,
       ratioKey:    document.getElementById('inp-ratio').value,
+      fontFamily:  document.getElementById('inp-font-family').value || 'Inter',
     };
   }
 
@@ -896,6 +912,19 @@
 
     if (msg.type === 'generation-complete' || msg.type === 'export-ready') {
       showExport(msg.json, msg.total, msg.cols);
+    }
+
+    if (msg.type === 'fonts-list') {
+      availableFonts = msg.fonts || [];
+      const select = document.getElementById('inp-font-family');
+      select.innerHTML = '';
+      availableFonts.forEach(font => {
+        const option = document.createElement('option');
+        option.value = font;
+        option.textContent = font;
+        if (font === 'Inter') option.selected = true;
+        select.appendChild(option);
+      });
     }
   };
 
