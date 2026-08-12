@@ -70,7 +70,15 @@ function Shell() {
       <Nav active={page} onSelect={navigate} onSearchSelect={navigateToResult} />
       <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {toasts.length > 0 && (
-          <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+          <div
+            style={{
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              padding: "var(--space-4) var(--space-4) 0",
+            }}
+          >
             {toasts.map((toast) => (
               <Banner key={toast.id} kind={toast.kind} onDismiss={() => dismissToast(toast.id)}>
                 {toast.message}
