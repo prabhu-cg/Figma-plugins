@@ -5,7 +5,7 @@ import type { TrackedEntity } from "@shared/types/entity";
 import { generateId } from "@shared/utils/id";
 import { getLatestChangeSetForBaseline } from "@shared/utils/changeSets";
 import { loadProject, saveProject } from "@plugin/storage";
-import { discoverComponents, scanComponents, scanTokens } from "@plugin/scanner";
+import { discoverComponents, scanComponents, scanInstances, scanTokens } from "@plugin/scanner";
 import { diffSnapshots } from "@plugin/diff";
 import { generateJson, generateMarkdown } from "@plugin/export";
 import { postToUi } from "@plugin/utils/postMessage";
@@ -463,6 +463,18 @@ async function handleMessage(message: UiToPluginMessage): Promise<void> {
       entity.migrationNote = undefined;
 
       await persist();
+      postToUi({ type: "state", project });
+      return;
+    }
+
+    case "build-impact-index": {
+      const index = await scanInstances((progress) => {
+        postToUi({ type: "impact-index-progress", progress });
+      });
+      project.instanceIndex = index;
+
+      await persist();
+      postToUi({ type: "impact-index-complete", index });
       postToUi({ type: "state", project });
       return;
     }

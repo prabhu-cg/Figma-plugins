@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import type { ChangeSet } from "@shared/types/change";
 import type { DiscoveredComponent, ScanProgress } from "@shared/types/scan";
 import type { Baseline, Project, Release } from "@shared/types/project";
+import type { InstanceScanProgress } from "@shared/types/instance";
 import type { UiToPluginMessage } from "@shared/types/messages";
 import { onPluginMessage, sendToPlugin } from "./bridge";
 
@@ -18,6 +19,8 @@ interface ProjectState {
   scanning: boolean;
   discovered: DiscoveredComponent[];
   latestChangeSet: ChangeSet | undefined;
+  instanceIndexBuilding: boolean;
+  instanceIndexProgress: InstanceScanProgress | undefined;
   toasts: Toast[];
   dismissToast: (id: number) => void;
   send: (message: UiToPluginMessage) => void;
@@ -43,6 +46,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [lastBaseline, setLastBaseline] = useState<Baseline | undefined>(undefined);
   const [lastRelease, setLastRelease] = useState<Release | undefined>(undefined);
+  const [instanceIndexBuilding, setInstanceIndexBuilding] = useState(false);
+  const [instanceIndexProgress, setInstanceIndexProgress] = useState<InstanceScanProgress | undefined>(undefined);
   const [exportContent, setExportContent] = useState<
     { format: "markdown" | "json"; content: string; releaseId: string } | undefined
   >(undefined);
@@ -88,8 +93,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         case "export-result":
           setExportContent({ format: message.format, content: message.content, releaseId: message.releaseId });
           return;
+        case "impact-index-progress":
+          setInstanceIndexProgress(message.progress);
+          return;
+        case "impact-index-complete":
+          setInstanceIndexBuilding(false);
+          setInstanceIndexProgress(undefined);
+          pushToast("info", `Impact index built — ${message.index.totalInstancesScanned} instances scanned.`);
+          return;
         case "error":
           setScanning(false);
+          setInstanceIndexBuilding(false);
           pushToast("error", message.message);
           return;
         default:
@@ -106,6 +120,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setScanning(true);
       setScanProgress({ phase: "components", componentsTotal: 0, componentsDone: 0, tokensTotal: 0, tokensDone: 0 });
     }
+    if (message.type === "build-impact-index") {
+      setInstanceIndexBuilding(true);
+      setInstanceIndexProgress({ pagesTotal: 0, pagesDone: 0, instancesFound: 0 });
+    }
     sendToPlugin(message);
   }, []);
 
@@ -121,6 +139,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       scanning,
       discovered,
       latestChangeSet,
+      instanceIndexBuilding,
+      instanceIndexProgress,
       toasts,
       dismissToast,
       send,
@@ -138,6 +158,8 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       scanning,
       discovered,
       latestChangeSet,
+      instanceIndexBuilding,
+      instanceIndexProgress,
       toasts,
       dismissToast,
       send,

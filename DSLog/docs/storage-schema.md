@@ -43,6 +43,7 @@ interface Project {
   releases: Release[];
   changeSets: ChangeSet[];
   trackedEntities: TrackedEntity[]; // V2 (schema version 2)
+  instanceIndex?: InstanceIndex; // V2 Phase 2 — built only by an explicit "Build impact index" action
   settings: Settings;
 }
 ```
@@ -64,6 +65,7 @@ interface StoredMeta {
 interface HeavyData {
   snapshots: Record<string /* baselineId */, DesignSystemSnapshot>;
   changeSets: ChangeSet[];
+  instanceIndex?: InstanceIndex; // V2 Phase 2 — can be large (thousands of instances), heavy not meta
 }
 ```
 

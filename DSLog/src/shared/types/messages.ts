@@ -2,6 +2,7 @@ import type { Baseline, Project, Release, Settings } from "./project";
 import type { ChangeSet, ManualClassification } from "./change";
 import type { DiscoveredComponent, ScanProgress, TrackingConfig } from "./scan";
 import type { EntityKind, ReviewState } from "./entity";
+import type { InstanceIndex, InstanceScanProgress } from "./instance";
 
 export type UiToPluginMessage =
   | { type: "ui-ready" }
@@ -50,6 +51,7 @@ export type UiToPluginMessage =
   | { type: "unmark-deprecated"; entityId: string }
   | { type: "confirm-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
   | { type: "dismiss-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
+  | { type: "build-impact-index" }
   | { type: "update-settings"; settings: Settings }
   | { type: "focus-node"; nodeId: string };
 
@@ -61,6 +63,8 @@ export type PluginToUiMessage =
   | { type: "baseline-created"; baseline: Baseline }
   | { type: "release-created"; release: Release }
   | { type: "export-result"; format: "markdown" | "json"; content: string; releaseId: string }
+  | { type: "impact-index-progress"; progress: InstanceScanProgress }
+  | { type: "impact-index-complete"; index: InstanceIndex }
   | { type: "error"; message: string };
 
 export interface PluginMessageEnvelope<T> {

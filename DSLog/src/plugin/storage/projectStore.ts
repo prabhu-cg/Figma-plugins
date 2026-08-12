@@ -8,6 +8,7 @@ import { createEmptyProject, DEFAULT_SETTINGS } from "@shared/types/project";
 import type { ChangeSet } from "@shared/types/change";
 import type { DesignSystemSnapshot } from "@shared/types/project";
 import type { TrackedEntity } from "@shared/types/entity";
+import type { InstanceIndex } from "@shared/types/instance";
 import { migrateProject } from "@shared/schemas/validate";
 import { clientStorageAdapter } from "./clientStorageAdapter";
 import { pluginDataAdapter } from "./pluginDataAdapter";
@@ -30,6 +31,8 @@ interface StoredMeta {
 interface HeavyData {
   snapshots: Record<string, DesignSystemSnapshot>;
   changeSets: ChangeSet[];
+  /** Can be large (thousands of instances) — heavy storage, not the compact meta chunk. */
+  instanceIndex?: InstanceIndex;
 }
 
 function isStoredMeta(value: unknown): value is StoredMeta {
@@ -79,6 +82,7 @@ export async function loadProject(): Promise<Project> {
     releases: metaRaw.releases ?? [],
     changeSets: heavy.changeSets,
     trackedEntities: metaRaw.trackedEntities ?? [],
+    instanceIndex: heavy.instanceIndex,
     settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings },
   });
 }
@@ -103,6 +107,7 @@ export async function saveProject(project: Project): Promise<void> {
   const heavy: HeavyData = {
     snapshots,
     changeSets: project.changeSets,
+    instanceIndex: project.instanceIndex,
   };
 
   await Promise.all([

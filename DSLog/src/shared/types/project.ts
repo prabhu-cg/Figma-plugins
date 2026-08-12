@@ -3,6 +3,7 @@ import type { TokenSnapshot, VariableCollectionSnapshot } from "./token";
 import type { TrackingConfig } from "./scan";
 import type { ChangeSet } from "./change";
 import type { TrackedEntity } from "./entity";
+import type { InstanceIndex } from "./instance";
 
 export interface DesignSystemSnapshot {
   components: ComponentSnapshot[];
@@ -65,6 +66,8 @@ export interface Project {
   releases: Release[];
   changeSets: ChangeSet[];
   trackedEntities: TrackedEntity[];
+  /** Document-wide instance usage, built only by an explicit "Build impact index" action (spec §19). */
+  instanceIndex?: InstanceIndex;
   settings: Settings;
 }
 

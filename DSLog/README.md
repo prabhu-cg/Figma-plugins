@@ -40,6 +40,12 @@ human-written changelog.
    and per-token timelines (including across confirmed renames), and token
    alias dependency chains. Components, variants, properties, and tokens
    can be marked deprecated with a replacement and migration note.
+9. **Build the impact index** (optional, explicit) — an opt-in,
+   document-wide scan that finds every instance of every tracked
+   component, so the History views can show real instance counts,
+   "potentially affected" screens, dependent components, and — for
+   tokens — how many components and instances sit downstream of an alias
+   chain. Never runs automatically; only on request.
 
 ## Tech stack
 
@@ -57,7 +63,7 @@ human-written changelog.
 ```
 src/
 ├── plugin/           # runs in Figma's plugin sandbox (no DOM)
-│   ├── scanner/       # discovers + reads components & variables from the Figma API
+│   ├── scanner/       # discovers + reads components, variables & instances from the Figma API
 │   ├── snapshot/       # pure normalization of raw Figma data → typed snapshots
 │   ├── diff/           # deterministic snapshot-to-snapshot diffing
 │   ├── classifier/      # assigns category / severity / breaking confidence
@@ -131,8 +137,12 @@ Figma (Figma does not hot-reload plugin code).
   alias dependency-chain resolution, and the global search index
 - end-to-end integration tests (`tests/helpers/fakeFigma.ts`) that load the
   real `main.ts` message handler against a simulated `figma` global for the
-  baseline → scan → release flow, deprecation, rename confirmation, and
-  review-state updates
+  baseline → scan → release flow, deprecation, rename confirmation,
+  review-state updates, and the document-wide impact-index build
+- the instance scanner (per-component counts, "potentially affected"
+  container names, and "component contains component" edges found via
+  ancestor-chain walking) and the dependency graph / token-impact
+  utilities built on top of it
 
 ## Non-goals (V1)
 

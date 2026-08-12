@@ -1,5 +1,6 @@
 import type { ComponentSnapshot } from "@shared/types/component";
 import type { TokenSnapshot } from "@shared/types/token";
+import type { InstanceIndex } from "@shared/types/instance";
 
 /**
  * Forward alias graph: tokenId -> the set of token ids it aliases to
@@ -45,15 +46,23 @@ export interface TokenImpact {
   directComponentIds: string[];
   /** Components bound to a token that (directly or transitively) aliases to this one. */
   indirectComponentIds: string[];
+  /** Sum of instance counts across direct + indirect components — only set when an InstanceIndex is available. */
+  totalInstanceCount?: number;
 }
 
 /**
  * "If this token changes, what's affected?" (spec §7's token impact
  * mockup — "Direct bindings" / "Indirect component dependencies"). Walks
  * the reverse alias graph transitively; entirely derived from already-
- * scanned data.
+ * scanned data plus the optional document-wide InstanceIndex for real
+ * instance counts (spec §7's "Used by 23 components, 86 instances").
  */
-export function getTokenImpact(tokens: TokenSnapshot[], components: ComponentSnapshot[], tokenId: string): TokenImpact {
+export function getTokenImpact(
+  tokens: TokenSnapshot[],
+  components: ComponentSnapshot[],
+  tokenId: string,
+  instanceIndex?: InstanceIndex,
+): TokenImpact {
   const reverse = buildReverseTokenAliasGraph(tokens);
 
   const aliasing = new Set<string>();
@@ -76,10 +85,18 @@ export function getTokenImpact(tokens: TokenSnapshot[], components: ComponentSna
     }
   }
 
+  const totalInstanceCount = instanceIndex
+    ? [...directComponentIds, ...indirectComponentIds].reduce(
+        (sum, id) => sum + (instanceIndex.byComponentId[id]?.count ?? 0),
+        0,
+      )
+    : undefined;
+
   return {
     aliasingTokenIds: Array.from(aliasing),
     directComponentIds: Array.from(directComponentIds),
     indirectComponentIds: Array.from(indirectComponentIds),
+    totalInstanceCount,
   };
 }
 
@@ -87,21 +104,24 @@ export interface TokenChainNode {
   tokenId: string;
   tokenName: string;
   directComponentNames: string[];
+  directComponentIds: string[];
+  /** Sum of instance counts for directComponentIds — only set when an InstanceIndex is available. */
+  totalInstanceCount?: number;
   children: TokenChainNode[];
 }
 
 /**
  * Downstream dependency chain from a token through every token that aliases
- * to it, down to the components that consume each leaf (spec §9's
- * `color.text.primary -> color.content.default -> Button -> 47 instances`
- * mockup — instance counts are Phase 2, component names ship now). Cycle-
- * guarded since alias chains are user-editable Figma data, not guaranteed
- * acyclic.
+ * to it, down to the components that consume each leaf, with real instance
+ * counts when available (spec §9's `color.text.primary ->
+ * color.content.default -> Button -> 47 instances` mockup). Cycle-guarded
+ * since alias chains are user-editable Figma data, not guaranteed acyclic.
  */
 export function buildTokenDependencyChain(
   tokens: TokenSnapshot[],
   components: ComponentSnapshot[],
   tokenId: string,
+  instanceIndex?: InstanceIndex,
 ): TokenChainNode | undefined {
   const reverse = buildReverseTokenAliasGraph(tokens);
   const tokensById = new Map(tokens.map((t) => [t.id, t]));
@@ -111,10 +131,16 @@ export function buildTokenDependencyChain(
     if (!token || seen.has(id)) return undefined;
     const nextSeen = new Set(seen).add(id);
     const childIds = Array.from(reverse.get(id) ?? []);
+    const directComponents = directTokenUsers(components, id);
+    const totalInstanceCount = instanceIndex
+      ? directComponents.reduce((sum, c) => sum + (instanceIndex.byComponentId[c.identity.id]?.count ?? 0), 0)
+      : undefined;
     return {
       tokenId: id,
       tokenName: token.name,
-      directComponentNames: directTokenUsers(components, id).map((c) => c.identity.name),
+      directComponentNames: directComponents.map((c) => c.identity.name),
+      directComponentIds: directComponents.map((c) => c.identity.id),
+      totalInstanceCount,
       children: childIds
         .map((childId) => build(childId, nextSeen))
         .filter((n): n is TokenChainNode => Boolean(n)),

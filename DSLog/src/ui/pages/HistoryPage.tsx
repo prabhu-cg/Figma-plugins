@@ -4,13 +4,18 @@ import { Tabs } from "@ui/components/Tabs";
 import { ChangeListItem } from "@ui/components/ChangeListItem";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
 import { DeprecationControl } from "@ui/components/DeprecationControl";
+import { ImpactIndexControl } from "@ui/components/ImpactIndexControl";
+import { StatCard } from "@ui/components/Shared";
 import { SearchIcon } from "@ui/components/Icons";
 import { getEntityHistory } from "@shared/utils/entityHistory";
 import { getEffectiveClassification } from "@shared/utils/classification";
-import { buildTokenDependencyChain, type TokenChainNode } from "@shared/utils/tokenGraph";
+import { buildTokenDependencyChain, getTokenImpact, type TokenChainNode } from "@shared/utils/tokenGraph";
+import { buildDependencyGraph, getDependentComponentIds } from "@shared/utils/dependencyGraph";
 import type { EntityKind } from "@shared/types/entity";
 import type { TokenSnapshot } from "@shared/types/token";
 import type { ComponentSnapshot } from "@shared/types/component";
+import type { DesignSystemSnapshot } from "@shared/types/project";
+import type { InstanceIndex } from "@shared/types/instance";
 
 type HistoryTab = "releases" | "components" | "tokens";
 
@@ -162,7 +167,9 @@ function EntityHistoryTab({ kind }: { kind: Extract<EntityKind, "component" | "t
   const trackedEntity = selected ? project.trackedEntities.find((e) => e.id === selected.id) : undefined;
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "260px 1fr", alignItems: "start", gap: "var(--space-3)" }}>
+    <div className="flex flex-col gap-3">
+      <ImpactIndexControl />
+      <div className="grid" style={{ gridTemplateColumns: "260px 1fr", alignItems: "start", gap: "var(--space-3)" }}>
       <div className="flex flex-col gap-2">
         <div style={{ position: "relative" }}>
           <SearchIcon
@@ -210,8 +217,29 @@ function EntityHistoryTab({ kind }: { kind: Extract<EntityKind, "component" | "t
 
           <DeprecationControl entityId={selected.id} kind={kind} displayName={selected.name} trackedEntity={trackedEntity} />
 
+          {baseline &&
+            (kind === "component" ? (
+              <ComponentImpactSection
+                snapshot={baseline.snapshot}
+                instanceIndex={project.instanceIndex}
+                componentId={selected.id}
+              />
+            ) : (
+              <TokenImpactSection
+                tokens={baseline.snapshot.tokens}
+                components={baseline.snapshot.components}
+                instanceIndex={project.instanceIndex}
+                tokenId={selected.id}
+              />
+            ))}
+
           {kind === "token" && baseline && (
-            <TokenDependencyChain tokens={baseline.snapshot.tokens} components={baseline.snapshot.components} tokenId={selected.id} />
+            <TokenDependencyChain
+              tokens={baseline.snapshot.tokens}
+              components={baseline.snapshot.components}
+              tokenId={selected.id}
+              instanceIndex={project.instanceIndex}
+            />
           )}
 
           {history.length === 0 ? (
@@ -240,6 +268,87 @@ function EntityHistoryTab({ kind }: { kind: Extract<EntityKind, "component" | "t
           <div className="text-secondary">Select a {kind} to see its history.</div>
         </div>
       )}
+      </div>
+    </div>
+  );
+}
+
+function ComponentImpactSection({
+  snapshot,
+  instanceIndex,
+  componentId,
+}: {
+  snapshot: DesignSystemSnapshot;
+  instanceIndex: InstanceIndex | undefined;
+  componentId: string;
+}) {
+  const edges = buildDependencyGraph(snapshot, instanceIndex);
+  const entry = instanceIndex?.byComponentId[componentId];
+  const dependentComponentIds = getDependentComponentIds(edges, componentId);
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{ marginBottom: 8 }}>
+        Impact
+      </div>
+      {!instanceIndex ? (
+        <div className="text-secondary" style={{ fontSize: 12 }}>
+          Build the impact index above to see instances found and potentially affected screens.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2" style={{ marginBottom: 12 }}>
+            <StatCard label="Instances found" value={entry?.count ?? 0} />
+            <StatCard label="Dependent components" value={dependentComponentIds.length} />
+          </div>
+          {entry && entry.containerNames.length > 0 && (
+            <div>
+              <div className="text-secondary" style={{ fontSize: 11.5, fontWeight: 600, marginBottom: 4 }}>
+                Potentially affected
+              </div>
+              <div className="text-secondary" style={{ fontSize: 12.5 }}>
+                {entry.containerNames.join(", ")}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function TokenImpactSection({
+  tokens,
+  components,
+  instanceIndex,
+  tokenId,
+}: {
+  tokens: TokenSnapshot[];
+  components: ComponentSnapshot[];
+  instanceIndex: InstanceIndex | undefined;
+  tokenId: string;
+}) {
+  const impact = getTokenImpact(tokens, components, tokenId, instanceIndex);
+  const usedByComponents = impact.directComponentIds.length + impact.indirectComponentIds.length;
+
+  return (
+    <div className="card">
+      <div className="card-title" style={{ marginBottom: 8 }}>
+        Impact
+      </div>
+      <div className="grid grid-cols-2">
+        <StatCard
+          label="Used by"
+          value={`${usedByComponents} component${usedByComponents === 1 ? "" : "s"}`}
+          sub={impact.totalInstanceCount !== undefined ? `${impact.totalInstanceCount} instances` : "Build impact index for instance counts"}
+        />
+        <StatCard label="Direct bindings" value={impact.directComponentIds.length} />
+      </div>
+      {impact.indirectComponentIds.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <StatCard label="Indirect component dependencies" value={impact.indirectComponentIds.length} />
+        </div>
+      )}
     </div>
   );
 }
@@ -248,12 +357,14 @@ function TokenDependencyChain({
   tokens,
   components,
   tokenId,
+  instanceIndex,
 }: {
   tokens: TokenSnapshot[];
   components: ComponentSnapshot[];
   tokenId: string;
+  instanceIndex: InstanceIndex | undefined;
 }) {
-  const chain = buildTokenDependencyChain(tokens, components, tokenId);
+  const chain = buildTokenDependencyChain(tokens, components, tokenId, instanceIndex);
   if (!chain || (chain.children.length === 0 && chain.directComponentNames.length === 0)) return null;
 
   return (
@@ -282,6 +393,11 @@ function TokenChainNodeView({ node, depth }: { node: TokenChainNode; depth: numb
           ↓ {name}
         </div>
       ))}
+      {node.directComponentNames.length > 0 && node.totalInstanceCount !== undefined && (
+        <div className="text-tertiary" style={{ paddingLeft: 32 + depth * 16, padding: "2px 0" }}>
+          ↓ {node.totalInstanceCount} instance{node.totalInstanceCount === 1 ? "" : "s"}
+        </div>
+      )}
       {node.children.map((child) => (
         <TokenChainNodeView key={child.tokenId} node={child} depth={depth + 1} />
       ))}

@@ -2,6 +2,7 @@ import { STORAGE_SCHEMA_VERSION } from "@shared/constants/storage";
 import { createEmptyProject, type Project } from "@shared/types/project";
 import type { ChangeSet } from "@shared/types/change";
 import type { TrackedEntity } from "@shared/types/entity";
+import type { InstanceIndex } from "@shared/types/instance";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -74,6 +75,7 @@ export function migrateProject(value: unknown): Project {
     releases: isArray(value.releases) ? (value.releases as Project["releases"]) : empty.releases,
     changeSets: migrateChangeSets(value.changeSets),
     trackedEntities: isArray(value.trackedEntities) ? (value.trackedEntities as TrackedEntity[]) : empty.trackedEntities,
+    instanceIndex: isRecord(value.instanceIndex) ? (value.instanceIndex as unknown as InstanceIndex) : undefined,
     settings: isRecord(value.settings) ? (value.settings as unknown as Project["settings"]) : empty.settings,
   };
 }

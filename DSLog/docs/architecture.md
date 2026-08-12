@@ -155,17 +155,59 @@ above without changing how scanning/diffing/classifying work at their core.
   the forward/reverse alias graph, "what's the blast radius of changing
   this token" (`getTokenImpact`), and the downstream chain view
   (`buildTokenDependencyChain`) are all pure computation with zero new
-  Figma calls. Real instance counts (vs. component names) are Phase 2 —
-  see below.
+  Figma calls. Both now also accept an optional `InstanceIndex` (see
+  "Impact analysis" below) to fold in real instance counts, not just
+  component names.
 - **Search** (`shared/utils/search.ts`): a flat index built from `Project`
   on every render, substring-matched — deliberately not fuzzy/AI matching.
 
-### Deferred to Phase 2 / Phase 3
+## Impact analysis (Phase 2)
 
-Full instance-based impact analysis (an opt-in document-wide
-`findAllWithCriteria({types:["INSTANCE"]})` walk, since spec section 19
-explicitly rules out scanning the whole document on every change) and
-visual before/after component comparison (thumbnail capture via
-`node.exportAsync()` at baseline time) are intentionally not part of V2's
-first slice — both are real, separate scanning/storage subsystems. See the
-plan history for the detailed design.
+Everything above is derived from data a *regular* scan already produces.
+Impact analysis needs one genuinely new kind of data — how many places in
+the document actually *use* a component — which requires a real
+document-wide walk. Spec section 19 explicitly rules out doing this on
+every change, so it's its own opt-in subsystem, separate from the
+component/token scan pipeline:
+
+- **`scanner/scanInstances.ts`**: walks every page
+  (`findAllWithCriteria({types:["INSTANCE"]})`) and resolves each
+  instance's main component via `getMainComponentAsync()` — required for
+  correctness under `documentAccess: "dynamic-page"`, where the synchronous
+  `mainComponent` getter is write-only. For each instance it also walks the
+  live `.parent` chain (no extra Figma calls) to find (a) the nearest
+  top-level frame/section, for the "potentially affected" list, and (b) the
+  nearest enclosing `COMPONENT` ancestor, if any, giving "component
+  contains component" edges as a side effect of the same walk — this is
+  what makes those edges available without adding any async call into the
+  synchronous `normalizeComponent`/`adaptNode` pipeline that runs on every
+  *regular* scan (that pipeline was deliberately left untouched).
+- **`InstanceIndex`** (`shared/types/instance.ts`): the scan's output —
+  per-component counts (never capped), plus capped/deduped container names
+  and sample instance ids, so storage stays bounded even on files with
+  thousands of instances. Stored in **heavy** storage
+  (`projectStore.ts`'s `HeavyData.instanceIndex`) since it can be large,
+  as a single project-wide field (not per-baseline — instance usage is
+  inherently a "right now" question, not a historical one). Built only by
+  the explicit `build-impact-index` message (`main.ts`), never
+  automatically.
+- **`shared/utils/dependencyGraph.ts`**: the internal dependency graph
+  (spec §8), expressed as a flat edge list (`{from, fromType, to, toType,
+  relation}` — a list view, since the spec calls that "acceptable
+  initially", no graph visualization). Combines `component -usesToken->
+  token` and `component -belongsTo-> componentSet` (already-scanned data),
+  `token -aliases-> token` (from `tokenGraph.ts`), and `component
+  -contains-> component` / `instance -instanceOf-> component` (from the
+  `InstanceIndex`, when built).
+- **Impact UI** (`ui/pages/HistoryPage.tsx`'s `ComponentImpactSection` /
+  `TokenImpactSection`, `ui/components/ImpactIndexControl.tsx`): shown
+  alongside the Component/Token History views. Degrades gracefully when no
+  `InstanceIndex` exists yet (shows a prompt to build one) rather than
+  showing zeros as if they were real counts.
+
+## Deferred to Phase 3
+
+Visual before/after component comparison (thumbnail capture via
+`node.exportAsync()` at baseline time, stored with hash-based dedup) is
+intentionally not part of this slice — real image storage/growth tradeoffs
+that deserve their own design pass rather than being bolted on.

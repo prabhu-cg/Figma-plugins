@@ -63,6 +63,7 @@
       releases: isArray(value.releases) ? value.releases : empty.releases,
       changeSets: migrateChangeSets(value.changeSets),
       trackedEntities: isArray(value.trackedEntities) ? value.trackedEntities : empty.trackedEntities,
+      instanceIndex: isRecord(value.instanceIndex) ? value.instanceIndex : void 0,
       settings: isRecord(value.settings) ? value.settings : empty.settings
     };
   }
@@ -240,6 +241,7 @@
       releases: metaRaw.releases ?? [],
       changeSets: heavy.changeSets,
       trackedEntities: metaRaw.trackedEntities ?? [],
+      instanceIndex: heavy.instanceIndex,
       settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings }
     });
   }
@@ -260,7 +262,8 @@
     };
     const heavy = {
       snapshots,
-      changeSets: project2.changeSets
+      changeSets: project2.changeSets,
+      instanceIndex: project2.instanceIndex
     };
     await Promise.all([
       writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT),
@@ -760,6 +763,99 @@
       }
     }
     return { tokens, collections: collectionSnapshots, scanned: tokens.length, skipped };
+  }
+  const INSTANCE_INDEX_MAX_CONTAINERS_PER_COMPONENT = 30;
+  const INSTANCE_INDEX_MAX_SAMPLE_IDS_PER_COMPONENT = 20;
+  function findContainerName(node) {
+    let current = node;
+    while (current.parent && current.parent.type !== "PAGE") {
+      current = current.parent;
+    }
+    return current.name;
+  }
+  function findContainingComponentId(node) {
+    let current = node.parent;
+    while (current && current.type !== "PAGE") {
+      if (current.type === "COMPONENT") return current.id;
+      current = current.parent;
+    }
+    return void 0;
+  }
+  async function scanInstances(onProgress) {
+    await figma.loadAllPagesAsync();
+    const pages = figma.root.children;
+    const byComponentId = /* @__PURE__ */ new Map();
+    let totalScanned = 0;
+    let totalSkipped = 0;
+    let instancesFound = 0;
+    for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      const page = pages[pageIndex];
+      await page.loadAsync();
+      const instances = page.findAllWithCriteria({ types: ["INSTANCE"] });
+      instancesFound += instances.length;
+      onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex, instancesFound });
+      for (let i = 0; i < instances.length; i += SCAN_BATCH_SIZE) {
+        const batch = instances.slice(i, i + SCAN_BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (instance) => {
+            try {
+              const main = await instance.getMainComponentAsync();
+              if (!main) {
+                totalSkipped += 1;
+                return;
+              }
+              let entry = byComponentId.get(main.id);
+              if (!entry) {
+                entry = {
+                  componentId: main.id,
+                  count: 0,
+                  containerNames: [],
+                  sampleInstanceIds: [],
+                  containingComponentIds: [],
+                  containerNameSet: /* @__PURE__ */ new Set(),
+                  containingComponentIdSet: /* @__PURE__ */ new Set()
+                };
+                byComponentId.set(main.id, entry);
+              }
+              entry.count += 1;
+              const containerName = findContainerName(instance);
+              if (entry.containerNameSet.size < INSTANCE_INDEX_MAX_CONTAINERS_PER_COMPONENT && !entry.containerNameSet.has(containerName)) {
+                entry.containerNameSet.add(containerName);
+                entry.containerNames.push(containerName);
+              }
+              if (entry.sampleInstanceIds.length < INSTANCE_INDEX_MAX_SAMPLE_IDS_PER_COMPONENT) {
+                entry.sampleInstanceIds.push(instance.id);
+              }
+              const containingComponentId = findContainingComponentId(instance);
+              if (containingComponentId && entry.containingComponentIdSet.size < INSTANCE_INDEX_MAX_CONTAINERS_PER_COMPONENT && !entry.containingComponentIdSet.has(containingComponentId)) {
+                entry.containingComponentIdSet.add(containingComponentId);
+                entry.containingComponentIds.push(containingComponentId);
+              }
+              totalScanned += 1;
+            } catch {
+              totalSkipped += 1;
+            }
+          })
+        );
+      }
+      onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex + 1, instancesFound });
+    }
+    const byComponentIdResult = {};
+    for (const [id, entry] of byComponentId) {
+      byComponentIdResult[id] = {
+        componentId: entry.componentId,
+        count: entry.count,
+        containerNames: entry.containerNames,
+        sampleInstanceIds: entry.sampleInstanceIds,
+        containingComponentIds: entry.containingComponentIds
+      };
+    }
+    return {
+      builtAt: (/* @__PURE__ */ new Date()).toISOString(),
+      totalInstancesScanned: totalScanned,
+      totalInstancesSkipped: totalSkipped,
+      byComponentId: byComponentIdResult
+    };
   }
   function valuesEqual(a, b) {
     if (a === b) return true;
@@ -1982,6 +2078,16 @@
         entity.replacement = void 0;
         entity.migrationNote = void 0;
         await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "build-impact-index": {
+        const index = await scanInstances((progress) => {
+          postToUi({ type: "impact-index-progress", progress });
+        });
+        project.instanceIndex = index;
+        await persist();
+        postToUi({ type: "impact-index-complete", index });
         postToUi({ type: "state", project });
         return;
       }
