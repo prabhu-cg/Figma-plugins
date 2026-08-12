@@ -107,6 +107,49 @@ describe("normalizeComponent", () => {
     expect(snapshot.structure.fills).toBeUndefined();
   });
 
+  it("handles mixed (symbol) style ids without leaking a Symbol into the snapshot", () => {
+    // Figma returns figma.mixed (a real JS Symbol) for fillStyleId/etc when
+    // a node's styles are inconsistently applied internally. A Symbol can't
+    // survive postMessage's structured clone — if one leaks into the
+    // snapshot sent to the UI, Figma throws "in postMessage: Cannot unwrap
+    // symbol" and the whole scan/baseline-create action dies.
+    const input = baseInput({
+      representative: {
+        id: "comp-1",
+        name: "Button",
+        type: "COMPONENT",
+        visible: true,
+        fillStyleId: Symbol("mixed") as unknown as string,
+        strokeStyleId: Symbol("mixed") as unknown as string,
+        effectStyleId: Symbol("mixed") as unknown as string,
+        textStyleId: Symbol("mixed") as unknown as string,
+        children: [],
+      },
+    });
+    expect(() => normalizeComponent(input)).not.toThrow();
+    const snapshot = normalizeComponent(input);
+    expect(snapshot.structure.styleBindings).toEqual([]);
+    expect(snapshot.styles).toEqual([]);
+    for (const binding of snapshot.styles) {
+      expect(typeof binding.styleId).toBe("string");
+    }
+  });
+
+  it("still records a real (non-mixed) style id normally", () => {
+    const input = baseInput({
+      representative: {
+        id: "comp-1",
+        name: "Button",
+        type: "COMPONENT",
+        visible: true,
+        fillStyleId: "S:abc123",
+        children: [],
+      },
+    });
+    const snapshot = normalizeComponent(input);
+    expect(snapshot.styles).toEqual([{ field: "fills", styleId: "S:abc123", styleType: "PAINT" }]);
+  });
+
   it("captures variant option data", () => {
     const snapshot = normalizeComponent(baseInput());
     expect(snapshot.variants).toHaveLength(1);

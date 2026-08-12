@@ -65,4 +65,21 @@ describe("recommendVersion", () => {
     const rec = recommendVersion("2.4.0", [change]);
     expect(rec.bump).toBe("patch");
   });
+
+  it("never recommends a version that's already been used, escalating within the same bump level", () => {
+    const changes = [classify(raw("component-added"))];
+    // A minor bump from 1.0.0 would naively land on 1.1.0, but that's
+    // already taken (e.g. from earlier duplicate test releases) — it
+    // should keep incrementing the minor position, not fall back to a
+    // patch bump, since the recommendation is still "a minor-level change".
+    const rec = recommendVersion("1.0.0", changes, ["1.1.0", "1.2.0"]);
+    expect(rec.bump).toBe("minor");
+    expect(rec.recommendedVersion).toBe("1.3.0");
+  });
+
+  it("recommends the naive next version when it isn't already taken", () => {
+    const changes = [classify(raw("component-added"))];
+    const rec = recommendVersion("1.0.0", changes, ["9.9.9"]);
+    expect(rec.recommendedVersion).toBe("1.1.0");
+  });
 });

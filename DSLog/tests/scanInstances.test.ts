@@ -88,6 +88,48 @@ describe("scanInstances", () => {
     expect(entry?.containingComponentIds).toEqual([cardComponent.id]);
   });
 
+  it("skips a page that fails to load instead of aborting the entire scan", async () => {
+    const { fakeFigma, page, components, registerNode } = createFakeFigma();
+    (globalThis as any).figma = fakeFigma;
+
+    const targetComponent = components[0]!;
+    const instance: any = {
+      id: "inst-1",
+      name: "Button Instance",
+      type: "INSTANCE",
+      parent: page,
+      getMainComponentAsync: async () => targetComponent,
+    };
+    registerNode(instance);
+    page.children = [...(page.children ?? []), instance];
+
+    // A second page that's inaccessible (e.g. the user lacks permission to
+    // view it in a shared file) — loadAsync throws, same as it would for a
+    // real Figma page under those conditions.
+    const brokenPage: any = {
+      id: "page-broken",
+      name: "Broken Page",
+      type: "PAGE",
+      children: [],
+      loadAsync: async () => {
+        throw new Error("Cannot load page: access denied");
+      },
+      findAllWithCriteria: () => {
+        throw new Error("should not be reached — loadAsync already threw");
+      },
+    };
+    fakeFigma.root.children = [...fakeFigma.root.children, brokenPage];
+
+    const progressCalls: Array<{ pagesDone: number; pagesTotal: number }> = [];
+    const index = await scanInstances((progress) => progressCalls.push(progress));
+
+    // The good page's instance is still counted...
+    expect(index.byComponentId[targetComponent.id]?.count).toBe(1);
+    // ...and the scan still reports completion for both pages rather than
+    // hanging or rejecting because one of them failed.
+    expect(progressCalls[progressCalls.length - 1]).toMatchObject({ pagesDone: 2, pagesTotal: 2 });
+  });
+
   it("reports progress per page", async () => {
     const { fakeFigma } = createFakeFigma();
     (globalThis as any).figma = fakeFigma;

@@ -432,10 +432,18 @@
   }
   function extractStyleBindings(node) {
     const bindings = [];
-    if (node.fillStyleId) bindings.push({ field: "fills", styleId: node.fillStyleId, styleType: "PAINT" });
-    if (node.strokeStyleId) bindings.push({ field: "strokes", styleId: node.strokeStyleId, styleType: "PAINT" });
-    if (node.effectStyleId) bindings.push({ field: "effects", styleId: node.effectStyleId, styleType: "EFFECT" });
-    if (node.textStyleId) bindings.push({ field: "text", styleId: node.textStyleId, styleType: "TEXT" });
+    if (node.fillStyleId && !isMixed(node.fillStyleId)) {
+      bindings.push({ field: "fills", styleId: node.fillStyleId, styleType: "PAINT" });
+    }
+    if (node.strokeStyleId && !isMixed(node.strokeStyleId)) {
+      bindings.push({ field: "strokes", styleId: node.strokeStyleId, styleType: "PAINT" });
+    }
+    if (node.effectStyleId && !isMixed(node.effectStyleId)) {
+      bindings.push({ field: "effects", styleId: node.effectStyleId, styleType: "EFFECT" });
+    }
+    if (node.textStyleId && !isMixed(node.textStyleId)) {
+      bindings.push({ field: "text", styleId: node.textStyleId, styleType: "TEXT" });
+    }
     return bindings;
   }
   function normalizeNode(node, keyPrefix, index) {
@@ -790,8 +798,14 @@
     let instancesFound = 0;
     for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
       const page = pages[pageIndex];
-      await page.loadAsync();
-      const instances = page.findAllWithCriteria({ types: ["INSTANCE"] });
+      let instances;
+      try {
+        await page.loadAsync();
+        instances = page.findAllWithCriteria({ types: ["INSTANCE"] });
+      } catch {
+        onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex + 1, instancesFound });
+        continue;
+      }
       instancesFound += instances.length;
       onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex, instancesFound });
       for (let i = 0; i < instances.length; i += SCAN_BATCH_SIZE) {

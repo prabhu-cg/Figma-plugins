@@ -63,8 +63,18 @@ export async function scanInstances(onProgress?: (progress: InstanceScanProgress
 
   for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
     const page = pages[pageIndex] as any;
-    await page.loadAsync();
-    const instances: any[] = page.findAllWithCriteria({ types: ["INSTANCE"] });
+    let instances: any[];
+    try {
+      await page.loadAsync();
+      instances = page.findAllWithCriteria({ types: ["INSTANCE"] });
+    } catch {
+      // A single inaccessible/broken page (e.g. one the user lacks
+      // permission to view in a shared file) must not abort the whole
+      // document-wide scan — skip it and keep going, same as every other
+      // scanner in this codebase does for individual bad items.
+      onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex + 1, instancesFound });
+      continue;
+    }
     instancesFound += instances.length;
     onProgress?.({ pagesTotal: pages.length, pagesDone: pageIndex, instancesFound });
 

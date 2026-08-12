@@ -51,10 +51,10 @@ export interface NodeLike {
   fontSize?: number | symbol;
   lineHeight?: { value: number; unit: string } | { unit: "AUTO" } | symbol;
   letterSpacing?: { value: number; unit: string } | symbol;
-  fillStyleId?: string;
-  strokeStyleId?: string;
-  effectStyleId?: string;
-  textStyleId?: string;
+  fillStyleId?: string | symbol;
+  strokeStyleId?: string | symbol;
+  effectStyleId?: string | symbol;
+  textStyleId?: string | symbol;
   boundVariables?: BoundVariablesLike;
   children?: NodeLike[];
 }

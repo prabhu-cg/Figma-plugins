@@ -54,10 +54,13 @@ export function ReleasesPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const changeSet = baseline ? getLatestChangeSetForBaseline(project, baseline.id) : undefined;
   const changesSinceRelease = changeSet?.changes ?? [];
 
-  const recommendation = baseline ? recommendVersion(baseline.version, changesSinceRelease) : undefined;
+  const existingVersions = project.releases.map((r) => r.version);
+  const recommendation = baseline
+    ? recommendVersion(baseline.version, changesSinceRelease, existingVersions)
+    : undefined;
   const validationChecks = validateRelease({
     version,
-    existingVersions: project.releases.map((r) => r.version),
+    existingVersions,
     changes: changesSinceRelease,
     trackedEntities: project.trackedEntities,
   });

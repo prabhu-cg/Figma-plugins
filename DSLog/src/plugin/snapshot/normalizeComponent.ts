@@ -108,10 +108,24 @@ function extractTokenBindings(node: NodeLike): TokenBindingSnapshot[] {
 
 function extractStyleBindings(node: NodeLike): StyleBindingSnapshot[] {
   const bindings: StyleBindingSnapshot[] = [];
-  if (node.fillStyleId) bindings.push({ field: "fills", styleId: node.fillStyleId, styleType: "PAINT" });
-  if (node.strokeStyleId) bindings.push({ field: "strokes", styleId: node.strokeStyleId, styleType: "PAINT" });
-  if (node.effectStyleId) bindings.push({ field: "effects", styleId: node.effectStyleId, styleType: "EFFECT" });
-  if (node.textStyleId) bindings.push({ field: "text", styleId: node.textStyleId, styleType: "TEXT" });
+  // Figma returns figma.mixed (a Symbol) for these ids when a node's
+  // styles are inconsistently applied internally (e.g. some fills styled,
+  // some not) — a Symbol can't survive postMessage's structured clone, so
+  // it must be filtered here exactly like every other mixed-capable field
+  // in this file, or scanning ever hits it and "in postMessage: Cannot
+  // unwrap symbol" kills the whole scan.
+  if (node.fillStyleId && !isMixed(node.fillStyleId)) {
+    bindings.push({ field: "fills", styleId: node.fillStyleId as string, styleType: "PAINT" });
+  }
+  if (node.strokeStyleId && !isMixed(node.strokeStyleId)) {
+    bindings.push({ field: "strokes", styleId: node.strokeStyleId as string, styleType: "PAINT" });
+  }
+  if (node.effectStyleId && !isMixed(node.effectStyleId)) {
+    bindings.push({ field: "effects", styleId: node.effectStyleId as string, styleType: "EFFECT" });
+  }
+  if (node.textStyleId && !isMixed(node.textStyleId)) {
+    bindings.push({ field: "text", styleId: node.textStyleId as string, styleType: "TEXT" });
+  }
   return bindings;
 }
 
