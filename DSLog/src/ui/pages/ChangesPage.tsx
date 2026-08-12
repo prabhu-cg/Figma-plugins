@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { ChangeListItem } from "@ui/components/ChangeListItem";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
@@ -15,7 +15,13 @@ type ReviewFilter = "all" | ReviewState;
 
 const REVIEW_STATE_OPTIONS: ReviewState[] = ["unreviewed", "reviewed", "accepted", "rejected"];
 
-export function ChangesPage() {
+export function ChangesPage({
+  focusChangeId,
+  onFocusConsumed,
+}: {
+  focusChangeId?: string;
+  onFocusConsumed?: () => void;
+} = {}) {
   const { project, send } = useProjectState();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ChangeCategory | "all">("all");
@@ -30,6 +36,18 @@ export function ChangesPage() {
     if (!project?.currentBaselineId) return undefined;
     return getLatestChangeSetForBaseline(project, project.currentBaselineId);
   }, [project]);
+
+  useEffect(() => {
+    if (!focusChangeId || !changeSet?.changes.some((c) => c.id === focusChangeId)) return;
+    // Clear filters so the requested change is guaranteed to be visible.
+    setSearch("");
+    setCategory("all");
+    setEntityType("all");
+    setBreaking("all");
+    setReviewFilter("all");
+    setSelectedId(focusChangeId);
+    onFocusConsumed?.();
+  }, [focusChangeId, changeSet]);
 
   const filtered = useMemo(() => {
     if (!changeSet) return [];

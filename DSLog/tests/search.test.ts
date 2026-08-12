@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSearchIndex, searchIndex } from "@shared/utils/search";
+import { buildSearchIndex, groupSearchResults, searchIndex, type SearchResult } from "@shared/utils/search";
 import { createEmptyProject } from "@shared/types/project";
 import type { Project } from "@shared/types/project";
 
@@ -108,5 +108,33 @@ describe("search", () => {
   it("returns nothing for an empty query", () => {
     const index = buildSearchIndex(projectWithData());
     expect(searchIndex(index, "  ")).toEqual([]);
+  });
+});
+
+describe("groupSearchResults", () => {
+  function makeResults(type: SearchResult["type"], count: number): SearchResult[] {
+    return Array.from({ length: count }, (_, i) => ({ type, id: `${type}-${i}`, label: `${type} ${i}` }));
+  }
+
+  it("groups results by type in a fixed, stable order regardless of input order", () => {
+    const results = [...makeResults("change", 1), ...makeResults("component", 1), ...makeResults("release", 1)];
+    const groups = groupSearchResults(results);
+    expect(groups.map((g) => g.type)).toEqual(["component", "release", "change"]);
+  });
+
+  it("caps each group independently so one noisy type can't crowd out the rest", () => {
+    const results = [...makeResults("change", 12), ...makeResults("release", 1)];
+    const groups = groupSearchResults(results, 5);
+    const changeGroup = groups.find((g) => g.type === "change");
+    const releaseGroup = groups.find((g) => g.type === "release");
+    expect(changeGroup?.items).toHaveLength(5);
+    expect(changeGroup?.totalCount).toBe(12);
+    expect(releaseGroup?.items).toHaveLength(1);
+  });
+
+  it("omits empty groups entirely", () => {
+    const groups = groupSearchResults(makeResults("token", 2));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.type).toBe("token");
   });
 });

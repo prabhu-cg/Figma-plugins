@@ -1,5 +1,6 @@
 import React from "react";
 import type { PageId } from "@ui/App";
+import type { SearchResult } from "@shared/utils/search";
 import { Logo } from "./Logo";
 import { ChangesIcon, HelpIcon, HistoryIcon, OverviewIcon, ReleasesIcon, SettingsIcon, TrackIcon } from "./Icons";
 import { SearchBar } from "./SearchBar";
@@ -27,7 +28,15 @@ const HELP_ITEM: { id: PageId; label: string; icon: NavIconComponent } = {
   icon: HelpIcon,
 };
 
-export function Nav({ active, onSelect }: { active: PageId; onSelect: (page: PageId) => void }) {
+export function Nav({
+  active,
+  onSelect,
+  onSearchSelect,
+}: {
+  active: PageId;
+  onSelect: (page: PageId) => void;
+  onSearchSelect: (result: SearchResult) => void;
+}) {
   function renderItem(item: { id: PageId; label: string; icon: NavIconComponent }) {
     const Icon = item.icon;
     return (
@@ -54,7 +63,7 @@ export function Nav({ active, onSelect }: { active: PageId; onSelect: (page: Pag
         </div>
       </div>
       <div style={{ padding: "0 var(--space-2) var(--space-2)" }}>
-        <SearchBar onNavigate={onSelect} />
+        <SearchBar onSelectResult={onSearchSelect} />
       </div>
       {MAIN_NAV_ITEMS.map(renderItem)}
       <div className="nav-spacer" />

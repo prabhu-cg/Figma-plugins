@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { Tabs } from "@ui/components/Tabs";
 import { ChangeListItem } from "@ui/components/ChangeListItem";
@@ -19,14 +19,26 @@ import type { ComponentSnapshot } from "@shared/types/component";
 import type { DesignSystemSnapshot, Project } from "@shared/types/project";
 import type { InstanceIndex } from "@shared/types/instance";
 
-type HistoryTab = "releases" | "components" | "tokens" | "deprecations" | "compare";
+export type HistoryTab = "releases" | "components" | "tokens" | "deprecations" | "compare";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function HistoryPage() {
-  const [tab, setTab] = useState<HistoryTab>("releases");
+export function HistoryPage({
+  focusTab,
+  focusEntityId,
+  onFocusConsumed,
+}: {
+  focusTab?: HistoryTab;
+  focusEntityId?: string;
+  onFocusConsumed?: () => void;
+} = {}) {
+  const [tab, setTab] = useState<HistoryTab>(focusTab ?? "releases");
+
+  useEffect(() => {
+    if (focusTab) setTab(focusTab);
+  }, [focusTab]);
 
   return (
     <div className="view" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -50,9 +62,26 @@ export function HistoryPage() {
         />
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-        {tab === "releases" && <ReleasesTab />}
-        {tab === "components" && <EntityHistoryTab kind="component" />}
-        {tab === "tokens" && <EntityHistoryTab kind="token" />}
+        {tab === "releases" && (
+          <ReleasesTab
+            focusReleaseId={tab === focusTab ? focusEntityId : undefined}
+            onFocusConsumed={onFocusConsumed}
+          />
+        )}
+        {tab === "components" && (
+          <EntityHistoryTab
+            kind="component"
+            focusEntityId={tab === focusTab ? focusEntityId : undefined}
+            onFocusConsumed={onFocusConsumed}
+          />
+        )}
+        {tab === "tokens" && (
+          <EntityHistoryTab
+            kind="token"
+            focusEntityId={tab === focusTab ? focusEntityId : undefined}
+            onFocusConsumed={onFocusConsumed}
+          />
+        )}
         {tab === "deprecations" && <DeprecationsTab />}
         {tab === "compare" && <CompareTab />}
       </div>
@@ -60,10 +89,22 @@ export function HistoryPage() {
   );
 }
 
-function ReleasesTab() {
+function ReleasesTab({
+  focusReleaseId,
+  onFocusConsumed,
+}: {
+  focusReleaseId?: string;
+  onFocusConsumed?: () => void;
+} = {}) {
   const { project } = useProjectState();
   const [selectedReleaseId, setSelectedReleaseId] = useState<string | null>(null);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusReleaseId) return;
+    setSelectedReleaseId(focusReleaseId);
+    onFocusConsumed?.();
+  }, [focusReleaseId]);
 
   if (!project) return null;
   const releases = [...project.releases].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -135,10 +176,25 @@ function ReleasesTab() {
   );
 }
 
-function EntityHistoryTab({ kind }: { kind: Extract<EntityKind, "component" | "token"> }) {
+function EntityHistoryTab({
+  kind,
+  focusEntityId,
+  onFocusConsumed,
+}: {
+  kind: Extract<EntityKind, "component" | "token">;
+  focusEntityId?: string;
+  onFocusConsumed?: () => void;
+}) {
   const { project } = useProjectState();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusEntityId) return;
+    setSearch("");
+    setSelectedId(focusEntityId);
+    onFocusConsumed?.();
+  }, [focusEntityId]);
 
   if (!project) return null;
 

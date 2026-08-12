@@ -49,10 +49,31 @@ export function buildSearchIndex(project: Project): SearchResult[] {
   return results;
 }
 
-export function searchIndex(index: SearchResult[], query: string, limit = 30): SearchResult[] {
+export function searchIndex(index: SearchResult[], query: string, limit = 60): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   return index
     .filter((r) => r.label.toLowerCase().includes(q) || (r.sublabel ?? "").toLowerCase().includes(q))
     .slice(0, limit);
+}
+
+export const SEARCH_GROUP_ORDER: SearchResultType[] = ["component", "token", "release", "change", "deprecated"];
+
+export interface SearchResultGroup {
+  type: SearchResultType;
+  items: SearchResult[];
+  /** Total matches of this type before the per-group limit was applied. */
+  totalCount: number;
+}
+
+/**
+ * Groups flat search results by entity type and caps each group
+ * independently, so one noisy type (e.g. a dozen Changes matching a
+ * component's own name) can't crowd out every other kind of result.
+ */
+export function groupSearchResults(results: SearchResult[], perGroupLimit = 5): SearchResultGroup[] {
+  return SEARCH_GROUP_ORDER.map((type) => {
+    const items = results.filter((r) => r.type === type);
+    return { type, items: items.slice(0, perGroupLimit), totalCount: items.length };
+  }).filter((group) => group.items.length > 0);
 }
