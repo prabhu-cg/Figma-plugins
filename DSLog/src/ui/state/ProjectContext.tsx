@@ -30,6 +30,9 @@ interface ProjectState {
   clearExportContent: () => void;
   clearLastBaseline: () => void;
   clearLastRelease: () => void;
+  comparing: boolean;
+  comparisonResult: { releaseIdA: string; releaseIdB: string; changeSet: ChangeSet } | undefined;
+  clearComparisonResult: () => void;
 }
 
 const ProjectStateContext = createContext<ProjectState | undefined>(undefined);
@@ -50,6 +53,10 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [instanceIndexProgress, setInstanceIndexProgress] = useState<InstanceScanProgress | undefined>(undefined);
   const [exportContent, setExportContent] = useState<
     { format: "markdown" | "json"; content: string; releaseId: string } | undefined
+  >(undefined);
+  const [comparing, setComparing] = useState(false);
+  const [comparisonResult, setComparisonResult] = useState<
+    { releaseIdA: string; releaseIdB: string; changeSet: ChangeSet } | undefined
   >(undefined);
 
   const pushToast = useCallback((kind: Toast["kind"], message: string) => {
@@ -101,9 +108,14 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
           setInstanceIndexProgress(undefined);
           pushToast("info", `Impact index built — ${message.index.totalInstancesScanned} instances scanned.`);
           return;
+        case "release-comparison-result":
+          setComparing(false);
+          setComparisonResult({ releaseIdA: message.releaseIdA, releaseIdB: message.releaseIdB, changeSet: message.changeSet });
+          return;
         case "error":
           setScanning(false);
           setInstanceIndexBuilding(false);
+          setComparing(false);
           pushToast("error", message.message);
           return;
         default:
@@ -124,12 +136,17 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       setInstanceIndexBuilding(true);
       setInstanceIndexProgress({ pagesTotal: 0, pagesDone: 0, instancesFound: 0 });
     }
+    if (message.type === "compare-releases") {
+      setComparing(true);
+      setComparisonResult(undefined);
+    }
     sendToPlugin(message);
   }, []);
 
   const clearExportContent = useCallback(() => setExportContent(undefined), []);
   const clearLastBaseline = useCallback(() => setLastBaseline(undefined), []);
   const clearLastRelease = useCallback(() => setLastRelease(undefined), []);
+  const clearComparisonResult = useCallback(() => setComparisonResult(undefined), []);
 
   const value = useMemo<ProjectState>(
     () => ({
@@ -150,6 +167,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       clearExportContent,
       clearLastBaseline,
       clearLastRelease,
+      comparing,
+      comparisonResult,
+      clearComparisonResult,
     }),
     [
       project,
@@ -169,6 +189,9 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
       clearExportContent,
       clearLastBaseline,
       clearLastRelease,
+      comparing,
+      comparisonResult,
+      clearComparisonResult,
     ],
   );
 

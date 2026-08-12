@@ -479,6 +479,37 @@ async function handleMessage(message: UiToPluginMessage): Promise<void> {
       return;
     }
 
+    case "compare-releases": {
+      const releaseA = project.releases.find((r) => r.id === message.releaseIdA);
+      const releaseB = project.releases.find((r) => r.id === message.releaseIdB);
+      const baselineA = releaseA && project.baselines.find((b) => b.id === releaseA.baselineId);
+      const baselineB = releaseB && project.baselines.find((b) => b.id === releaseB.baselineId);
+      if (!baselineA || !baselineB) {
+        postToUi({ type: "error", message: "Could not find both releases to compare." });
+        return;
+      }
+
+      // Read-only report: reuses the same diffSnapshots a real scan uses,
+      // fed two historical snapshots instead of baseline-vs-current. Never
+      // pushed onto project.changeSets and never persisted — this is not a
+      // scan, so it must not affect "what changed since the baseline".
+      const changeSet = diffSnapshots(generateId("compare"), baselineA.snapshot, baselineB.snapshot, {
+        componentsScanned: baselineB.snapshot.components.length,
+        componentsSkipped: 0,
+        tokensScanned: baselineB.snapshot.tokens.length,
+        tokensSkipped: 0,
+        skippedItems: [],
+      });
+
+      postToUi({
+        type: "release-comparison-result",
+        releaseIdA: message.releaseIdA,
+        releaseIdB: message.releaseIdB,
+        changeSet,
+      });
+      return;
+    }
+
     case "update-settings": {
       project.settings = message.settings;
       await persist();

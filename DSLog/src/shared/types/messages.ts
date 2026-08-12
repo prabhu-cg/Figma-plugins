@@ -52,6 +52,7 @@ export type UiToPluginMessage =
   | { type: "confirm-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
   | { type: "dismiss-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
   | { type: "build-impact-index" }
+  | { type: "compare-releases"; releaseIdA: string; releaseIdB: string }
   | { type: "update-settings"; settings: Settings }
   | { type: "focus-node"; nodeId: string };
 
@@ -65,6 +66,7 @@ export type PluginToUiMessage =
   | { type: "export-result"; format: "markdown" | "json"; content: string; releaseId: string }
   | { type: "impact-index-progress"; progress: InstanceScanProgress }
   | { type: "impact-index-complete"; index: InstanceIndex }
+  | { type: "release-comparison-result"; releaseIdA: string; releaseIdB: string; changeSet: ChangeSet }
   | { type: "error"; message: string };
 
 export interface PluginMessageEnvelope<T> {

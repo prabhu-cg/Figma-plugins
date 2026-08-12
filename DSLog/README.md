@@ -46,6 +46,17 @@ human-written changelog.
    "potentially affected" screens, dependent components, and — for
    tokens — how many components and instances sit downstream of an alias
    chain. Never runs automatically; only on request.
+10. **Plan a release** — the Releases page shows a recommended semantic
+    version (major/minor/patch, based on what actually changed — never
+    applied without your approval), a release-readiness checklist
+    (only an invalid/duplicate version blocks creation; everything else is
+    an informational warning), and the migration actions the release would
+    need to document.
+11. **Manage deprecations and compare releases** — a dedicated Deprecations
+    tab (History page) shows every deprecated item with its status, and a
+    Compare tab diffs any two releases directly — reusing the same diff
+    engine a regular scan uses, against snapshots that are already kept
+    forever, so nothing new is scanned.
 
 ## Tech stack
 
@@ -143,6 +154,10 @@ Figma (Figma does not hot-reload plugin code).
   container names, and "component contains component" edges found via
   ancestor-chain walking) and the dependency graph / token-impact
   utilities built on top of it
+- semantic version recommendation, release validation, and the migration
+  report, and release comparison — including an end-to-end integration
+  test that asserts comparing two releases never persists a new changeSet
+  (it's a read-only report, not a scan)
 
 ## Non-goals (V1)
 

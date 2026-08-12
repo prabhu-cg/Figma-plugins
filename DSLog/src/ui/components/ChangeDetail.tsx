@@ -24,7 +24,7 @@ function verdictToOverride(
   }
 }
 
-function formatValue(value: unknown): string {
+export function formatValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
   if (typeof value === "string") return value;
   try {

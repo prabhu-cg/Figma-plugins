@@ -4,7 +4,7 @@ import { StatCard } from "@ui/components/Shared";
 import { TrackIcon } from "@ui/components/Icons";
 import type { PageId } from "@ui/App";
 import { getLatestChangeSetForBaseline } from "@shared/utils/changeSets";
-import { getEffectiveClassification } from "@shared/utils/classification";
+import { summarizeChanges } from "@shared/utils/changeSetStats";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
@@ -35,9 +35,7 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   }
 
   const changeSet = getLatestChangeSetForBaseline(project, baseline.id);
-  const totalChanges = changeSet?.changes.length ?? 0;
-  const breakingChanges = changeSet?.changes.filter((c) => getEffectiveClassification(c).breaking).length ?? 0;
-  const deprecatedChanges = changeSet?.changes.filter((c) => c.category === "deprecated").length ?? 0;
+  const stats = summarizeChanges(changeSet?.changes ?? []);
 
   const latestRelease = [...project.releases].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
@@ -107,9 +105,9 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         Since last release
       </div>
       <div className="grid grid-cols-3">
-        <StatCard label="Changes" value={totalChanges} />
-        <StatCard label="Breaking" value={breakingChanges} />
-        <StatCard label="Deprecated" value={deprecatedChanges} />
+        <StatCard label="Changes" value={stats.total} />
+        <StatCard label="Breaking" value={stats.breaking} />
+        <StatCard label="Deprecated" value={stats.deprecated} />
       </div>
     </div>
   );

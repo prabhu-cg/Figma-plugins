@@ -2091,6 +2091,30 @@
         postToUi({ type: "state", project });
         return;
       }
+      case "compare-releases": {
+        const releaseA = project.releases.find((r) => r.id === message.releaseIdA);
+        const releaseB = project.releases.find((r) => r.id === message.releaseIdB);
+        const baselineA = releaseA && project.baselines.find((b) => b.id === releaseA.baselineId);
+        const baselineB = releaseB && project.baselines.find((b) => b.id === releaseB.baselineId);
+        if (!baselineA || !baselineB) {
+          postToUi({ type: "error", message: "Could not find both releases to compare." });
+          return;
+        }
+        const changeSet = diffSnapshots(generateId("compare"), baselineA.snapshot, baselineB.snapshot, {
+          componentsScanned: baselineB.snapshot.components.length,
+          componentsSkipped: 0,
+          tokensScanned: baselineB.snapshot.tokens.length,
+          tokensSkipped: 0,
+          skippedItems: []
+        });
+        postToUi({
+          type: "release-comparison-result",
+          releaseIdA: message.releaseIdA,
+          releaseIdB: message.releaseIdB,
+          changeSet
+        });
+        return;
+      }
       case "update-settings": {
         project.settings = message.settings;
         await persist();

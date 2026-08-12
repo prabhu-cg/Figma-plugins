@@ -210,4 +210,60 @@ component/token scan pipeline:
 Visual before/after component comparison (thumbnail capture via
 `node.exportAsync()` at baseline time, stored with hash-based dedup) is
 intentionally not part of this slice — real image storage/growth tradeoffs
-that deserve their own design pass rather than being bolted on.
+that deserve their own design pass rather than being bolted on. Still
+deferred as of V3.
+
+## V3 additions (release management, trimmed scope)
+
+V3's full spec asked for a Jira/GitHub-style release-management suite. Per
+the user's explicit "don't bloat the plugin" priority, only the parts that
+are **pure computation over data already stored or already scanned** were
+built — nothing here adds a persisted field, a Figma API call, or a
+dependency, so `STORAGE_SCHEMA_VERSION` stays at 2 (no migration needed).
+
+- **Version recommendation** (`shared/utils/versionRecommendation.ts`):
+  deterministic MAJOR/MINOR/PATCH rule (any breaking change -> major, else
+  any addition -> minor, else patch) over the current baseline's latest
+  changeSet. Purely advisory — `ReleasesPage.tsx` shows it as a suggestion
+  with a "Use recommended" button; it never writes to the version field on
+  its own.
+- **Release validation** (`shared/utils/releaseValidation.ts`): a
+  checklist of deterministic checks. Only an invalid or duplicate version
+  is `"blocking"` (disables the create button) — everything else
+  (unreviewed changes, undocumented breaking changes, deprecated items
+  without a replacement, changes with no description) is `"warning"`,
+  informational only, per spec §10's "prevent only for genuinely required
+  conditions."
+- **Migration report** (`shared/utils/migrationReport.ts`): combines
+  changes with a `migrationNote` and deprecated `TrackedEntity` records
+  with a `replacement`, deduped by entity — shown scoped to the current
+  unreleased changeSet in `ReleasesPage.tsx`'s create form.
+- **Deprecations tab** (`HistoryPage.tsx`): an aggregate dashboard over
+  `project.trackedEntities` (counts + per-item cards, with instance counts
+  from `InstanceIndex` when built) — added as a tab on the existing
+  History page rather than a new top-level nav item, to keep the nav from
+  growing.
+- **Release comparison** (`compare-releases`/`release-comparison-result`
+  messages, `HistoryPage.tsx`'s Compare tab): since every baseline's full
+  snapshot is retained forever, comparing any two releases is just
+  `diffSnapshots()` — the exact function a regular scan already uses — fed
+  two historical snapshots instead of baseline-vs-current. The plugin-side
+  handler deliberately does **not** push the result onto
+  `project.changeSets` or call `persist()`: it's a read-only report, not a
+  real scan, and must never be mistaken for one. The UI mirrors this with
+  a read-only `CompareChangeDetail` (not the editable `ChangeDetail`) since
+  the underlying changeSet doesn't exist in storage to write updates back
+  to.
+
+**Explicitly cut from V3's spec** (agreed with the user, not built): the
+multi-step "release workspace" wizard (folded into the existing Releases
+page instead), developer/DesignOps/general changelog variants (a flowing
+non-technical summary isn't achievable deterministically without AI), the
+ZIP export package (Figma plugins can't touch the filesystem; a from-
+scratch ZIP encoder was judged not worth it for a convenience feature),
+migration status tracking as a persisted not-started/in-progress/complete
+state machine (inferring "migrated" from a shrinking instance count is a
+guess — a component could've been deleted, not migrated), and the new
+`Release` shape from spec §15 (`changes[]`/`breakingChanges[]`/
+`deprecatedItems[]` would duplicate what's already derivable from the
+existing `changeSet`).
