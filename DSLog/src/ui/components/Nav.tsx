@@ -1,7 +1,7 @@
 import React from "react";
 import type { PageId } from "@ui/App";
 import { Logo } from "./Logo";
-import { ChangesIcon, HistoryIcon, OverviewIcon, ReleasesIcon, SettingsIcon, TrackIcon } from "./Icons";
+import { ChangesIcon, HelpIcon, HistoryIcon, OverviewIcon, ReleasesIcon, SettingsIcon, TrackIcon } from "./Icons";
 import { SearchBar } from "./SearchBar";
 import { PRODUCT_TAGLINE } from "@shared/constants/brand";
 
@@ -19,6 +19,12 @@ const SETTINGS_ITEM: { id: PageId; label: string; icon: NavIconComponent } = {
   id: "settings",
   label: "Settings",
   icon: SettingsIcon,
+};
+
+const HELP_ITEM: { id: PageId; label: string; icon: NavIconComponent } = {
+  id: "help",
+  label: "Help",
+  icon: HelpIcon,
 };
 
 export function Nav({ active, onSelect }: { active: PageId; onSelect: (page: PageId) => void }) {
@@ -53,6 +59,7 @@ export function Nav({ active, onSelect }: { active: PageId; onSelect: (page: Pag
       {MAIN_NAV_ITEMS.map(renderItem)}
       <div className="nav-spacer" />
       {renderItem(SETTINGS_ITEM)}
+      {renderItem(HELP_ITEM)}
     </nav>
   );
 }

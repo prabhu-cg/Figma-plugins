@@ -8,9 +8,10 @@ import { ChangesPage } from "@ui/pages/ChangesPage";
 import { ReleasesPage } from "@ui/pages/ReleasesPage";
 import { HistoryPage } from "@ui/pages/HistoryPage";
 import { SettingsPage } from "@ui/pages/SettingsPage";
+import { HelpPage } from "@ui/pages/HelpPage";
 import { useTheme } from "@ui/state/useTheme";
 
-export type PageId = "overview" | "track" | "changes" | "releases" | "history" | "settings";
+export type PageId = "overview" | "track" | "changes" | "releases" | "history" | "settings" | "help";
 
 function Shell() {
   const [page, setPage] = useState<PageId>("overview");
@@ -45,6 +46,7 @@ function Shell() {
           {page === "releases" && <ReleasesPage onNavigate={setPage} />}
           {page === "history" && <HistoryPage />}
           {page === "settings" && <SettingsPage />}
+          {page === "help" && <HelpPage />}
         </div>
       </div>
     </div>
