@@ -88,6 +88,30 @@ describe("diffTokens", () => {
     expect(changes.some((c) => c.changeType === "token-alias-changed")).toBe(true);
   });
 
+  it("detects an alias removal as a distinct, breaking-flavored changeType from a mere retarget", () => {
+    const hadAlias = makeToken({
+      resolvedType: "COLOR",
+      valuesByMode: [{ modeId: "light", modeName: "Light", value: { type: "VARIABLE_ALIAS", id: "token-2" } }],
+      variableNamesById: { "token-2": "color.base" },
+    });
+    const lostAlias = makeToken({
+      resolvedType: "COLOR",
+      valuesByMode: [{ modeId: "light", modeName: "Light", value: { r: 0, g: 0, b: 0 } }],
+    });
+    const removalChanges = diffTokens([hadAlias], [lostAlias]);
+    expect(removalChanges.some((c) => c.changeType === "token-alias-removed")).toBe(true);
+    expect(removalChanges.some((c) => c.changeType === "token-alias-changed")).toBe(false);
+
+    const retargeted = makeToken({
+      resolvedType: "COLOR",
+      valuesByMode: [{ modeId: "light", modeName: "Light", value: { type: "VARIABLE_ALIAS", id: "token-3" } }],
+      variableNamesById: { "token-3": "color.other" },
+    });
+    const retargetChanges = diffTokens([hadAlias], [retargeted]);
+    expect(retargetChanges.some((c) => c.changeType === "token-alias-changed")).toBe(true);
+    expect(retargetChanges.some((c) => c.changeType === "token-alias-removed")).toBe(false);
+  });
+
   it("detects a type change", () => {
     const before = makeToken();
     const after = makeToken({ resolvedType: "STRING", valuesByMode: [{ modeId: "light", modeName: "Light", value: "12px" }, { modeId: "dark", modeName: "Dark", value: "12px" }] });

@@ -1,7 +1,28 @@
 import React, { useEffect, useState } from "react";
-import type { Change } from "@shared/types/change";
-import { CategoryBadge, BreakingBadge } from "./Shared";
+import type { Change, ChangeSeverity, ChangeVerdict } from "@shared/types/change";
+import type { ReviewState } from "@shared/types/entity";
+import { getEffectiveClassification, getVerdict, VERDICT_LABEL } from "@shared/utils/classification";
+import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
+import { DeprecationControl } from "./DeprecationControl";
 import { useProjectState } from "@ui/state/ProjectContext";
+
+const REVIEW_STATE_OPTIONS: ReviewState[] = ["unreviewed", "reviewed", "accepted", "rejected"];
+const VERDICT_OPTIONS: ChangeVerdict[] = ["breaking", "potentially-breaking", "non-breaking", "informational"];
+
+function verdictToOverride(
+  verdict: ChangeVerdict,
+): { severity?: ChangeSeverity; breaking: boolean; potentialBreaking: boolean } {
+  switch (verdict) {
+    case "breaking":
+      return { breaking: true, potentialBreaking: false };
+    case "potentially-breaking":
+      return { breaking: false, potentialBreaking: true };
+    case "informational":
+      return { severity: "info", breaking: false, potentialBreaking: false };
+    case "non-breaking":
+      return { severity: "minor", breaking: false, potentialBreaking: false };
+  }
+}
 
 function formatValue(value: unknown): string {
   if (value === undefined || value === null) return "—";
@@ -25,7 +46,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 export function ChangeDetail({ change, changeSetId }: { change: Change | null; changeSetId: string }) {
-  const { send } = useProjectState();
+  const { send, project } = useProjectState();
   const [reviewNote, setReviewNote] = useState(change?.reviewNote ?? "");
   const [migrationNote, setMigrationNote] = useState(change?.migrationNote ?? "");
 
@@ -41,6 +62,8 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
       </div>
     );
   }
+
+  const effective = getEffectiveClassification(change);
 
   return (
     <div
@@ -58,9 +81,10 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14, padding: "var(--space-3)" }}>
           <div className="flex items-center gap-2 wrap">
-            <CategoryBadge category={change.category} />
-            <BreakingBadge breaking={change.breaking} potential={change.potentialBreaking} />
-            {change.reviewed && <span className="badge badge-neutral">Reviewed</span>}
+            <CategoryBadge category={effective.category} />
+            <BreakingBadge breaking={effective.breaking} potential={effective.potentialBreaking} />
+            <ReviewStateBadge state={change.reviewState} />
+            {effective.overridden && <span className="badge badge-neutral">Overridden</span>}
           </div>
 
           <div>
@@ -69,6 +93,51 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
               {change.summary}
             </div>
           </div>
+
+          <Field label="Classification">
+            <div className="flex items-center gap-2">
+              <div className="select-wrapper" style={{ flex: 1 }}>
+                <select
+                  className="select"
+                  value={getVerdict(change)}
+                  onChange={(e) =>
+                    send({
+                      type: "update-change",
+                      changeSetId,
+                      changeId: change.id,
+                      manualClassification: {
+                        ...verdictToOverride(e.target.value as ChangeVerdict),
+                        overriddenAt: new Date().toISOString(),
+                      },
+                    })
+                  }
+                >
+                  {VERDICT_OPTIONS.map((verdict) => (
+                    <option key={verdict} value={verdict}>
+                      {VERDICT_LABEL[verdict]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {effective.overridden && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() =>
+                    send({ type: "update-change", changeSetId, changeId: change.id, manualClassification: null })
+                  }
+                >
+                  Reset to automatic
+                </button>
+              )}
+            </div>
+          </Field>
+
+          <DeprecationControl
+            entityId={change.entityId}
+            kind={change.entityType === "token" ? "token" : "component"}
+            displayName={change.entityName}
+            trackedEntity={project?.trackedEntities.find((e) => e.id === change.entityId)}
+          />
 
           {change.modeDetails && change.modeDetails.length > 0 ? (
             <Field label="Modes">
@@ -135,12 +204,26 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
                 Select in canvas
               </button>
             )}
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => send({ type: "update-change", changeSetId, changeId: change.id, reviewed: !change.reviewed })}
-            >
-              {change.reviewed ? "Mark as unreviewed" : "Mark as reviewed"}
-            </button>
+            <div className="select-wrapper">
+              <select
+                className="select"
+                value={change.reviewState}
+                onChange={(e) =>
+                  send({
+                    type: "update-change",
+                    changeSetId,
+                    changeId: change.id,
+                    reviewState: e.target.value as ReviewState,
+                  })
+                }
+              >
+                {REVIEW_STATE_OPTIONS.map((state) => (
+                  <option key={state} value={state}>
+                    {state.charAt(0).toUpperCase() + state.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>

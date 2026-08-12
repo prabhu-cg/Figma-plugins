@@ -22,7 +22,7 @@ export function classify(raw: RawChange): Change {
     breaking: rule.breaking,
     potentialBreaking: rule.potentialBreaking,
     modeDetails: raw.modeDetails,
-    reviewed: false,
+    reviewState: "unreviewed",
     createdAt: new Date().toISOString(),
   };
 }

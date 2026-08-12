@@ -1,5 +1,6 @@
 import React from "react";
 import type { ChangeCategory } from "@shared/types/change";
+import type { ReviewState } from "@shared/types/entity";
 import { CheckIcon } from "@ui/components/Icons";
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -34,6 +35,24 @@ export function BreakingBadge({ breaking, potential }: { breaking: boolean; pote
   if (breaking) return <span className="badge badge-critical">Breaking</span>;
   if (potential) return <span className="badge badge-warning">Potential breaking</span>;
   return null;
+}
+
+const REVIEW_STATE_BADGE_CLASS: Record<ReviewState, string> = {
+  unreviewed: "badge-neutral",
+  reviewed: "badge-neutral",
+  accepted: "badge-success",
+  rejected: "badge-critical",
+};
+
+const REVIEW_STATE_LABEL: Record<ReviewState, string> = {
+  unreviewed: "Unreviewed",
+  reviewed: "Reviewed",
+  accepted: "Accepted",
+  rejected: "Rejected",
+};
+
+export function ReviewStateBadge({ state }: { state: ReviewState }) {
+  return <span className={`badge ${REVIEW_STATE_BADGE_CLASS[state]}`}>{REVIEW_STATE_LABEL[state]}</span>;
 }
 
 export function OptionCard({

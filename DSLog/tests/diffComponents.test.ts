@@ -61,6 +61,20 @@ describe("diffComponents", () => {
     expect(variantRemoved?.field).toBe("Size=Medium");
   });
 
+  it("detects a component property type change as a distinct changeType from a value-only edit", () => {
+    const before = makeComponent();
+    const after = makeComponent({
+      componentPropertyDefinitions: {
+        Size: { type: "TEXT", defaultValue: "Medium", variantOptions: ["Small", "Medium"] },
+      },
+    });
+    const changes = diffComponents([before], [after]);
+    const typeChanged = changes.find((c) => c.changeType === "property-type-changed");
+    expect(typeChanged).toBeDefined();
+    expect(typeChanged?.field).toBe("Size");
+    expect(changes.some((c) => c.changeType === "property-changed")).toBe(false);
+  });
+
   it("detects an added component property", () => {
     const before = makeComponent();
     const after = makeComponent({

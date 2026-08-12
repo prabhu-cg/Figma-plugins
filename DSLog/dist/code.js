@@ -6,7 +6,12 @@
     const random = Math.random().toString(36).slice(2, 10);
     return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${random}`;
   }
-  const STORAGE_SCHEMA_VERSION = 1;
+  function getLatestChangeSetForBaseline(project2, baselineId) {
+    const sets = project2.changeSets.filter((cs) => cs.baselineId === baselineId);
+    if (sets.length === 0) return void 0;
+    return sets.reduce((latest, cs) => cs.createdAt > latest.createdAt ? cs : latest);
+  }
+  const STORAGE_SCHEMA_VERSION = 2;
   const STORAGE_CHUNK_SIZE_CLIENT = 8e5;
   const STORAGE_CHUNK_SIZE_PLUGIN_DATA = 4e4;
   const SCAN_BATCH_SIZE = 25;
@@ -20,7 +25,45 @@
       baselines: [],
       releases: [],
       changeSets: [],
+      trackedEntities: [],
       settings: DEFAULT_SETTINGS
+    };
+  }
+  function isRecord(value) {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+  }
+  function isArray(value) {
+    return Array.isArray(value);
+  }
+  function migrateReviewState(change) {
+    if (change.reviewState === "unreviewed" || change.reviewState === "reviewed" || change.reviewState === "accepted" || change.reviewState === "rejected") {
+      return change.reviewState;
+    }
+    return change.reviewed === true ? "reviewed" : "unreviewed";
+  }
+  function migrateChangeSets(value) {
+    if (!isArray(value)) return [];
+    return value.map((raw) => {
+      if (!isRecord(raw) || !isArray(raw.changes)) return raw;
+      return {
+        ...raw,
+        changes: raw.changes.map(
+          (c) => isRecord(c) ? { ...c, reviewState: migrateReviewState(c) } : c
+        )
+      };
+    });
+  }
+  function migrateProject(value) {
+    const empty = createEmptyProject(STORAGE_SCHEMA_VERSION);
+    if (!isRecord(value)) return empty;
+    return {
+      schemaVersion: STORAGE_SCHEMA_VERSION,
+      currentBaselineId: typeof value.currentBaselineId === "string" ? value.currentBaselineId : void 0,
+      baselines: isArray(value.baselines) ? value.baselines : empty.baselines,
+      releases: isArray(value.releases) ? value.releases : empty.releases,
+      changeSets: migrateChangeSets(value.changeSets),
+      trackedEntities: isArray(value.trackedEntities) ? value.trackedEntities : empty.trackedEntities,
+      settings: isRecord(value.settings) ? value.settings : empty.settings
     };
   }
   const clientStorageAdapter = {
@@ -190,14 +233,15 @@
       ...b,
       snapshot: heavy.snapshots[b.id] ?? EMPTY_SNAPSHOT
     }));
-    return {
+    return migrateProject({
       schemaVersion: STORAGE_SCHEMA_VERSION,
       currentBaselineId: metaRaw.currentBaselineId,
       baselines,
       releases: metaRaw.releases ?? [],
       changeSets: heavy.changeSets,
+      trackedEntities: metaRaw.trackedEntities ?? [],
       settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings }
-    };
+    });
   }
   async function saveProject(project2) {
     const snapshots = {};
@@ -211,6 +255,7 @@
       currentBaselineId: project2.currentBaselineId,
       baselines: baselinesWithoutSnapshot,
       releases: project2.releases,
+      trackedEntities: project2.trackedEntities,
       settings: project2.settings
     };
     const heavy = {
@@ -990,7 +1035,17 @@
     for (const [propName, beforeProp] of beforeByName) {
       const afterProp = afterByName.get(propName);
       if (!afterProp) continue;
-      if (!valuesEqual(beforeProp, afterProp)) {
+      if (beforeProp.type !== afterProp.type) {
+        changes.push({
+          entityType: "component",
+          entityId: id,
+          entityName: name,
+          changeType: "property-type-changed",
+          field: propName,
+          before: beforeProp,
+          after: afterProp
+        });
+      } else if (!valuesEqual(beforeProp, afterProp)) {
         changes.push({
           entityType: "component",
           entityId: id,
@@ -1128,21 +1183,32 @@
     const modeDetails = [];
     let anyValueChanged = false;
     let anyAliasChanged = false;
+    let anyAliasRemoved = false;
     for (const [modeId, beforeMode] of beforeByMode) {
       const afterMode = afterByMode.get(modeId);
       if (!afterMode) continue;
       const aliasChanged = !valuesEqual(beforeMode.aliasTo, afterMode.aliasTo);
       const valueChanged = !valuesEqual(beforeMode.value, afterMode.value);
+      const aliasRemoved = aliasChanged && Boolean(beforeMode.aliasTo) && !afterMode.aliasTo;
       modeDetails.push({
         modeName: afterMode.modeName,
         before: beforeMode.aliasTo ? `-> ${beforeMode.aliasTo.variableName ?? beforeMode.aliasTo.variableId}` : beforeMode.value,
         after: afterMode.aliasTo ? `-> ${afterMode.aliasTo.variableName ?? afterMode.aliasTo.variableId}` : afterMode.value,
         changed: aliasChanged || valueChanged
       });
-      if (aliasChanged) anyAliasChanged = true;
+      if (aliasRemoved) anyAliasRemoved = true;
+      else if (aliasChanged) anyAliasChanged = true;
       else if (valueChanged) anyValueChanged = true;
     }
-    if (anyAliasChanged) {
+    if (anyAliasRemoved) {
+      changes.push({
+        entityType: "token",
+        entityId: id,
+        entityName: name,
+        changeType: "token-alias-removed",
+        modeDetails
+      });
+    } else if (anyAliasChanged) {
       changes.push({
         entityType: "token",
         entityId: id,
@@ -1236,21 +1302,17 @@
     return changes;
   }
   const CLASSIFICATION_RULES = {
-    "component-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
+    // --- BREAKING ---
     "component-removed": { category: "removed", severity: "major", breaking: true, potentialBreaking: false },
-    "component-renamed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "component-description-changed": {
-      category: "modified",
-      severity: "info",
-      breaking: false,
-      potentialBreaking: false
-    },
-    "property-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
     "property-removed": { category: "removed", severity: "major", breaking: true, potentialBreaking: false },
+    "variant-removed": { category: "removed", severity: "major", breaking: true, potentialBreaking: false },
+    "token-removed": { category: "removed", severity: "major", breaking: true, potentialBreaking: false },
+    "token-type-changed": { category: "modified", severity: "major", breaking: true, potentialBreaking: false },
+    "token-alias-removed": { category: "modified", severity: "major", breaking: true, potentialBreaking: false },
+    "property-type-changed": { category: "modified", severity: "major", breaking: true, potentialBreaking: false },
+    // --- POTENTIALLY BREAKING ---
+    "component-renamed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
     "property-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "variant-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
-    "variant-removed": { category: "removed", severity: "major", breaking: false, potentialBreaking: true },
-    "structure-child-added": { category: "added", severity: "minor", breaking: false, potentialBreaking: false },
     "structure-child-removed": { category: "removed", severity: "minor", breaking: false, potentialBreaking: true },
     "structure-child-type-changed": {
       category: "modified",
@@ -1259,33 +1321,42 @@
       potentialBreaking: true
     },
     "visibility-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "dimensions-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
+    "dimensions-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "typography-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "token-binding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "style-binding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "layout-mode-changed": { category: "modified", severity: "major", breaking: false, potentialBreaking: true },
+    "padding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "gap-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "alignment-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "token-renamed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "token-mode-removed": { category: "removed", severity: "minor", breaking: false, potentialBreaking: true },
+    "token-value-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    "token-scopes-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
+    // --- NON-BREAKING / INFORMATIONAL ---
+    "component-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
+    "component-description-changed": {
+      category: "modified",
+      severity: "info",
+      breaking: false,
+      potentialBreaking: false
+    },
+    "property-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
+    "variant-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
+    "structure-child-added": { category: "added", severity: "minor", breaking: false, potentialBreaking: false },
     "corner-radius-changed": { category: "modified", severity: "info", breaking: false, potentialBreaking: false },
     "fills-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
     "strokes-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
     "effects-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
-    "typography-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
-    "token-binding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "style-binding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "layout-mode-changed": { category: "modified", severity: "major", breaking: false, potentialBreaking: true },
-    "padding-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
-    "gap-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
-    "alignment-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
     "token-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
-    "token-removed": { category: "removed", severity: "major", breaking: true, potentialBreaking: false },
-    "token-renamed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true },
-    "token-type-changed": { category: "modified", severity: "major", breaking: false, potentialBreaking: true },
     "token-mode-added": { category: "added", severity: "info", breaking: false, potentialBreaking: false },
-    "token-mode-removed": { category: "removed", severity: "minor", breaking: false, potentialBreaking: true },
-    "token-value-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
     "token-alias-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: false },
     "token-description-changed": {
       category: "modified",
       severity: "info",
       breaking: false,
       potentialBreaking: false
-    },
-    "token-scopes-changed": { category: "modified", severity: "minor", breaking: false, potentialBreaking: true }
+    }
   };
   const DEFAULT_RULE = {
     category: "modified",
@@ -1304,6 +1375,7 @@
     "property-added": (c) => `Added property ${fieldLabel(c)}`,
     "property-removed": (c) => `Removed property ${fieldLabel(c)}`,
     "property-changed": (c) => `Changed property ${fieldLabel(c)}`,
+    "property-type-changed": (c) => `Property type changed for ${fieldLabel(c)}`,
     "variant-added": (c) => `Added variant ${fieldLabel(c)}`,
     "variant-removed": (c) => `Removed variant ${fieldLabel(c)}`,
     "structure-child-added": (c) => `Added layer ${fieldLabel(c)}`,
@@ -1330,6 +1402,7 @@
     "token-mode-removed": (c) => `Removed mode ${c.field}`,
     "token-value-changed": () => "Token value changed",
     "token-alias-changed": () => "Token alias changed",
+    "token-alias-removed": () => "Token alias removed",
     "token-description-changed": () => "Description changed",
     "token-scopes-changed": () => "Scopes changed"
   };
@@ -1354,17 +1427,94 @@
       breaking: rule.breaking,
       potentialBreaking: rule.potentialBreaking,
       modeDetails: raw.modeDetails,
-      reviewed: false,
+      reviewState: "unreviewed",
       createdAt: (/* @__PURE__ */ new Date()).toISOString()
     };
   }
   function classifyAll(raws) {
     return raws.map(classify);
   }
+  function componentStructuralSignature(component) {
+    return hashObject({
+      properties: [...component.properties].map((p) => ({ name: p.name, type: p.type })).sort((a, b) => a.name.localeCompare(b.name)),
+      variants: [...component.variants].map((v) => v.properties).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))),
+      structureShape: structureShape(component.structure),
+      dimensions: component.dimensions,
+      layout: component.layout
+    });
+  }
+  function structureShape(node) {
+    return { type: node.type, children: node.children.map(structureShape) };
+  }
+  function tokenStructuralSignature(token) {
+    return hashObject({
+      type: token.type,
+      scopes: [...token.scopes].sort(),
+      modeCount: token.valuesByMode.length,
+      modeValueKinds: token.valuesByMode.map((m) => m.aliasTo ? "alias" : typeof m.value).sort()
+    });
+  }
+  function detectPossibleRenames(changes, baseline, current) {
+    detectComponentRenames(changes, baseline.components, current.components);
+    detectTokenRenames(changes, baseline.tokens, current.tokens);
+  }
+  function detectComponentRenames(changes, baseline, current) {
+    const removedChanges = changes.filter((c) => c.changeType === "component-removed");
+    const addedChanges = changes.filter((c) => c.changeType === "component-added");
+    if (removedChanges.length === 0 || addedChanges.length === 0) return;
+    const baselineById = new Map(baseline.map((c) => [c.identity.id, c]));
+    const currentById = new Map(current.map((c) => [c.identity.id, c]));
+    const usedAddedIds = /* @__PURE__ */ new Set();
+    for (const removedChange of removedChanges) {
+      const removedEntity = baselineById.get(removedChange.entityId);
+      if (!removedEntity) continue;
+      const keyMatch = removedEntity.identity.key ? addedChanges.find((c) => {
+        if (usedAddedIds.has(c.id)) return false;
+        const entity = currentById.get(c.entityId);
+        return entity?.identity.key !== void 0 && entity.identity.key === removedEntity.identity.key;
+      }) : void 0;
+      const match = keyMatch ?? addedChanges.find((c) => {
+        if (usedAddedIds.has(c.id)) return false;
+        const entity = currentById.get(c.entityId);
+        return entity !== void 0 && componentStructuralSignature(entity) === componentStructuralSignature(removedEntity);
+      });
+      if (match) {
+        usedAddedIds.add(match.id);
+        match.possibleRenameOf = removedChange.id;
+      }
+    }
+  }
+  function detectTokenRenames(changes, baseline, current) {
+    const removedChanges = changes.filter((c) => c.changeType === "token-removed");
+    const addedChanges = changes.filter((c) => c.changeType === "token-added");
+    if (removedChanges.length === 0 || addedChanges.length === 0) return;
+    const baselineById = new Map(baseline.map((t) => [t.id, t]));
+    const currentById = new Map(current.map((t) => [t.id, t]));
+    const usedAddedIds = /* @__PURE__ */ new Set();
+    for (const removedChange of removedChanges) {
+      const removedEntity = baselineById.get(removedChange.entityId);
+      if (!removedEntity) continue;
+      const keyMatch = removedEntity.key ? addedChanges.find((c) => {
+        if (usedAddedIds.has(c.id)) return false;
+        const entity = currentById.get(c.entityId);
+        return entity?.key !== void 0 && entity.key === removedEntity.key;
+      }) : void 0;
+      const match = keyMatch ?? addedChanges.find((c) => {
+        if (usedAddedIds.has(c.id)) return false;
+        const entity = currentById.get(c.entityId);
+        return entity !== void 0 && entity.type === removedEntity.type && tokenStructuralSignature(entity) === tokenStructuralSignature(removedEntity);
+      });
+      if (match) {
+        usedAddedIds.add(match.id);
+        match.possibleRenameOf = removedChange.id;
+      }
+    }
+  }
   function diffSnapshots(baselineId, baseline, current, scanSummary) {
     const rawComponentChanges = diffComponents(baseline.components, current.components);
     const rawTokenChanges = diffTokens(baseline.tokens, current.tokens);
     const changes = classifyAll([...rawComponentChanges, ...rawTokenChanges]);
+    detectPossibleRenames(changes, baseline, current);
     return {
       id: generateId("changeset"),
       baselineId,
@@ -1373,8 +1523,19 @@
       scanSummary
     };
   }
+  function getEffectiveClassification(change) {
+    const override = change.manualClassification;
+    return {
+      category: override?.category ?? change.category,
+      severity: override?.severity ?? change.severity,
+      breaking: override?.breaking ?? change.breaking,
+      potentialBreaking: override?.potentialBreaking ?? change.potentialBreaking,
+      overridden: Boolean(override)
+    };
+  }
   function isBreakingSection(change) {
-    return change.category === "removed" || change.breaking || change.potentialBreaking;
+    const effective = getEffectiveClassification(change);
+    return effective.category === "removed" || effective.breaking || effective.potentialBreaking;
   }
   function filterByInclude(changes, include) {
     return changes.filter((change) => {
@@ -1394,8 +1555,9 @@
     return groups;
   }
   function renderBullet(change) {
+    const effective = getEffectiveClassification(change);
     const prefix = change.entityType === "token" ? `\`${change.entityName}\` — ` : "";
-    const suffix = change.potentialBreaking && !change.breaking ? " (potential breaking change)" : "";
+    const suffix = effective.potentialBreaking && !effective.breaking ? " (potential breaking change)" : "";
     return `- ${prefix}${change.summary}${suffix}`;
   }
   function renderSection(heading, changes) {
@@ -1415,8 +1577,10 @@
     const filtered = filterByInclude(input.changes, input.include);
     const breaking = input.include.breakingChanges ? filtered.filter(isBreakingSection) : [];
     const breakingIds = new Set(breaking.map((c) => c.id));
-    const added = filtered.filter((c) => c.category === "added" && !breakingIds.has(c.id));
-    const changed = filtered.filter((c) => c.category === "modified" && !breakingIds.has(c.id));
+    const added = filtered.filter((c) => getEffectiveClassification(c).category === "added" && !breakingIds.has(c.id));
+    const changed = filtered.filter(
+      (c) => getEffectiveClassification(c).category === "modified" && !breakingIds.has(c.id)
+    );
     const parts = [`# Design System v${input.version}`, ""];
     if (input.title) parts.push(`**${input.title}**`, "");
     if (input.description) parts.push(input.description, "");
@@ -1439,8 +1603,10 @@
     const filtered = filterByInclude(input.changes, input.include);
     const breaking = input.include.breakingChanges ? filtered.filter(isBreakingSection) : [];
     const breakingIds = new Set(breaking.map((c) => c.id));
-    const added = filtered.filter((c) => c.category === "added" && !breakingIds.has(c.id));
-    const changed = filtered.filter((c) => c.category === "modified" && !breakingIds.has(c.id));
+    const added = filtered.filter((c) => getEffectiveClassification(c).category === "added" && !breakingIds.has(c.id));
+    const changed = filtered.filter(
+      (c) => getEffectiveClassification(c).category === "modified" && !breakingIds.has(c.id)
+    );
     const migration = input.include.migrationNotes ? filtered.filter((c) => c.migrationNote).map((c) => ({ entityName: c.entityName, note: c.migrationNote })) : [];
     return {
       version: input.version,
@@ -1472,6 +1638,26 @@
   }
   function findCurrentBaseline() {
     return project.baselines.find((b) => b.id === project.currentBaselineId);
+  }
+  async function resolveComponentIds(baseline) {
+    const tracking = baseline.tracking.components;
+    if (tracking.scope === "selection") return tracking.includedIds;
+    const discovered = await discoverComponents(tracking.scope, tracking.pageIds);
+    return discovered.map((d) => d.id);
+  }
+  function appendSyntheticChange(baselineId, change) {
+    let changeSet = getLatestChangeSetForBaseline(project, baselineId);
+    if (!changeSet) {
+      changeSet = {
+        id: generateId("changeset"),
+        baselineId,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        changes: [],
+        scanSummary: { componentsScanned: 0, componentsSkipped: 0, tokensScanned: 0, tokensSkipped: 0, skippedItems: [] }
+      };
+      project.changeSets.push(changeSet);
+    }
+    changeSet.changes.push(change);
   }
   async function captureSnapshot(componentIds, tokenCollectionIds, tokensEnabled) {
     const componentResult = await scanComponents(componentIds, (done, total) => {
@@ -1566,7 +1752,7 @@
           return;
         }
         const { snapshot, scanSummary } = await captureSnapshot(
-          baseline.tracking.components.includedIds,
+          await resolveComponentIds(baseline),
           baseline.tracking.tokens.includedCollectionIds,
           baseline.tracking.tokens.enabled
         );
@@ -1586,7 +1772,7 @@
           return;
         }
         const snapshot = latestScannedSnapshot ?? (await captureSnapshot(
-          baseline.tracking.components.includedIds,
+          await resolveComponentIds(baseline),
           baseline.tracking.tokens.includedCollectionIds,
           baseline.tracking.tokens.enabled
         )).snapshot;
@@ -1659,9 +1845,142 @@
           postToUi({ type: "error", message: "Change not found." });
           return;
         }
-        if (message.reviewed !== void 0) change.reviewed = message.reviewed;
+        if (message.reviewState !== void 0) change.reviewState = message.reviewState;
         if (message.reviewNote !== void 0) change.reviewNote = message.reviewNote;
         if (message.migrationNote !== void 0) change.migrationNote = message.migrationNote;
+        if (message.manualClassification !== void 0) {
+          change.manualClassification = message.manualClassification ?? void 0;
+        }
+        await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "bulk-update-review": {
+        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+        if (!changeSet) {
+          postToUi({ type: "error", message: "Change set not found." });
+          return;
+        }
+        const ids = new Set(message.changeIds);
+        for (const change of changeSet.changes) {
+          if (ids.has(change.id)) change.reviewState = message.reviewState;
+        }
+        await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "confirm-rename": {
+        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+        const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
+        const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
+        if (!changeSet || !addedChange || !removedChange) {
+          postToUi({ type: "error", message: "Rename suggestion not found." });
+          return;
+        }
+        const kind = addedChange.entityType === "token" ? "token" : "component";
+        const renameEntry = {
+          fromId: removedChange.entityId,
+          fromName: removedChange.entityName,
+          toId: addedChange.entityId,
+          toName: addedChange.entityName,
+          confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+        };
+        const existing = project.trackedEntities.find((e) => e.id === removedChange.entityId);
+        if (existing) {
+          existing.id = addedChange.entityId;
+          existing.displayName = addedChange.entityName;
+          existing.renameHistory.push(renameEntry);
+        } else {
+          const entity = {
+            id: addedChange.entityId,
+            kind,
+            displayName: addedChange.entityName,
+            deprecated: false,
+            renameHistory: [renameEntry]
+          };
+          project.trackedEntities.push(entity);
+        }
+        addedChange.changeType = kind === "token" ? "token-renamed" : "component-renamed";
+        addedChange.category = "modified";
+        addedChange.before = removedChange.entityName;
+        addedChange.after = addedChange.entityName;
+        addedChange.summary = `Renamed from "${removedChange.entityName}" to "${addedChange.entityName}" (id changed)`;
+        addedChange.renameResolution = "confirmed";
+        changeSet.changes = changeSet.changes.filter((c) => c.id !== removedChange.id);
+        await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "dismiss-rename": {
+        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+        const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
+        const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
+        if (!changeSet || !addedChange || !removedChange) {
+          postToUi({ type: "error", message: "Rename suggestion not found." });
+          return;
+        }
+        addedChange.renameResolution = "dismissed";
+        removedChange.renameResolution = "dismissed";
+        await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "mark-deprecated": {
+        const now = (/* @__PURE__ */ new Date()).toISOString();
+        const existing = project.trackedEntities.find((e) => e.id === message.entityId);
+        if (existing) {
+          existing.deprecated = true;
+          existing.deprecatedAt = existing.deprecatedAt ?? now;
+          existing.displayName = message.displayName;
+          existing.replacement = message.replacement;
+          existing.migrationNote = message.migrationNote;
+        } else {
+          const entity = {
+            id: message.entityId,
+            kind: message.kind,
+            displayName: message.displayName,
+            parentId: message.parentId,
+            deprecated: true,
+            deprecatedAt: now,
+            replacement: message.replacement,
+            migrationNote: message.migrationNote,
+            renameHistory: []
+          };
+          project.trackedEntities.push(entity);
+        }
+        const baseline = findCurrentBaseline();
+        if (baseline) {
+          const suffix = message.replacement ? ` — replaced by ${message.replacement}` : "";
+          appendSyntheticChange(baseline.id, {
+            id: generateId("change"),
+            entityType: message.kind === "token" ? "token" : "component",
+            entityId: message.entityId,
+            entityName: message.displayName,
+            category: "deprecated",
+            severity: "info",
+            changeType: `${message.kind}-deprecated`,
+            summary: `Marked deprecated${suffix}`,
+            breaking: false,
+            potentialBreaking: false,
+            reviewState: "unreviewed",
+            migrationNote: message.migrationNote,
+            createdAt: now
+          });
+        }
+        await persist();
+        postToUi({ type: "state", project });
+        return;
+      }
+      case "unmark-deprecated": {
+        const entity = project.trackedEntities.find((e) => e.id === message.entityId);
+        if (!entity) {
+          postToUi({ type: "error", message: "Tracked entity not found." });
+          return;
+        }
+        entity.deprecated = false;
+        entity.deprecatedAt = void 0;
+        entity.replacement = void 0;
+        entity.migrationNote = void 0;
         await persist();
         postToUi({ type: "state", project });
         return;

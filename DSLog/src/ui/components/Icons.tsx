@@ -40,6 +40,14 @@ export const ReleasesIcon = (props: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const HistoryIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...base(props)}>
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <polyline points="3 4 3 9 8 9" />
+    <polyline points="12 7 12 12 16 14" />
+  </svg>
+);
+
 export const SettingsIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg {...base(props)}>
     <circle cx="12" cy="12" r="3" />

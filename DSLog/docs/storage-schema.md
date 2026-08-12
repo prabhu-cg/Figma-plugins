@@ -42,6 +42,7 @@ interface Project {
   baselines: Baseline[];
   releases: Release[];
   changeSets: ChangeSet[];
+  trackedEntities: TrackedEntity[]; // V2 (schema version 2)
   settings: Settings;
 }
 ```
@@ -55,6 +56,7 @@ interface StoredMeta {
   currentBaselineId?: string;
   baselines: Array<Omit<Baseline, "snapshot">>;
   releases: Release[];
+  trackedEntities: TrackedEntity[]; // V2 — small, belongs in meta not heavy
   settings: Settings;
 }
 
@@ -84,9 +86,16 @@ baseline record entirely). `saveProject()` does the inverse split.
 - `shared/schemas/validate.ts` additionally provides `isValidProject` (a
   strict, all-or-nothing shape check) and `migrateProject` (a lenient,
   field-by-field repair — a single malformed field falls back to its
-  default without discarding the rest of the object) for future schema
-  migrations. V1 is schema version 1; a version bump would extend
-  `migrateProject` to transform old shapes into the new one.
+  default without discarding the rest of the object) for schema migrations.
+  V1 was schema version 1; V2 (schema version 2) is the first real use of
+  this path — `projectStore.loadProject()` now always routes the assembled
+  `Project` through `migrateProject()` before returning it (previously
+  `migrateProject` existed but nothing called it), which backfills a
+  missing `trackedEntities: []` and maps each Change's old `reviewed:
+  boolean` to the new `reviewState` (`true -> "reviewed"`, `false ->
+  "unreviewed"`) so a project created under V1 keeps working unmodified
+  after upgrading — no explicit "migrate now" step, it happens transparently
+  on next load.
 
 ## Deterministic hashing
 

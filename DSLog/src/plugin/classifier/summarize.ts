@@ -12,6 +12,7 @@ const SUMMARY_BUILDERS: Record<string, (c: RawChange) => string> = {
   "property-added": (c) => `Added property ${fieldLabel(c)}`,
   "property-removed": (c) => `Removed property ${fieldLabel(c)}`,
   "property-changed": (c) => `Changed property ${fieldLabel(c)}`,
+  "property-type-changed": (c) => `Property type changed for ${fieldLabel(c)}`,
   "variant-added": (c) => `Added variant ${fieldLabel(c)}`,
   "variant-removed": (c) => `Removed variant ${fieldLabel(c)}`,
   "structure-child-added": (c) => `Added layer ${fieldLabel(c)}`,
@@ -39,6 +40,7 @@ const SUMMARY_BUILDERS: Record<string, (c: RawChange) => string> = {
   "token-mode-removed": (c) => `Removed mode ${c.field}`,
   "token-value-changed": () => "Token value changed",
   "token-alias-changed": () => "Token alias changed",
+  "token-alias-removed": () => "Token alias removed",
   "token-description-changed": () => "Description changed",
   "token-scopes-changed": () => "Scopes changed",
 };

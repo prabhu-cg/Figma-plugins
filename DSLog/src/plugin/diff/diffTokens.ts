@@ -41,6 +41,7 @@ function diffModes(before: TokenSnapshot, after: TokenSnapshot): RawChange[] {
   const modeDetails: Array<{ modeName: string; before?: unknown; after?: unknown; changed: boolean }> = [];
   let anyValueChanged = false;
   let anyAliasChanged = false;
+  let anyAliasRemoved = false;
 
   for (const [modeId, beforeMode] of beforeByMode) {
     const afterMode = afterByMode.get(modeId);
@@ -48,6 +49,7 @@ function diffModes(before: TokenSnapshot, after: TokenSnapshot): RawChange[] {
 
     const aliasChanged = !valuesEqual(beforeMode.aliasTo, afterMode.aliasTo);
     const valueChanged = !valuesEqual(beforeMode.value, afterMode.value);
+    const aliasRemoved = aliasChanged && Boolean(beforeMode.aliasTo) && !afterMode.aliasTo;
 
     modeDetails.push({
       modeName: afterMode.modeName,
@@ -56,11 +58,23 @@ function diffModes(before: TokenSnapshot, after: TokenSnapshot): RawChange[] {
       changed: aliasChanged || valueChanged,
     });
 
-    if (aliasChanged) anyAliasChanged = true;
+    if (aliasRemoved) anyAliasRemoved = true;
+    else if (aliasChanged) anyAliasChanged = true;
     else if (valueChanged) anyValueChanged = true;
   }
 
-  if (anyAliasChanged) {
+  // A mode that lost its alias (pointed at another token, now a raw value)
+  // is a distinct, definitively-breaking signal from a mere retarget —
+  // see CLASSIFICATION_RULES["token-alias-removed"] (spec §10).
+  if (anyAliasRemoved) {
+    changes.push({
+      entityType: "token",
+      entityId: id,
+      entityName: name,
+      changeType: "token-alias-removed",
+      modeDetails,
+    });
+  } else if (anyAliasChanged) {
     changes.push({
       entityType: "token",
       entityId: id,

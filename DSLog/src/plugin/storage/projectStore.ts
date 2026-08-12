@@ -7,6 +7,8 @@ import type { Baseline, Project, Settings } from "@shared/types/project";
 import { createEmptyProject, DEFAULT_SETTINGS } from "@shared/types/project";
 import type { ChangeSet } from "@shared/types/change";
 import type { DesignSystemSnapshot } from "@shared/types/project";
+import type { TrackedEntity } from "@shared/types/entity";
+import { migrateProject } from "@shared/schemas/validate";
 import { clientStorageAdapter } from "./clientStorageAdapter";
 import { pluginDataAdapter } from "./pluginDataAdapter";
 import { readChunked, writeChunked } from "./chunking";
@@ -21,6 +23,7 @@ interface StoredMeta {
   currentBaselineId?: string;
   baselines: BaselineWithoutSnapshot[];
   releases: Project["releases"];
+  trackedEntities: TrackedEntity[];
   settings: Settings;
 }
 
@@ -64,14 +67,20 @@ export async function loadProject(): Promise<Project> {
     snapshot: heavy.snapshots[b.id] ?? EMPTY_SNAPSHOT,
   }));
 
-  return {
+  // Route every load through migrateProject: it's a no-op on already-current
+  // data (confirmed by schemaValidation.test.ts) and backfills/repairs older
+  // schema shapes (e.g. v1's `reviewed: boolean` -> v2's `reviewState`,
+  // missing `trackedEntities`) so a project created under an older
+  // schemaVersion keeps working after this upgrade.
+  return migrateProject({
     schemaVersion: STORAGE_SCHEMA_VERSION,
     currentBaselineId: metaRaw.currentBaselineId,
     baselines,
     releases: metaRaw.releases ?? [],
     changeSets: heavy.changeSets,
+    trackedEntities: metaRaw.trackedEntities ?? [],
     settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings },
-  };
+  });
 }
 
 export async function saveProject(project: Project): Promise<void> {
@@ -87,6 +96,7 @@ export async function saveProject(project: Project): Promise<void> {
     currentBaselineId: project.currentBaselineId,
     baselines: baselinesWithoutSnapshot,
     releases: project.releases,
+    trackedEntities: project.trackedEntities,
     settings: project.settings,
   };
 

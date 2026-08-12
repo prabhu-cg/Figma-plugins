@@ -2,39 +2,58 @@ import React, { useMemo, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { ChangeListItem } from "@ui/components/ChangeListItem";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
+import { RenameSuggestionBanner } from "@ui/components/RenameSuggestionBanner";
 import { SearchIcon, TrackIcon } from "@ui/components/Icons";
 import type { ChangeCategory } from "@shared/types/change";
+import type { ReviewState } from "@shared/types/entity";
+import { getEffectiveClassification } from "@shared/utils/classification";
+import { getLatestChangeSetForBaseline } from "@shared/utils/changeSets";
 
 type EntityFilter = "all" | "components" | "tokens";
 type BreakingFilter = "all" | "breaking";
+type ReviewFilter = "all" | ReviewState;
+
+const REVIEW_STATE_OPTIONS: ReviewState[] = ["unreviewed", "reviewed", "accepted", "rejected"];
 
 export function ChangesPage() {
-  const { project } = useProjectState();
+  const { project, send } = useProjectState();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<ChangeCategory | "all">("all");
   const [entityType, setEntityType] = useState<EntityFilter>("all");
   const [breaking, setBreaking] = useState<BreakingFilter>("all");
+  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkTarget, setBulkTarget] = useState<ReviewState>("reviewed");
 
   const changeSet = useMemo(() => {
     if (!project?.currentBaselineId) return undefined;
-    const sets = project.changeSets.filter((cs) => cs.baselineId === project.currentBaselineId);
-    if (sets.length === 0) return undefined;
-    return sets.reduce((latest, cs) => (cs.createdAt > latest.createdAt ? cs : latest));
+    return getLatestChangeSetForBaseline(project, project.currentBaselineId);
   }, [project]);
 
   const filtered = useMemo(() => {
     if (!changeSet) return [];
     const q = search.trim().toLowerCase();
     return changeSet.changes.filter((c) => {
-      if (category !== "all" && c.category !== category) return false;
+      const effective = getEffectiveClassification(c);
+      if (category !== "all" && effective.category !== category) return false;
       if (entityType === "components" && c.entityType !== "component") return false;
       if (entityType === "tokens" && c.entityType !== "token") return false;
-      if (breaking === "breaking" && !c.breaking && !c.potentialBreaking) return false;
+      if (breaking === "breaking" && !effective.breaking && !effective.potentialBreaking) return false;
+      if (reviewFilter !== "all" && c.reviewState !== reviewFilter) return false;
       if (q && !`${c.entityName} ${c.summary}`.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [changeSet, search, category, entityType, breaking]);
+  }, [changeSet, search, category, entityType, breaking, reviewFilter]);
+
+  function toggleChecked(id: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   if (!project) return null;
 
@@ -54,6 +73,8 @@ export function ChangesPage() {
 
   const componentCount = changeSet.changes.filter((c) => c.entityType === "component").length;
   const tokenCount = changeSet.changes.filter((c) => c.entityType === "token").length;
+  const unreviewedCount = changeSet.changes.filter((c) => c.reviewState === "unreviewed").length;
+  const reviewedCount = changeSet.changes.filter((c) => c.reviewState !== "unreviewed").length;
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
 
   return (
@@ -63,7 +84,8 @@ export function ChangesPage() {
           <div>
             <div className="view-title">Changes</div>
             <div className="view-subtitle">
-              {changeSet.changes.length} changes detected · {componentCount} components · {tokenCount} tokens
+              {changeSet.changes.length} changes · {componentCount} components · {tokenCount} tokens ·{" "}
+              {unreviewedCount} unreviewed · {reviewedCount} reviewed
             </div>
           </div>
         </div>
@@ -103,6 +125,20 @@ export function ChangesPage() {
               <option value="breaking">Breaking only</option>
             </select>
           </div>
+          <div className="select-wrapper">
+            <select
+              className="select"
+              value={reviewFilter}
+              onChange={(e) => setReviewFilter(e.target.value as ReviewFilter)}
+            >
+              <option value="all">All review states</option>
+              {REVIEW_STATE_OPTIONS.map((state) => (
+                <option key={state} value={state}>
+                  {state.charAt(0).toUpperCase() + state.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {changeSet.scanSummary.skippedItems.length > 0 && (
@@ -123,6 +159,40 @@ export function ChangesPage() {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 12 }}>
+        <RenameSuggestionBanner changeSetId={changeSet.id} changes={changeSet.changes} />
+        {checkedIds.size > 0 && (
+          <div className="card flex items-center justify-between wrap gap-2" style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{checkedIds.size} selected</span>
+            <div className="flex items-center gap-2">
+              <div className="select-wrapper">
+                <select className="select" value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value as ReviewState)}>
+                  {REVIEW_STATE_OPTIONS.map((state) => (
+                    <option key={state} value={state}>
+                      {state.charAt(0).toUpperCase() + state.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  send({
+                    type: "bulk-update-review",
+                    changeSetId: changeSet.id,
+                    changeIds: Array.from(checkedIds),
+                    reviewState: bulkTarget,
+                  });
+                  setCheckedIds(new Set());
+                }}
+              >
+                Apply
+              </button>
+              <button className="btn btn-secondary btn-sm" onClick={() => setCheckedIds(new Set())}>
+                Clear
+              </button>
+            </div>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="card state-card">
             <div className="text-secondary">No changes match these filters.</div>
@@ -136,6 +206,8 @@ export function ChangesPage() {
                   change={change}
                   selected={selectedId === change.id}
                   onSelect={() => setSelectedId(change.id)}
+                  checked={checkedIds.has(change.id)}
+                  onToggleCheck={() => toggleChecked(change.id)}
                 />
               ))}
             </div>

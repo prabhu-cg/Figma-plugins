@@ -2,6 +2,7 @@ import type { ComponentSnapshot } from "./component";
 import type { TokenSnapshot, VariableCollectionSnapshot } from "./token";
 import type { TrackingConfig } from "./scan";
 import type { ChangeSet } from "./change";
+import type { TrackedEntity } from "./entity";
 
 export interface DesignSystemSnapshot {
   components: ComponentSnapshot[];
@@ -63,6 +64,7 @@ export interface Project {
   baselines: Baseline[];
   releases: Release[];
   changeSets: ChangeSet[];
+  trackedEntities: TrackedEntity[];
   settings: Settings;
 }
 
@@ -72,6 +74,7 @@ export function createEmptyProject(schemaVersion: number): Project {
     baselines: [],
     releases: [],
     changeSets: [],
+    trackedEntities: [],
     settings: DEFAULT_SETTINGS,
   };
 }

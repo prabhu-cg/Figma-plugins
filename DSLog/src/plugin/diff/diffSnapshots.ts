@@ -4,6 +4,7 @@ import { generateId } from "@shared/utils/id";
 import { classifyAll } from "@plugin/classifier/classify";
 import { diffComponents } from "./diffComponents";
 import { diffTokens } from "./diffTokens";
+import { detectPossibleRenames } from "./detectPossibleRenames";
 
 export interface ScanSummaryInput {
   componentsScanned: number;
@@ -23,6 +24,7 @@ export function diffSnapshots(
   const rawTokenChanges = diffTokens(baseline.tokens, current.tokens);
 
   const changes = classifyAll([...rawComponentChanges, ...rawTokenChanges]);
+  detectPossibleRenames(changes, baseline, current);
 
   return {
     id: generateId("changeset"),

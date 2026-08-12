@@ -24,13 +24,22 @@ human-written changelog.
 4. **Scan for changes** — DSLog re-scans the tracked set and diffs it
    against the current baseline.
 5. **Review changes** — each change is classified (Added / Changed /
-   Removed, with a severity and breaking-change confidence) and can be
-   annotated with a review note and a migration note.
+   Removed, with a severity and a deterministic breaking / potentially
+   breaking / non-breaking / informational verdict — never a confidence
+   score) and can be annotated with a review note, a migration note, a
+   review state (unreviewed / reviewed / accepted / rejected), or a manual
+   classification override. A possible rename (same component/token key or
+   structural shape under a new id) is flagged for confirmation rather than
+   silently merged.
 6. **Create a release** — bundles the current change set into a named
    version, generates a baseline for the new state, and produces a
    Markdown + JSON changelog.
 7. **Export** — copy the changelog to your clipboard or the raw
    Markdown/JSON text.
+8. **Browse History** — release-by-release change history, per-component
+   and per-token timelines (including across confirmed renames), and token
+   alias dependency chains. Components, variants, properties, and tokens
+   can be marked deprecated with a replacement and migration note.
 
 ## Tech stack
 
@@ -56,7 +65,7 @@ src/
 │   ├── export/          # Markdown / JSON changelog generation
 │   └── main.ts          # message router wiring the UI to everything above
 ├── ui/                # runs in the plugin iframe (React)
-│   ├── pages/            # Overview, Track, Changes, Releases, Settings
+│   ├── pages/            # Overview, Track, Changes, Releases, History, Settings
 │   ├── components/
 │   ├── state/            # postMessage bridge + React context
 │   └── styles/
@@ -109,11 +118,21 @@ Figma (Figma does not hot-reload plugin code).
 - change classification against the rules in the product spec
 - changelog (Markdown + JSON) generation and `include` filtering
 - storage chunking and corruption/malformed-data recovery
-- schema validation and migration
+- schema validation and migration (including the V1 -> V2 `reviewed` ->
+  `reviewState` migration on load)
 - three fixture datasets (`fixtures/small-ds.json`, `medium-ds.json`,
   `large-ds.json`, at 50/250/1000 components and 500/1000/2000 tokens) that
   exercise normalization and diffing at the scales called out in the
   product spec's performance requirements
+- rename detection (component/token key and structural-signature matching)
+  and its confirm/dismiss flow through `main.ts`
+- deprecation and bulk review-state updates through `main.ts`
+- entity history reconstruction across releases and rename chains, token
+  alias dependency-chain resolution, and the global search index
+- end-to-end integration tests (`tests/helpers/fakeFigma.ts`) that load the
+  real `main.ts` message handler against a simulated `figma` global for the
+  baseline → scan → release flow, deprecation, rename confirmation, and
+  review-state updates
 
 ## Non-goals (V1)
 

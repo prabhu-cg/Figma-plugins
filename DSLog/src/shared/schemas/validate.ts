@@ -1,5 +1,7 @@
 import { STORAGE_SCHEMA_VERSION } from "@shared/constants/storage";
 import { createEmptyProject, type Project } from "@shared/types/project";
+import type { ChangeSet } from "@shared/types/change";
+import type { TrackedEntity } from "@shared/types/entity";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -7,6 +9,35 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isArray(value: unknown): value is unknown[] {
   return Array.isArray(value);
+}
+
+/**
+ * V1 stored `reviewed: boolean` on each Change; V2 replaced it with a
+ * 4-state `reviewState`. Reads either shape, always returns the new one.
+ */
+function migrateReviewState(change: Record<string, unknown>): ChangeSet["changes"][number]["reviewState"] {
+  if (
+    change.reviewState === "unreviewed" ||
+    change.reviewState === "reviewed" ||
+    change.reviewState === "accepted" ||
+    change.reviewState === "rejected"
+  ) {
+    return change.reviewState;
+  }
+  return change.reviewed === true ? "reviewed" : "unreviewed";
+}
+
+function migrateChangeSets(value: unknown): Project["changeSets"] {
+  if (!isArray(value)) return [];
+  return value.map((raw) => {
+    if (!isRecord(raw) || !isArray(raw.changes)) return raw as ChangeSet;
+    return {
+      ...raw,
+      changes: raw.changes.map((c) =>
+        isRecord(c) ? { ...c, reviewState: migrateReviewState(c) } : c,
+      ),
+    } as unknown as ChangeSet;
+  });
 }
 
 /**
@@ -41,7 +72,8 @@ export function migrateProject(value: unknown): Project {
     currentBaselineId: typeof value.currentBaselineId === "string" ? value.currentBaselineId : undefined,
     baselines: isArray(value.baselines) ? (value.baselines as Project["baselines"]) : empty.baselines,
     releases: isArray(value.releases) ? (value.releases as Project["releases"]) : empty.releases,
-    changeSets: isArray(value.changeSets) ? (value.changeSets as Project["changeSets"]) : empty.changeSets,
+    changeSets: migrateChangeSets(value.changeSets),
+    trackedEntities: isArray(value.trackedEntities) ? (value.trackedEntities as TrackedEntity[]) : empty.trackedEntities,
     settings: isRecord(value.settings) ? (value.settings as unknown as Project["settings"]) : empty.settings,
   };
 }

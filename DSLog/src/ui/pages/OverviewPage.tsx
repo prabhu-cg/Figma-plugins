@@ -3,12 +3,11 @@ import { useProjectState } from "@ui/state/ProjectContext";
 import { StatCard } from "@ui/components/Shared";
 import { TrackIcon } from "@ui/components/Icons";
 import type { PageId } from "@ui/App";
-import type { Project } from "@shared/types/project";
+import { getLatestChangeSetForBaseline } from "@shared/utils/changeSets";
+import { getEffectiveClassification } from "@shared/utils/classification";
 
-function latestChangeSetForBaseline(project: Project, baselineId: string) {
-  const sets = project.changeSets.filter((cs) => cs.baselineId === baselineId);
-  if (sets.length === 0) return undefined;
-  return sets.reduce((latest, cs) => (cs.createdAt > latest.createdAt ? cs : latest));
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
@@ -35,9 +34,12 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
     );
   }
 
-  const changeSet = latestChangeSetForBaseline(project, baseline.id);
-  const componentChanges = changeSet?.changes.filter((c) => c.entityType === "component").length ?? 0;
-  const tokenChanges = changeSet?.changes.filter((c) => c.entityType === "token").length ?? 0;
+  const changeSet = getLatestChangeSetForBaseline(project, baseline.id);
+  const totalChanges = changeSet?.changes.length ?? 0;
+  const breakingChanges = changeSet?.changes.filter((c) => getEffectiveClassification(c).breaking).length ?? 0;
+  const deprecatedChanges = changeSet?.changes.filter((c) => c.category === "deprecated").length ?? 0;
+
+  const latestRelease = [...project.releases].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 
   const pctComponents =
     scanProgress && scanProgress.componentsTotal > 0
@@ -53,7 +55,11 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
       <div className="view-header">
         <div>
           <div className="view-title">Overview</div>
-          <div className="view-subtitle">Current baseline v{baseline.version}</div>
+          <div className="view-subtitle">
+            {latestRelease
+              ? `Current release v${latestRelease.version} · ${formatDate(latestRelease.createdAt)}`
+              : `Current baseline v${baseline.version} (unreleased)`}
+          </div>
         </div>
         <div className="flex gap-2">
           <button className="btn btn-secondary" disabled={scanning} onClick={() => send({ type: "scan" })}>
@@ -88,11 +94,22 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
         </div>
       )}
 
-      <div className="grid grid-cols-4">
-        <StatCard label="Tracked components" value={baseline.snapshot.components.length} />
-        <StatCard label="Tracked tokens" value={baseline.snapshot.tokens.length} />
-        <StatCard label="Component changes" value={componentChanges} />
-        <StatCard label="Token changes" value={tokenChanges} />
+      <div className="card-title" style={{ marginBottom: 8 }}>
+        Tracked
+      </div>
+      <div className="grid grid-cols-3" style={{ marginBottom: "var(--space-3)" }}>
+        <StatCard label="Components" value={baseline.snapshot.components.length} />
+        <StatCard label="Tokens" value={baseline.snapshot.tokens.length} />
+        <StatCard label="Releases" value={project.releases.length} />
+      </div>
+
+      <div className="card-title" style={{ marginBottom: 8 }}>
+        Since last release
+      </div>
+      <div className="grid grid-cols-3">
+        <StatCard label="Changes" value={totalChanges} />
+        <StatCard label="Breaking" value={breakingChanges} />
+        <StatCard label="Deprecated" value={deprecatedChanges} />
       </div>
     </div>
   );

@@ -1,7 +1,8 @@
 import React from "react";
 import type { PageId } from "@ui/App";
 import { Logo } from "./Logo";
-import { ChangesIcon, OverviewIcon, ReleasesIcon, SettingsIcon, TrackIcon } from "./Icons";
+import { ChangesIcon, HistoryIcon, OverviewIcon, ReleasesIcon, SettingsIcon, TrackIcon } from "./Icons";
+import { SearchBar } from "./SearchBar";
 import { PRODUCT_TAGLINE } from "@shared/constants/brand";
 
 type NavIconComponent = (props: { className?: string }) => JSX.Element;
@@ -11,6 +12,7 @@ const MAIN_NAV_ITEMS: { id: PageId; label: string; icon: NavIconComponent }[] = 
   { id: "track", label: "Track", icon: TrackIcon },
   { id: "changes", label: "Changes", icon: ChangesIcon },
   { id: "releases", label: "Releases", icon: ReleasesIcon },
+  { id: "history", label: "History", icon: HistoryIcon },
 ];
 
 const SETTINGS_ITEM: { id: PageId; label: string; icon: NavIconComponent } = {
@@ -44,6 +46,9 @@ export function Nav({ active, onSelect }: { active: PageId; onSelect: (page: Pag
           </span>
           <span className="nav-brand-tagline">{PRODUCT_TAGLINE}</span>
         </div>
+      </div>
+      <div style={{ padding: "0 var(--space-2) var(--space-2)" }}>
+        <SearchBar onNavigate={onSelect} />
       </div>
       {MAIN_NAV_ITEMS.map(renderItem)}
       <div className="nav-spacer" />

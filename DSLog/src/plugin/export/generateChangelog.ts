@@ -1,5 +1,6 @@
 import type { Change } from "@shared/types/change";
 import type { Release } from "@shared/types/project";
+import { getEffectiveClassification } from "@shared/utils/classification";
 
 export interface ChangelogInput {
   version: string;
@@ -26,7 +27,8 @@ export interface ChangelogJson {
 }
 
 function isBreakingSection(change: Change): boolean {
-  return change.category === "removed" || change.breaking || change.potentialBreaking;
+  const effective = getEffectiveClassification(change);
+  return effective.category === "removed" || effective.breaking || effective.potentialBreaking;
 }
 
 function filterByInclude(changes: Change[], include: ChangelogInput["include"]): Change[] {
@@ -49,8 +51,9 @@ function groupByEntity(changes: Change[]): Map<string, Change[]> {
 }
 
 function renderBullet(change: Change): string {
+  const effective = getEffectiveClassification(change);
   const prefix = change.entityType === "token" ? `\`${change.entityName}\` — ` : "";
-  const suffix = change.potentialBreaking && !change.breaking ? " (potential breaking change)" : "";
+  const suffix = effective.potentialBreaking && !effective.breaking ? " (potential breaking change)" : "";
   return `- ${prefix}${change.summary}${suffix}`;
 }
 
@@ -73,8 +76,10 @@ export function generateMarkdown(input: ChangelogInput): string {
 
   const breaking = input.include.breakingChanges ? filtered.filter(isBreakingSection) : [];
   const breakingIds = new Set(breaking.map((c) => c.id));
-  const added = filtered.filter((c) => c.category === "added" && !breakingIds.has(c.id));
-  const changed = filtered.filter((c) => c.category === "modified" && !breakingIds.has(c.id));
+  const added = filtered.filter((c) => getEffectiveClassification(c).category === "added" && !breakingIds.has(c.id));
+  const changed = filtered.filter(
+    (c) => getEffectiveClassification(c).category === "modified" && !breakingIds.has(c.id),
+  );
 
   const parts: string[] = [`# Design System v${input.version}`, ""];
   if (input.title) parts.push(`**${input.title}**`, "");
@@ -106,8 +111,10 @@ export function generateJson(input: ChangelogInput): ChangelogJson {
   const filtered = filterByInclude(input.changes, input.include);
   const breaking = input.include.breakingChanges ? filtered.filter(isBreakingSection) : [];
   const breakingIds = new Set(breaking.map((c) => c.id));
-  const added = filtered.filter((c) => c.category === "added" && !breakingIds.has(c.id));
-  const changed = filtered.filter((c) => c.category === "modified" && !breakingIds.has(c.id));
+  const added = filtered.filter((c) => getEffectiveClassification(c).category === "added" && !breakingIds.has(c.id));
+  const changed = filtered.filter(
+    (c) => getEffectiveClassification(c).category === "modified" && !breakingIds.has(c.id),
+  );
   const migration = input.include.migrationNotes
     ? filtered.filter((c) => c.migrationNote).map((c) => ({ entityName: c.entityName, note: c.migrationNote as string }))
     : [];

@@ -41,7 +41,17 @@ function diffProperties(before: ComponentSnapshot, after: ComponentSnapshot): Ra
   for (const [propName, beforeProp] of beforeByName) {
     const afterProp = afterByName.get(propName);
     if (!afterProp) continue;
-    if (!valuesEqual(beforeProp, afterProp)) {
+    if (beforeProp.type !== afterProp.type) {
+      changes.push({
+        entityType: "component",
+        entityId: id,
+        entityName: name,
+        changeType: "property-type-changed",
+        field: propName,
+        before: beforeProp,
+        after: afterProp,
+      });
+    } else if (!valuesEqual(beforeProp, afterProp)) {
       changes.push({
         entityType: "component",
         entityId: id,

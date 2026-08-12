@@ -1,6 +1,7 @@
 import type { Baseline, Project, Release, Settings } from "./project";
-import type { ChangeSet } from "./change";
+import type { ChangeSet, ManualClassification } from "./change";
 import type { DiscoveredComponent, ScanProgress, TrackingConfig } from "./scan";
+import type { EntityKind, ReviewState } from "./entity";
 
 export type UiToPluginMessage =
   | { type: "ui-ready" }
@@ -26,10 +27,29 @@ export type UiToPluginMessage =
       type: "update-change";
       changeSetId: string;
       changeId: string;
-      reviewed?: boolean;
+      reviewState?: ReviewState;
       reviewNote?: string;
       migrationNote?: string;
+      manualClassification?: ManualClassification | null;
     }
+  | {
+      type: "bulk-update-review";
+      changeSetId: string;
+      changeIds: string[];
+      reviewState: ReviewState;
+    }
+  | {
+      type: "mark-deprecated";
+      entityId: string;
+      kind: EntityKind;
+      parentId?: string;
+      displayName: string;
+      replacement?: string;
+      migrationNote?: string;
+    }
+  | { type: "unmark-deprecated"; entityId: string }
+  | { type: "confirm-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
+  | { type: "dismiss-rename"; changeSetId: string; addedChangeId: string; removedChangeId: string }
   | { type: "update-settings"; settings: Settings }
   | { type: "focus-node"; nodeId: string };
 

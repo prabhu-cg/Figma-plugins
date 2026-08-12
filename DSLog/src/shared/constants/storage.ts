@@ -1,5 +1,5 @@
 /** clientStorage keys and chunking limits. */
-export const STORAGE_SCHEMA_VERSION = 1;
+export const STORAGE_SCHEMA_VERSION = 2;
 
 export const STORAGE_KEYS = {
   /** Index record: lists chunk keys for the project blob. */

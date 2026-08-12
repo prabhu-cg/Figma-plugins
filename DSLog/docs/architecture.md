@@ -95,3 +95,77 @@ the Changes page.
 50/250/1000 components and 500/1000/2000 tokens (the scales called out in
 the product spec) for exercising normalization and diffing at scale in
 `tests/fixtures.test.ts`.
+
+## V2 additions (schema version 2)
+
+V2 layers history, impact, and workflow features on top of the V1 pipeline
+above without changing how scanning/diffing/classifying work at their core.
+
+- **Rename detection** (`diff/structuralSignature.ts`,
+  `diff/detectPossibleRenames.ts`): after `diffComponents`/`diffTokens`
+  produce id-matched changes, a post-pass pairs any remaining
+  `-added`/`-removed` changes that share a component/variable `key` or a
+  structural signature (everything except name/id — properties, variants,
+  structure shape for components; type/scopes/mode-shape for tokens), and
+  links them via `Change.possibleRenameOf` for the UI to offer "Confirm
+  rename" / "Treat as remove + add" (never auto-merged). This is also why
+  `main.ts`'s `resolveComponentIds` re-runs `discoverComponents` against the
+  baseline's stored scope on every scan (for scopes other than
+  `"selection"`) instead of re-scanning the frozen id list captured at
+  baseline time — a node with a genuinely new id (delete + recreate) would
+  otherwise never be discovered as "added" at all, and rename pairing needs
+  both sides present in the same diff.
+- **Breaking-change engine** (`classifier/rules.ts`,
+  `shared/utils/classification.ts`): the classification table now mirrors
+  the product spec's explicit BREAKING / POTENTIALLY BREAKING / NON-BREAKING
+  buckets (e.g. variant removal and token alias removal are definitively
+  breaking, not just potential). `Change.manualClassification` lets a human
+  override the deterministic output without discarding it —
+  `getEffectiveClassification`/`getVerdictLabel` are the single place every
+  UI surface and the changelog generator read the "real" classification
+  from, so an override is honored everywhere consistently.
+  `ChangeVerdict` (`"breaking" | "potentially-breaking" | "non-breaking" |
+  "informational"`) is the only vocabulary ever shown to the user — never a
+  confidence score.
+- **Deprecation** (`shared/types/entity.ts`'s `TrackedEntity`,
+  `mark-deprecated`/`unmark-deprecated` in `main.ts`): deprecation is
+  manual, user-applied metadata decoupled from any one snapshot, so it's
+  stored as a `TrackedEntity` record (keyed by component/token id, or a
+  synthetic `id::variant::name` / `id::prop::name` key for variants and
+  properties) in `Project.trackedEntities` rather than duplicated across
+  snapshots. Marking something deprecated also appends a synthetic
+  `category: "deprecated"` Change into the current baseline's latest
+  ChangeSet (`appendSyntheticChange`), so deprecations flow through the
+  existing changelog/history/dashboard aggregation with no parallel
+  counting logic.
+- **Review states** (`shared/types/entity.ts`'s `ReviewState`): replaces
+  V1's boolean `reviewed` with `"unreviewed" | "reviewed" | "accepted" |
+  "rejected"`, plus a `bulk-update-review` message for multi-select actions.
+- **History** (`shared/utils/entityHistory.ts`): a logical entity's full
+  history is reconstructed by walking `TrackedEntity.renameHistory` to
+  collect every id it's ever had (a rename confirmation appends the prior
+  id onto the *surviving* record, so one lookup already carries the whole
+  chain), then collecting every `Change` across every `ChangeSet` matching
+  those ids, grouped by the `Release` each ChangeSet was folded into
+  (unreleased changes bucket separately). Entirely derived from data
+  already in `Project` — no new persisted index.
+- **Token dependency chains** (`shared/utils/tokenGraph.ts`): alias edges
+  (`TokenModeValue.aliasTo`, unioned across modes) and direct component
+  bindings (`ComponentSnapshot.tokens`) are both already-scanned data, so
+  the forward/reverse alias graph, "what's the blast radius of changing
+  this token" (`getTokenImpact`), and the downstream chain view
+  (`buildTokenDependencyChain`) are all pure computation with zero new
+  Figma calls. Real instance counts (vs. component names) are Phase 2 —
+  see below.
+- **Search** (`shared/utils/search.ts`): a flat index built from `Project`
+  on every render, substring-matched — deliberately not fuzzy/AI matching.
+
+### Deferred to Phase 2 / Phase 3
+
+Full instance-based impact analysis (an opt-in document-wide
+`findAllWithCriteria({types:["INSTANCE"]})` walk, since spec section 19
+explicitly rules out scanning the whole document on every change) and
+visual before/after component comparison (thumbnail capture via
+`node.exportAsync()` at baseline time) are intentionally not part of V2's
+first slice — both are real, separate scanning/storage subsystems. See the
+plan history for the detailed design.
