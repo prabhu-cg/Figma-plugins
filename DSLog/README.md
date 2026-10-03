@@ -84,6 +84,7 @@ src/
 │   └── main.ts          # shows the UI and routes messages to handlers/
 ├── ui/                # runs in the plugin iframe (React)
 │   ├── pages/            # Overview, Track, Changes, Releases, History, Settings
+│   │   └── history/      # one file per History tab (Releases, Components/Tokens, Deprecations, Compare)
 │   ├── components/
 │   ├── state/            # postMessage bridge + React context
 │   └── styles/
