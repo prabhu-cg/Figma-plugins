@@ -2,6 +2,21 @@
 TOKEN SYSTEM GENERATOR PRO — FIGMA COMMUNITY LISTING
 ================================================================================
 
+Where each section goes in Figma's publish form (Plugins > Manage plugins in
+development > Publish):
+  Step 1  Name, Tagline, Description (SHORT + FULL below), Category
+  Step 2  Icon: store-assets/icon-128.png (128 x 128)
+          Thumbnail: store-assets/cover-1920x1080.png (1920 x 1080)
+  Step 3  Data security: optional, see DATA SECURITY below
+  Step 4  Support contact: see SUPPORT below. Network access is read from the
+          manifest ("No access to network").
+Tags are listed in TAGS (Figma allows a handful; use the first five).
+
+
+NAME
+----
+Token System Generator Pro
+
 
 TAGLINE (keep to 100 characters)
 --------------------------------
@@ -11,14 +26,14 @@ Free design tokens for Figma: OKLCH color ramps, spacing, radius, type scale.  [
 SHORT DESCRIPTION
 -----------------
 Generate a complete design token system — colors, spacing, border radius, and
-typography — directly into Figma Variables in seconds. 100% free, forever.
+typography — directly into Figma Variables in seconds. Free on every Figma plan.
 
 
 FULL DESCRIPTION
 ----------------
 Token System Generator Pro is the fastest way to set up a professional, dev-
-ready design token system inside Figma — and it is completely free on every
-Figma plan, including Starter. No subscriptions, no paywalls, no feature locks.
+ready design token system inside Figma, and it is free on every Figma plan,
+including Starter.
 
 Design tokens are the foundation of any scalable design system. But building
 them by hand is slow, inconsistent, and painful. Token System Generator Pro
@@ -230,17 +245,45 @@ COMING SOON
 - One-click publish to Tokens Studio / W3C DTCG format
 
 
-TAGS (12 priority tags first; the rest are spare)
--------------------------------------------------
-design tokens, design system, variables, token generator, color ramp, oklch,
-typography, style dictionary, spacing, type scale, component tokens, color palette
+TAGS (use the first five; the rest are spare)
+---------------------------------------------
+design tokens, design system, variables, oklch, style dictionary
 
-Spare: design ops, variables API, token architecture, alias tokens, global
-tokens, primitive tokens, semantic tokens, border radius, design foundation
+Spare: token generator, color ramp, typography, spacing, type scale, component
+tokens, color palette, contrast checker, design ops, variables API
 
 
 CATEGORY
 --------
-Productivity / Design System Tools
+Design tools
+
+
+SUPPORT
+-------
+Support contact (required): https://github.com/prabhu-cg/Figma-plugins/issues
+Documentation: https://github.com/prabhu-cg/Figma-plugins/tree/main/Token%20System%20Generator%20Pro
+(Replace with an email address instead if you prefer; either is accepted.)
+
+
+DATA SECURITY AND PRIVACY (optional form, answers for reference)
+----------------------------------------------------------------
+- The plugin makes no network requests (manifest networkAccess is "none").
+- It collects, stores and sends no personal data and has no analytics.
+- It reads and writes only local variables, styles and, if you choose the
+  canvas option, one frame in the current file. It never reads your designs.
+- No third-party services, accounts or payments are involved.
+
+
+RELEASE NOTES (version 1.0)
+---------------------------
+First release. Generate a complete design token system as Figma Variables:
+OKLCH color ramps with a live preview and a contrast checker (WCAG and APCA),
+spacing, radius, border width, a typography scale with weights, paragraph
+spacing and an optional second font, plus optional elevation, opacity and
+z-index tokens. 2-tier or 3-tier structure, variable scopes and code syntax,
+an optional foundation drawn on the canvas, and a Style Dictionary compatible
+JSON export. Smart Convert turns existing paint and text styles into tokens.
+All-or-nothing generation: if anything fails, your file is left unchanged.
+
 
 ================================================================================

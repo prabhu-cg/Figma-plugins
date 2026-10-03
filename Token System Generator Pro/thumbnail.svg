@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 960"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"
   font-family="Inter, system-ui, -apple-system, sans-serif">
 
   <defs>
 
     <!-- Background gradient: warm dark -->
-    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="960" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="0" y1="0" x2="1920" y2="1080" gradientUnits="userSpaceOnUse">
       <stop offset="0%"   stop-color="#0D1117"/>
       <stop offset="100%" stop-color="#1A1A2A"/>
     </linearGradient>
@@ -47,7 +47,10 @@
 
 
   <!-- ─── Background ─── -->
-  <rect width="1920" height="960" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- Everything below is shifted down so the 1920x960 design sits centred in the 1920x1080 frame -->
+  <g transform="translate(0,60)">
   <ellipse cx="430" cy="360" rx="520" ry="430" fill="url(#glow)"/>
 
   <!-- Subtle concentric rings (depth) -->
@@ -165,7 +168,7 @@
   <text x="1030" y="183" fill="white" font-weight="800" font-size="23" text-anchor="middle" letter-spacing="1">FREE</text>
 
   <!-- FREE sub-label -->
-  <text x="1116" y="183" fill="#4ADE80" font-size="19" font-weight="500">100% · All Figma plans · No limits</text>
+  <text x="1116" y="183" fill="#4ADE80" font-size="19" font-weight="500">Free on every Figma plan</text>
 
   <!-- Main headline -->
   <text x="960" y="318" fill="white"   font-weight="800" font-size="98" letter-spacing="-2">Token System</text>
@@ -203,10 +206,12 @@
   <text x="1314" y="618" fill="#818CF8" font-size="17" font-weight="600" text-anchor="middle">JSON Export</text>
 
   <!-- Features line -->
-  <text x="960" y="682" fill="#475569" font-size="17" font-weight="500">Colors  ·  Spacing  ·  Typography  ·  2/3-Tier  ·  Collection-Aware JSON</text>
+  <text x="960" y="682" fill="#475569" font-size="17" font-weight="500">OKLCH ramps  ·  Contrast checker  ·  Elevation  ·  Scopes  ·  Collection-aware JSON</text>
 
+
+  </g>
 
   <!-- ─── Bottom accent bar ─── -->
-  <rect x="0" y="918" width="1920" height="42" fill="url(#accent-bar)" fill-opacity="0.50"/>
+  <rect x="0" y="1038" width="1920" height="42" fill="url(#accent-bar)" fill-opacity="0.50"/>
 
 </svg>
