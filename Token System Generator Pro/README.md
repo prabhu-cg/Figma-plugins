@@ -18,7 +18,7 @@ Token System Generator Pro creates production-ready Figma Variable collections f
 - **3-Tier** (Global → Alias → Component) — for complex systems with component-level tokens
 
 🎨 **What gets generated**
-- **Color ramps** — 10-stop (50–900) per brand color with semantic aliases (Primary, Secondary, Tertiary, Accent, Feedback)
+- **Color ramps** — 10-stop (50–900) per brand color with semantic aliases (Primary, Secondary, Tertiary, Accent, Feedback). Ramps are generated in [OKLCH](https://oklch.fyi/): stop 500 is exactly your color, every other stop keeps its hue and moves in perceptually even lightness steps, and chroma eases off toward the light and dark ends (gamut-mapped to sRGB)
 - **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios with font family binding
 - **Spacing scale** — 10-level scale from configurable base unit
 - **Border radius** — 7 semantic values (none → full circle)
@@ -171,13 +171,18 @@ Built with TypeScript + Figma Plugin API. No external dependencies.
 npm install
 npm run build          # Builds once
 npm run watch         # Auto-rebuilds on file changes
-npm run test          # Run test suite (algorithms only)
+npm test              # Algorithm tests + generation tests (incl. failure injection)
+npm run test:memory   # Repeated-run heap/state check
+npm run lint          # ESLint with the Figma plugin rules
 ```
 
 ### Project structure
 - `code.ts` — Figma plugin logic, token generation, variable management
 - `ui.html` — UI shell, form inputs, wizard screens, JSON display
-- `tests/algorithms.test.js` — Pure algorithm tests (color ramps, type scales)
+- `algorithms.ts` — Pure color/scale algorithms (OKLCH ramps, type, spacing); no Figma API
+- `tests/algorithms.test.js` — Algorithm tests (OKLCH conversions, ramps, type scales)
+- `tests/generation.test.js` + `tests/figma-mock.js` — Runs the real plugin against an in-memory Figma mock; checks failed runs leave the file unchanged
+- `tests/memory.test.js` — Heap and state check across hundreds of runs
 - `tsconfig.json` — TypeScript config (strict mode, ES2020 target)
 
 ## How to contribute

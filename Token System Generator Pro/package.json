@@ -10,15 +10,16 @@
     "watch": "esbuild code.ts --bundle --target=es2017 --outfile=code.js --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "pretest": "esbuild algorithms.ts --bundle --format=cjs --outfile=.test-build/algorithms.js && esbuild code.ts --bundle --target=es2017 --outfile=.test-build/code.js --log-level=warning",
-    "test": "node tests/algorithms.test.js && node tests/generation.test.js"
+    "test": "node tests/algorithms.test.js && node tests/generation.test.js",
+    "test:memory": "npm run pretest && node --expose-gc tests/memory.test.js"
   },
   "author": "",
   "license": "",
   "devDependencies": {
-    "@figma/eslint-plugin-figma-plugins": "*",
-    "@figma/plugin-typings": "*",
-    "@typescript-eslint/eslint-plugin": "^6.12.0",
-    "@typescript-eslint/parser": "^6.12.0",
+    "@figma/eslint-plugin-figma-plugins": "^1.0.0",
+    "@figma/plugin-typings": "^1.125.0",
+    "@typescript-eslint/eslint-plugin": "^8.71.0",
+    "@typescript-eslint/parser": "^8.71.0",
     "esbuild": "^0.28.2",
     "eslint": "^8.54.0",
     "typescript": "^5.3.2"

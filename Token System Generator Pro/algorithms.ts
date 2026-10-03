@@ -24,19 +24,66 @@ export function rgbToHsl(r: number, g: number, b: number): { h: number; s: numbe
   return { h, s, l };
 }
 
-export function hslToRgb(h: number, s: number, l: number): RGB {
-  if (s === 0) return { r: l, g: l, b: l };
-  const hue2rgb = (p: number, q: number, t: number): number => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  return { r: hue2rgb(p, q, h + 1 / 3), g: hue2rgb(p, q, h), b: hue2rgb(p, q, h - 1 / 3) };
+// ─── OKLCH ───────────────────────────────────────────────────────
+// OKLab/OKLCH (Björn Ottosson, 2020) is perceptually uniform: equal lightness steps look equal
+// across every hue, and changing hue or chroma doesn't shift perceived lightness the way HSL does.
+
+export interface Oklch { l: number; c: number; h: number } // l 0–1, c ≈ 0–0.4, h in degrees
+
+function srgbToLinear(v: number): number {
+  return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+}
+
+function linearToSrgb(v: number): number {
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+}
+
+export function rgbToOklch(r: number, g: number, b: number): Oklch {
+  const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
+  const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+  const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+  const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+  const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s;
+  const B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s;
+  const c = Math.sqrt(A * A + B * B);
+  const h = c < 1e-6 ? 0 : ((Math.atan2(B, A) * 180) / Math.PI + 360) % 360;
+  return { l: L, c, h };
+}
+
+// Linear-light sRGB for an OKLCH color; components fall outside 0–1 when it is out of gamut.
+function oklchToLinear(l: number, c: number, h: number): [number, number, number] {
+  const hr = (h * Math.PI) / 180;
+  const A = c * Math.cos(hr), B = c * Math.sin(hr);
+  const l_ = Math.pow(l + 0.3963377774 * A + 0.2158037573 * B, 3);
+  const m_ = Math.pow(l - 0.1055613458 * A - 0.0638541728 * B, 3);
+  const s_ = Math.pow(l - 0.0894841775 * A - 1.2914855480 * B, 3);
+  return [
+     4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+    -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+    -0.0041960863 * l_ - 0.7034186147 * m_ + 1.7076147010 * s_,
+  ];
+}
+
+const GAMUT_EPS = 1e-4;
+function inSrgbGamut(rgb: [number, number, number]): boolean {
+  return rgb.every(v => v >= -GAMUT_EPS && v <= 1 + GAMUT_EPS);
+}
+
+// Convert to sRGB. A color outside the gamut keeps its lightness and hue and loses only
+// as much chroma as it must, rather than being clipped per channel (which shifts the hue).
+export function oklchToRgb(l: number, c: number, h: number): RGB {
+  let lin = oklchToLinear(l, c, h);
+  if (!inSrgbGamut(lin)) {
+    let lo = 0, hi = c;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (inSrgbGamut(oklchToLinear(l, mid, h))) lo = mid; else hi = mid;
+    }
+    lin = oklchToLinear(l, lo, h);
+  }
+  const clamp = (v: number) => Math.min(1, Math.max(0, linearToSrgb(Math.min(1, Math.max(0, v)))));
+  return { r: clamp(lin[0]), g: clamp(lin[1]), b: clamp(lin[2]) };
 }
 
 export function rgbToHex(r: number, g: number, b: number): string {
@@ -59,27 +106,38 @@ export const STARTER_COLORS = {
   neutral:   '#6B7280',
 } as const;
 
+// How far each stop sits from stop 500 toward the lightest (50) or darkest (900) end, 0–1.
+// Lightness is interpolated in OKLCH, so each step is an equal perceptual distance.
+const LIGHT_SIDE: Partial<Record<RampStop, number>> = { 400: 0.25, 300: 0.50, 200: 0.72, 100: 0.88, 50: 1 };
+const DARK_SIDE:  Partial<Record<RampStop, number>> = { 600: 0.22, 700: 0.45, 800: 0.70, 900: 1 };
+const RAMP_L_MAX = 0.97;
+const RAMP_L_MIN = 0.24;
+
+// Chroma relative to the input color: full at 500, easing off toward both ends so tints stay
+// soft and shades stay rich instead of going neon or muddy.
+const CHROMA_CURVE: Record<RampStop, number> = {
+  50: 0.15, 100: 0.30, 200: 0.55, 300: 0.78, 400: 0.92, 500: 1,
+  600: 0.95, 700: 0.82, 800: 0.65, 900: 0.50,
+};
+
+// Stop 500 is exactly the input color. The other stops keep its hue and move only lightness
+// and chroma. Stops whose chroma doesn't fit in sRGB are gamut-mapped by reducing chroma.
 export function generateColorRamp(hex: string): Record<RampStop, RGB> {
   const rgb = hexToRgb(hex);
-  const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-
-  const lightnessMap: Record<RampStop, number> = {
-    50:  0.95, 100: 0.88, 200: 0.76, 300: 0.64, 400: 0.52,
-    500: hsl.l,
-    600: hsl.l * 0.78, 700: hsl.l * 0.58, 800: hsl.l * 0.40, 900: hsl.l * 0.24,
-  };
-  const satMap: Record<RampStop, number> = {
-    50:  hsl.s * 0.30, 100: hsl.s * 0.45, 200: hsl.s * 0.60,
-    300: hsl.s * 0.75, 400: hsl.s * 0.90, 500: hsl.s,
-    600: Math.min(1, hsl.s * 1.05), 700: Math.min(1, hsl.s * 1.10),
-    800: Math.min(1, hsl.s * 1.15), 900: Math.min(1, hsl.s * 1.20),
-  };
+  const base = rgbToOklch(rgb.r, rgb.g, rgb.b);
+  const achromatic = base.c < 0.004;
+  const top = Math.max(RAMP_L_MAX, base.l);
+  const bottom = Math.min(RAMP_L_MIN, base.l);
 
   const result = {} as Record<RampStop, RGB>;
   for (const stop of RAMP_STOPS) {
-    result[stop] = hslToRgb(hsl.h, satMap[stop], lightnessMap[stop]);
+    if (stop === 500) { result[stop] = rgb; continue; }
+    const light = LIGHT_SIDE[stop];
+    const l = light !== undefined
+      ? base.l + (top - base.l) * light
+      : base.l - (base.l - bottom) * (DARK_SIDE[stop] as number);
+    result[stop] = oklchToRgb(l, achromatic ? 0 : base.c * CHROMA_CURVE[stop], base.h);
   }
-  result[500] = rgb;
   return result;
 }
 
@@ -96,7 +154,7 @@ export const TS_RATIO: Record<string, number> = {
 export interface TypeLevel { name: string; fontSize: number; lineHeight: number; letterSpacing: number; }
 
 export function generateTypographyScale(fontBase: number, ratioKey: string): TypeLevel[] {
-  const ratio = TS_RATIO[ratioKey] ?? 1.25;
+  const ratio = Object.prototype.hasOwnProperty.call(TS_RATIO, ratioKey) ? TS_RATIO[ratioKey] : 1.25;
   const levels = [
     { name: 'display-lg', step: 10, lh: 1.0,  ls: -0.05 },
     { name: 'display-md', step:  9, lh: 1.0,  ls: -0.05 },

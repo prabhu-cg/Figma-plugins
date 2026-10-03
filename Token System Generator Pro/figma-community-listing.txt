@@ -28,7 +28,8 @@ Generator Pro has a mode for you.
 WHAT GETS GENERATED:
 
 Color system
-  - Full 10-stop color ramps (50 → 900) for every brand and semantic color
+  - Full 10-stop color ramps (50 → 900) for every brand and semantic color,
+    generated in OKLCH so lightness steps look even across every hue
   - Auto-named by hue family — e.g. cobalt/500, violet/200, emerald/300
   - Semantic alias tokens for interactive, secondary, accent, feedback states
     (info, success, error, warning)

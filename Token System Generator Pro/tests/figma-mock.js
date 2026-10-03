@@ -3,7 +3,7 @@
 const vm = require('vm');
 const fs = require('fs');
 
-function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {} } = {}) {
+function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {}, hooks = {} } = {}) {
   let nextId = 0;
   const state = { collections: [], variables: [], paintStyles: [], textStyles: [], messages: [], notes: [] };
   const counts = {};
@@ -11,12 +11,17 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
   const tick = (op) => {
     if (!armed) return;
     counts[op] = (counts[op] || 0) + 1;
+    if (hooks[op]) hooks[op](counts[op]);
     const f = faults[op];
     if (f === counts[op] || (Array.isArray(f) && f.includes(counts[op]))) throw new Error(`injected ${op} failure #${counts[op]}`);
   };
   let handler;
+  const listeners = {};
 
-  const makeVariable = (name, collectionId, type) => {
+  const makeVariable = (name, collection, type) => {
+    // dynamic-page: the collection must be passed as an object, not an id string
+    if (!collection || typeof collection !== 'object') throw new Error('createVariable needs a VariableCollection object');
+    const collectionId = collection.id;
     tick('createVariable');
     const v = {
       id: 'v' + nextId++, name, variableCollectionId: collectionId, resolvedType: type, valuesByMode: {},
@@ -61,35 +66,45 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
   // Seed pre-existing document content.
   collections.forEach(({ name, variables }) => {
     const c = makeCollection(name);
-    (variables || []).forEach(vn => { const v = makeVariable(vn, c.id, 'FLOAT'); v.setValueForMode(c.modes[0].modeId, 1); });
+    (variables || []).forEach(vn => { const v = makeVariable(vn, c, 'FLOAT'); v.setValueForMode(c.modes[0].modeId, 1); });
   });
   paintStyles.forEach(([name, r, g, b]) => { const s = makePaintStyle(); s.name = name; s.paints = [{ type: 'SOLID', color: { r, g, b } }]; });
   textStyles.forEach(([name, size]) => { const s = makeTextStyle(); s.name = name; s.fontSize = size; });
   armed = true;
 
+  // With "documentAccess": "dynamic-page" the synchronous getters throw, so the mock only has the async ones.
+  const syncRemoved = (name) => () => { throw new Error(`${name} is not available with documentAccess: dynamic-page`); };
   const figma = {
     showUI() {},
     notify(text) { state.notes.push(text); },
+    on(event, fn) { (listeners[event] = listeners[event] || []).push(fn); },
     ui: { postMessage(m) { state.messages.push(m); }, set onmessage(f) { handler = f; } },
     variables: {
       createVariableCollection: makeCollection,
       createVariable: makeVariable,
-      getLocalVariables: () => state.variables.slice(),
-      getLocalVariableCollections: () => state.collections.slice(),
+      getLocalVariablesAsync: async () => state.variables.slice(),
+      getLocalVariableCollectionsAsync: async () => state.collections.slice(),
+      getLocalVariables: syncRemoved('getLocalVariables'),
+      getLocalVariableCollections: syncRemoved('getLocalVariableCollections'),
     },
-    getLocalPaintStyles: () => state.paintStyles.slice(),
-    getLocalTextStyles: () => state.textStyles.slice(),
+    getLocalPaintStylesAsync: async () => state.paintStyles.slice(),
+    getLocalTextStylesAsync: async () => state.textStyles.slice(),
+    getLocalPaintStyles: syncRemoved('getLocalPaintStyles'),
+    getLocalTextStyles: syncRemoved('getLocalTextStyles'),
     createPaintStyle: makePaintStyle,
     createTextStyle: makeTextStyle,
     loadFontAsync: async (font) => { tick('loadFont'); if (font.family === 'Missing Font') throw new Error('font not found'); },
     listAvailableFontsAsync: async () => [],
   };
 
+  let ctx;
   const load = (bundlePath) => {
-    const ctx = { figma, __html__: '', console, setTimeout };
+    ctx = { figma, __html__: '', console, setTimeout };
     vm.createContext(ctx);
     vm.runInContext(fs.readFileSync(bundlePath, 'utf8'), ctx);
   };
+  const evalInPlugin = (code) => vm.runInContext(code, ctx);
+  const emit = (event) => (listeners[event] || []).forEach(fn => fn());
   const send = (msg) => handler(msg);
   const finished = () => new Promise(resolve => {
     const check = () => {
@@ -104,7 +119,7 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     paint: state.paintStyles.map(s => [s.name, JSON.stringify(s.paints)]).sort(),
     text: state.textStyles.map(s => [s.name, s.fontSize]).sort(),
   });
-  return { figma, state, counts, load, send, finished, snapshot };
+  return { figma, state, counts, load, send, finished, snapshot, evalInPlugin, emit };
 }
 
 module.exports = { createFigma };

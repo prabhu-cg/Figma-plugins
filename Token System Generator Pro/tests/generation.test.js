@@ -136,6 +136,98 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(fig.state.collections.some(c => c.name === '01 Global') && fig.state.collections.some(c => c.name === '02 Alias'), 'new collections missing');
   });
 
+  // ── Request validation ──
+  const scratchMsg = (over = {}) => ({
+    type: 'confirm-continue', approach: '2tier', mode: 'scratch', colors: COLORS,
+    spacingBase: 4, radiusBase: 4, widthBase: 1, fontBase: 16, ratioKey: 'major-third', fontFamily: 'Inter', ...over,
+  });
+  const BAD_REQUESTS = [
+    ['spacing of zero', { spacingBase: 0 }], ['huge spacing', { spacingBase: 1e9 }], ['fractional radius', { radiusBase: 2.5 }],
+    ['NaN width', { widthBase: NaN }], ['string font size', { fontBase: '16' }], ['tiny font size', { fontBase: 2 }],
+    ['unknown ratio', { ratioKey: 'constructor' }], ['missing font', { fontFamily: '' }],
+    ['unknown mode', { mode: 'nuke' }], ['unknown tier', { approach: '9tier' }],
+    ['invalid primary hex', { colors: { ...COLORS, primary: 'red' } }],
+    ['injected hex', { colors: { ...COLORS, accent: '#fff"><script>' } }],
+    ['missing colors', { colors: undefined }],
+  ];
+  for (const [label, over] of BAD_REQUESTS) {
+    await test(`rejects ${label} without touching the document`, async () => {
+      const fig = createFigma(EXISTING); fig.load(BUNDLE);
+      const before = fig.snapshot();
+      fig.send(scratchMsg(over));
+      const result = await fig.finished();
+      assert(result.type === 'generation-failed' && result.leftover === 0, `got ${result.type}`);
+      assert(fig.snapshot() === before, 'document changed');
+      assert(fig.counts.createCollection === undefined, 'started building before validating');
+    });
+  }
+
+  await test('optional semantic colors may be left blank', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    fig.send(scratchMsg({ colors: { ...COLORS, tertiary: '', info: '#', warning: undefined } }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-complete', `got ${result.type}: ${result.message}`);
+  });
+
+  // ── One run at a time ──
+  await test('a second request while one is running is ignored', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    const first = fig.send(scratchMsg());
+    const second = fig.send(scratchMsg());           // e.g. a double-click
+    await Promise.all([first, second]);
+    const done = fig.state.messages.filter(m => m.type === 'generation-complete');
+    assert(done.length === 1, `completed ${done.length} times`);
+    assert(fig.state.notes.some(n => /Still generating/.test(n)), 'no busy notice');
+    const names = fig.state.collections.map(c => c.name).sort();
+    assert(JSON.stringify(names) === JSON.stringify(['01 Global', '02 Alias']), `collections: ${names}`);
+  });
+
+  await test('the plugin can run again after a failed run', async () => {
+    const fig = createFigma({ ...EXISTING, faults: { createPaintStyle: 5 } }); fig.load(BUNDLE);
+    await fig.send(scratchMsg());
+    fig.state.messages.length = 0;
+    await fig.send(scratchMsg());
+    assert(fig.state.messages.some(m => m.type === 'generation-complete'), 'second run did not complete');
+  });
+
+  // ── Closing the plugin mid-build ──
+  await test('closing the plugin during the build removes everything staged so far', async () => {
+    let snapshotAtClose = null, before = null, fig;
+    const hooks = { createTextStyle: (n) => {
+      if (n !== 5) return;
+      fig.emit('close');                                   // Figma calls this, then stops the plugin
+      snapshotAtClose = fig.snapshot();
+      throw new Error('plugin terminated');                // the mock keeps running, so stop it here
+    } };
+    fig = createFigma({ ...EXISTING, hooks }); fig.load(BUNDLE);
+    before = fig.snapshot();
+    await fig.send(scratchMsg());
+    assert(snapshotAtClose === before, 'staged tokens were still in the file when the plugin closed');
+  });
+
+  // ── Hostile names in the file ──
+  await test('exporting a file with __proto__ / constructor variable names does not pollute Object.prototype', async () => {
+    const doc = { collections: [{ name: '__proto__', variables: ['__proto__/polluted', 'constructor/prototype/polluted2', 'a/__proto__/polluted3'] }] };
+    const fig = createFigma(doc); fig.load(BUNDLE);
+    await fig.send({ type: 'export-json' });
+    const out = fig.state.messages.find(m => m.type === 'export-ready');
+    assert(out, 'no export produced');
+    JSON.parse(out.json);
+    const leaked = fig.evalInPlugin('[({}).polluted, ({}).polluted2, ({}).polluted3].filter(v => v !== undefined).length');
+    assert(leaked === 0, 'Object.prototype was polluted');
+  });
+
+  await test('JSON export of a generated system is valid and resolves aliases', async () => {
+    const fig = createFigma(); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', approach: '3tier' }));
+    fig.state.messages.length = 0;
+    await fig.send({ type: 'export-json' });
+    const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
+    const refs = JSON.stringify(out).match(/\{[^{}"]+\}/g) || [];
+    assert(refs.length > 50, `only ${refs.length} alias references`);
+    assert(refs.every(r => /^\{[^.]+\.[^{}]+\}$/.test(r)), 'malformed alias reference');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

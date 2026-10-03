@@ -1,5 +1,25 @@
 "use strict";
 (() => {
+  var __defProp = Object.defineProperty;
+  var __defProps = Object.defineProperties;
+  var __getOwnPropDescs = Object.getOwnPropertyDescriptors;
+  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __propIsEnum = Object.prototype.propertyIsEnumerable;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __spreadValues = (a, b) => {
+    for (var prop in b || (b = {}))
+      if (__hasOwnProp.call(b, prop))
+        __defNormalProp(a, prop, b[prop]);
+    if (__getOwnPropSymbols)
+      for (var prop of __getOwnPropSymbols(b)) {
+        if (__propIsEnum.call(b, prop))
+          __defNormalProp(a, prop, b[prop]);
+      }
+    return a;
+  };
+  var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
+
   // algorithms.ts
   function hexToRgb(hex) {
     const c = hex.replace("#", "");
@@ -21,19 +41,53 @@
     else h = ((r - g) / d + 4) / 6;
     return { h, s, l };
   }
-  function hslToRgb(h, s, l) {
-    if (s === 0) return { r: l, g: l, b: l };
-    const hue2rgb = (p2, q2, t) => {
-      if (t < 0) t += 1;
-      if (t > 1) t -= 1;
-      if (t < 1 / 6) return p2 + (q2 - p2) * 6 * t;
-      if (t < 1 / 2) return q2;
-      if (t < 2 / 3) return p2 + (q2 - p2) * (2 / 3 - t) * 6;
-      return p2;
-    };
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    return { r: hue2rgb(p, q, h + 1 / 3), g: hue2rgb(p, q, h), b: hue2rgb(p, q, h - 1 / 3) };
+  function srgbToLinear(v) {
+    return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  }
+  function linearToSrgb(v) {
+    return v <= 31308e-7 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055;
+  }
+  function rgbToOklch(r, g, b) {
+    const lr = srgbToLinear(r), lg = srgbToLinear(g), lb = srgbToLinear(b);
+    const l = Math.cbrt(0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb);
+    const m = Math.cbrt(0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb);
+    const s = Math.cbrt(0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb);
+    const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+    const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+    const B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+    const c = Math.sqrt(A * A + B * B);
+    const h = c < 1e-6 ? 0 : (Math.atan2(B, A) * 180 / Math.PI + 360) % 360;
+    return { l: L, c, h };
+  }
+  function oklchToLinear(l, c, h) {
+    const hr = h * Math.PI / 180;
+    const A = c * Math.cos(hr), B = c * Math.sin(hr);
+    const l_ = Math.pow(l + 0.3963377774 * A + 0.2158037573 * B, 3);
+    const m_ = Math.pow(l - 0.1055613458 * A - 0.0638541728 * B, 3);
+    const s_ = Math.pow(l - 0.0894841775 * A - 1.291485548 * B, 3);
+    return [
+      4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+      -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+      -0.0041960863 * l_ - 0.7034186147 * m_ + 1.707614701 * s_
+    ];
+  }
+  var GAMUT_EPS = 1e-4;
+  function inSrgbGamut(rgb) {
+    return rgb.every((v) => v >= -GAMUT_EPS && v <= 1 + GAMUT_EPS);
+  }
+  function oklchToRgb(l, c, h) {
+    let lin = oklchToLinear(l, c, h);
+    if (!inSrgbGamut(lin)) {
+      let lo = 0, hi = c;
+      for (let i = 0; i < 24; i++) {
+        const mid = (lo + hi) / 2;
+        if (inSrgbGamut(oklchToLinear(l, mid, h))) lo = mid;
+        else hi = mid;
+      }
+      lin = oklchToLinear(l, lo, h);
+    }
+    const clamp = (v) => Math.min(1, Math.max(0, linearToSrgb(Math.min(1, Math.max(0, v)))));
+    return { r: clamp(lin[0]), g: clamp(lin[1]), b: clamp(lin[2]) };
   }
   var RAMP_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
   var STARTER_COLORS = {
@@ -47,38 +101,38 @@
     warning: "#F59E0B",
     neutral: "#6B7280"
   };
+  var LIGHT_SIDE = { 400: 0.25, 300: 0.5, 200: 0.72, 100: 0.88, 50: 1 };
+  var DARK_SIDE = { 600: 0.22, 700: 0.45, 800: 0.7, 900: 1 };
+  var RAMP_L_MAX = 0.97;
+  var RAMP_L_MIN = 0.24;
+  var CHROMA_CURVE = {
+    50: 0.15,
+    100: 0.3,
+    200: 0.55,
+    300: 0.78,
+    400: 0.92,
+    500: 1,
+    600: 0.95,
+    700: 0.82,
+    800: 0.65,
+    900: 0.5
+  };
   function generateColorRamp(hex) {
     const rgb = hexToRgb(hex);
-    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
-    const lightnessMap = {
-      50: 0.95,
-      100: 0.88,
-      200: 0.76,
-      300: 0.64,
-      400: 0.52,
-      500: hsl.l,
-      600: hsl.l * 0.78,
-      700: hsl.l * 0.58,
-      800: hsl.l * 0.4,
-      900: hsl.l * 0.24
-    };
-    const satMap = {
-      50: hsl.s * 0.3,
-      100: hsl.s * 0.45,
-      200: hsl.s * 0.6,
-      300: hsl.s * 0.75,
-      400: hsl.s * 0.9,
-      500: hsl.s,
-      600: Math.min(1, hsl.s * 1.05),
-      700: Math.min(1, hsl.s * 1.1),
-      800: Math.min(1, hsl.s * 1.15),
-      900: Math.min(1, hsl.s * 1.2)
-    };
+    const base = rgbToOklch(rgb.r, rgb.g, rgb.b);
+    const achromatic = base.c < 4e-3;
+    const top = Math.max(RAMP_L_MAX, base.l);
+    const bottom = Math.min(RAMP_L_MIN, base.l);
     const result = {};
     for (const stop of RAMP_STOPS) {
-      result[stop] = hslToRgb(hsl.h, satMap[stop], lightnessMap[stop]);
+      if (stop === 500) {
+        result[stop] = rgb;
+        continue;
+      }
+      const light = LIGHT_SIDE[stop];
+      const l = light !== void 0 ? base.l + (top - base.l) * light : base.l - (base.l - bottom) * DARK_SIDE[stop];
+      result[stop] = oklchToRgb(l, achromatic ? 0 : base.c * CHROMA_CURVE[stop], base.h);
     }
-    result[500] = rgb;
     return result;
   }
   var TS_RATIO = {
@@ -89,8 +143,7 @@
     "aug-fourth": 1.414
   };
   function generateTypographyScale(fontBase, ratioKey) {
-    var _a;
-    const ratio = (_a = TS_RATIO[ratioKey]) != null ? _a : 1.25;
+    const ratio = Object.prototype.hasOwnProperty.call(TS_RATIO, ratioKey) ? TS_RATIO[ratioKey] : 1.25;
     const levels = [
       { name: "display-lg", step: 10, lh: 1, ls: -0.05 },
       { name: "display-md", step: 9, lh: 1, ls: -0.05 },
@@ -179,7 +232,7 @@
     return Array.from(issues.entries()).map(([m, n]) => n > 1 ? `${m} (\xD7${n})` : m);
   }
   function createColor(collection, name, r, g, b) {
-    const v = figma.variables.createVariable(name, collection.id, "COLOR");
+    const v = figma.variables.createVariable(name, collection, "COLOR");
     v.setValueForMode(collection.modes[0].modeId, { r, g, b, a: 1 });
     return v;
   }
@@ -217,13 +270,13 @@
     staged.collections = [];
     return failed;
   }
-  function snapshotExisting(mode) {
+  async function snapshotExisting(mode) {
     return {
-      collections: figma.variables.getLocalVariableCollections(),
-      variables: figma.variables.getLocalVariables(),
+      collections: await figma.variables.getLocalVariableCollectionsAsync(),
+      variables: await figma.variables.getLocalVariablesAsync(),
       // Smart Convert reads the local styles, so they are kept.
-      paintStyles: mode === "convert" ? [] : figma.getLocalPaintStyles(),
-      textStyles: mode === "convert" ? [] : figma.getLocalTextStyles()
+      paintStyles: mode === "convert" ? [] : await figma.getLocalPaintStylesAsync(),
+      textStyles: mode === "convert" ? [] : await figma.getLocalTextStylesAsync()
     };
   }
   function commitStaged(old) {
@@ -291,37 +344,38 @@
     return style;
   }
   function createNumber(collection, name, value) {
-    const v = figma.variables.createVariable(name, collection.id, "FLOAT");
+    const v = figma.variables.createVariable(name, collection, "FLOAT");
     v.setValueForMode(collection.modes[0].modeId, value);
     return v;
   }
   function alias(collection, name, ref) {
     if (!ref) return;
-    const v = figma.variables.createVariable(name, collection.id, ref.resolvedType);
+    const v = figma.variables.createVariable(name, collection, ref.resolvedType);
     v.setValueForMode(collection.modes[0].modeId, { type: "VARIABLE_ALIAS", id: ref.id });
     return v;
   }
-  function tokensExist() {
-    return figma.variables.getLocalVariableCollections().length > 0;
+  async function tokensExist() {
+    return (await figma.variables.getLocalVariableCollectionsAsync()).length > 0;
   }
-  function describeExisting(mode) {
-    const vars = figma.variables.getLocalVariables();
+  async function describeExisting(mode) {
+    const vars = await figma.variables.getLocalVariablesAsync();
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
     return {
-      collections: figma.variables.getLocalVariableCollections().map((c) => ({
+      collections: collections.map((c) => ({
         name: c.name,
         variables: vars.filter((v) => v.variableCollectionId === c.id).length
       })),
       // Smart Convert reads the local styles, so they are kept.
-      paintStyles: mode === "convert" ? 0 : figma.getLocalPaintStyles().length,
-      textStyles: mode === "convert" ? 0 : figma.getLocalTextStyles().length
+      paintStyles: mode === "convert" ? 0 : (await figma.getLocalPaintStylesAsync()).length,
+      textStyles: mode === "convert" ? 0 : (await figma.getLocalTextStylesAsync()).length
     };
   }
   async function createStarterSystem(tier) {
     return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, "major-third", tier);
   }
-  function convertStylesToTokens(tier) {
-    const colorStyles = figma.getLocalPaintStyles();
-    const textStyles = figma.getLocalTextStyles();
+  async function convertStylesToTokens(tier) {
+    const colorStyles = await figma.getLocalPaintStylesAsync();
+    const textStyles = await figma.getLocalTextStylesAsync();
     if (colorStyles.length === 0 && textStyles.length === 0) {
       throw new Error("No local styles found to convert.");
     }
@@ -338,14 +392,14 @@
       const name = style.name.replace(/\s+/g, "-").toLowerCase();
       const match = name.match(/^(.+?)(-\d+)$/);
       const varName = match ? `color/${match[1]}/${match[2].substring(1)}` : `color/${name}`;
-      const v = figma.variables.createVariable(varName, global.id, "COLOR");
+      const v = figma.variables.createVariable(varName, global, "COLOR");
       v.setValueForMode(modeId, { r: paint.color.r, g: paint.color.g, b: paint.color.b, a: 1 });
       globalColors.push({ name, brightness: paint.color.r + paint.color.g + paint.color.b, variable: v });
     });
     if (globalColors.length === 0) {
       throw new Error("No solid color styles found to convert.");
     }
-    const allGlobalVars = figma.variables.getLocalVariables().filter((v) => v.variableCollectionId === global.id && v.name.startsWith("color/"));
+    const allGlobalVars = globalColors.map((c) => c.variable);
     const colorFamilies = /* @__PURE__ */ new Map();
     allGlobalVars.forEach((gVar) => {
       const parts = gVar.name.split("/");
@@ -366,12 +420,15 @@
     const accentFamily = sortedFamilies[sortedFamilies.length - 1];
     const darkestFamily = sortedFamilies[0];
     const lightestFamily = sortedFamilies[sortedFamilies.length - 1];
+    const aliasByName = /* @__PURE__ */ new Map();
     const aliasFamily = (family, role) => {
       if (!family) return;
       family[1].forEach((gVar) => {
         const suffix = gVar.name.substring(`color/${family[0]}`.length);
-        const a = figma.variables.createVariable(`${aliasColorRoot}/${role}${suffix}`, aliasCol.id, "COLOR");
+        const name = `${aliasColorRoot}/${role}${suffix}`;
+        const a = figma.variables.createVariable(name, aliasCol, "COLOR");
         a.setValueForMode(aliasModeId, { type: "VARIABLE_ALIAS", id: gVar.id });
+        if (!aliasByName.has(name)) aliasByName.set(name, a);
       });
     };
     aliasFamily(primaryFamily, "primary");
@@ -395,14 +452,13 @@
       alias(aliasCol, `text/${name}/letterSpacing`, ls);
       alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
     });
-    if (component) createComponentColorTokens(aliasCol, component, aliasColorRoot);
+    if (component) createComponentColorTokens(component, aliasByName, aliasColorRoot);
   }
-  function createComponentColorTokens(aliasCol, component, root) {
+  function createComponentColorTokens(component, aliasVars, root) {
     const modeId = component.modes[0].modeId;
-    const aliasVars = figma.variables.getLocalVariables().filter((v) => v.variableCollectionId === aliasCol.id);
-    const stop500 = (role) => aliasVars.find((v) => v.name === `${root}/${role}/500`);
+    const stop500 = (role) => aliasVars.get(`${root}/${role}/500`);
     const make = (name, target) => {
-      const v = figma.variables.createVariable(name, component.id, "COLOR");
+      const v = figma.variables.createVariable(name, component, "COLOR");
       v.setValueForMode(modeId, { type: "VARIABLE_ALIAS", id: target.id });
     };
     const primary = stop500("primary"), secondary = stop500("secondary");
@@ -473,7 +529,7 @@
   }
   function createTypographyVariables(global, fontBase, ratioKey, font) {
     const levels = generateTypographyScale(fontBase, ratioKey);
-    const fontFamily = figma.variables.createVariable("typography/font-family", global.id, "STRING");
+    const fontFamily = figma.variables.createVariable("typography/font-family", global, "STRING");
     fontFamily.setValueForMode(global.modes[0].modeId, font);
     const fontSize = {};
     const lineHeight = {};
@@ -593,110 +649,89 @@
     createPaintStyles(global, ramps, brandNames);
     if (tier === "3tier") createComponentCollection(colorAliases);
   }
-  function exportVariablesToJSON() {
-    const collections = figma.variables.getLocalVariableCollections();
-    const allVars = figma.variables.getLocalVariables();
-    const result = {};
+  var newNode = () => /* @__PURE__ */ Object.create(null);
+  var childNode = (parent, key) => {
+    if (!Object.prototype.hasOwnProperty.call(parent, key)) parent[key] = newNode();
+    return parent[key];
+  };
+  async function exportVariablesToJSON() {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const allVars = await figma.variables.getLocalVariablesAsync();
+    const result = newNode();
     const toCamelCase = (str) => str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
     const colorToHex = (c) => {
       const h = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
       return `#${h(c.r)}${h(c.g)}${h(c.b)}`.toUpperCase();
     };
-    const varLookup = /* @__PURE__ */ new Map();
+    const collectionById = /* @__PURE__ */ new Map();
     const collectionNames = /* @__PURE__ */ new Map();
     collections.forEach((col) => {
+      collectionById.set(col.id, col);
       collectionNames.set(col.id, toCamelCase(col.name));
     });
+    const varTokens = /* @__PURE__ */ new Map();
     allVars.forEach((v) => {
       const colName = collectionNames.get(v.variableCollectionId) || "unknown";
-      const token = v.name.split("/").map((p) => toCamelCase(p)).join(".");
-      varLookup.set(v.id, { name: v.name, collectionName: colName, token: `${colName}.${token}` });
+      varTokens.set(v.id, `${colName}.${v.name.split("/").map((p) => toCamelCase(p)).join(".")}`);
     });
-    const typographyGroupsByCollection = /* @__PURE__ */ new Map();
+    const isTypographyPart = (name) => name.includes("/fontSize/") || name.includes("/lineHeight/") || name.includes("/letterSpacing/");
+    const typographyByCollection = /* @__PURE__ */ new Map();
     allVars.forEach((v) => {
       var _a;
-      if (v.name.includes("/fontSize/") || v.name.includes("/lineHeight/") || v.name.includes("/letterSpacing/")) {
-        const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
-        if (match) {
-          const colId = v.variableCollectionId;
-          const colName = collectionNames.get(colId) || "unknown";
-          const baseKey = match[1];
-          if (!typographyGroupsByCollection.has(colName)) {
-            typographyGroupsByCollection.set(colName, /* @__PURE__ */ new Map());
-          }
-          const groupMap = typographyGroupsByCollection.get(colName);
-          if (!groupMap.has(baseKey)) groupMap.set(baseKey, {});
-          const mode = (_a = figma.variables.getLocalVariableCollections().find((c) => c.id === colId)) == null ? void 0 : _a.modes[0];
-          if (mode) {
-            const val = v.valuesByMode[mode.modeId];
-            const group = groupMap.get(baseKey);
-            if (match[2] === "fontSize") group.fontSize = val;
-            else if (match[2] === "lineHeight") group.lineHeight = val;
-            else if (match[2] === "letterSpacing") group.letterSpacing = val;
-          }
-        }
-      }
+      if (!isTypographyPart(v.name)) return;
+      const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
+      if (!match) return;
+      const colName = collectionNames.get(v.variableCollectionId) || "unknown";
+      if (!typographyByCollection.has(colName)) typographyByCollection.set(colName, /* @__PURE__ */ new Map());
+      const groups = typographyByCollection.get(colName);
+      if (!groups.has(match[1])) groups.set(match[1], {});
+      const mode = (_a = collectionById.get(v.variableCollectionId)) == null ? void 0 : _a.modes[0];
+      if (mode) groups.get(match[1])[match[2]] = v.valuesByMode[mode.modeId];
     });
     collections.forEach((col) => {
+      var _a;
       const colName = toCamelCase(col.name);
-      const colResult = {};
-      const vars = allVars.filter((v) => v.variableCollectionId === col.id);
+      const colResult = childNode(result, colName);
       const mode = col.modes[0];
-      vars.forEach((v) => {
-        if (v.name.includes("/fontSize/") || v.name.includes("/lineHeight/") || v.name.includes("/letterSpacing/")) {
-          return;
-        }
+      allVars.filter((v) => v.variableCollectionId === col.id).forEach((v) => {
+        if (isTypographyPart(v.name)) return;
         const val = v.valuesByMode[mode.modeId];
         const parts = v.name.split("/");
         let current = colResult;
-        for (let i = 0; i < parts.length - 1; i++) {
-          const key = toCamelCase(parts[i]);
-          if (!current[key]) current[key] = {};
-          current = current[key];
-        }
-        const lastKey = toCamelCase(parts[parts.length - 1]);
+        for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
         let type = "unknown";
         let value = val;
-        if (v.resolvedType === "COLOR" && val && typeof val === "object" && val.r !== void 0) {
+        if (v.resolvedType === "COLOR" && val && typeof val === "object" && "r" in val) {
           value = colorToHex(val);
           type = "color";
-        } else if (typeof val === "object" && val.type === "VARIABLE_ALIAS") {
-          const aliasId = val.id;
-          const aliasVar = varLookup.get(aliasId);
-          if (aliasVar) {
-            value = `{${aliasVar.token}}`;
+        } else if (val && typeof val === "object" && val.type === "VARIABLE_ALIAS") {
+          const token = varTokens.get(val.id);
+          if (token) {
+            value = `{${token}}`;
             type = "color";
           }
         } else if (v.resolvedType === "FLOAT") {
-          value = val;
           type = "dimension";
         }
-        current[lastKey] = { value, type };
+        current[toCamelCase(parts[parts.length - 1])] = { value, type };
       });
-      const typographyGroups = typographyGroupsByCollection.get(colName);
-      if (typographyGroups) {
-        typographyGroups.forEach((group, name) => {
-          var _a, _b;
-          if (group.fontSize !== void 0) {
-            if (!colResult["text"]) colResult["text"] = {};
-            const textObj = colResult["text"];
-            textObj[name] = {
-              value: {
-                fontSize: group.fontSize,
-                lineHeight: (_a = group.lineHeight) != null ? _a : group.fontSize * 1.4,
-                letterSpacing: (_b = group.letterSpacing) != null ? _b : 0
-              },
-              type: "typography"
-            };
-          }
-        });
-      }
-      result[colName] = colResult;
+      (_a = typographyByCollection.get(colName)) == null ? void 0 : _a.forEach((group, name) => {
+        var _a2, _b;
+        if (group.fontSize === void 0) return;
+        childNode(colResult, "text")[name] = {
+          value: {
+            fontSize: group.fontSize,
+            lineHeight: (_a2 = group.lineHeight) != null ? _a2 : group.fontSize * 1.4,
+            letterSpacing: (_b = group.letterSpacing) != null ? _b : 0
+          },
+          type: "typography"
+        };
+      });
     });
     return JSON.stringify(result, null, 2);
   }
-  function blockedReason(mode) {
-    if (mode === "convert" && figma.getLocalPaintStyles().length === 0 && figma.getLocalTextStyles().length === 0) {
+  async function blockedReason(mode) {
+    if (mode === "convert" && (await figma.getLocalPaintStylesAsync()).length === 0 && (await figma.getLocalTextStylesAsync()).length === 0) {
       return "No local color or text styles found. Smart Convert needs styles to convert, so nothing was changed.";
     }
     return null;
@@ -720,26 +755,26 @@
     }
   }
   async function runGeneration(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily) {
-    const blocked = blockedReason(mode);
+    const blocked = await blockedReason(mode);
     if (blocked) {
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
-    if (tokensExist()) {
-      figma.ui.postMessage({ type: "confirm-replace", existing: describeExisting(mode) });
+    if (await tokensExist()) {
+      figma.ui.postMessage({ type: "confirm-replace", existing: await describeExisting(mode) });
       return;
     }
     await generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
   }
   async function generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily) {
     var _a;
-    const blocked = blockedReason(mode);
+    const blocked = await blockedReason(mode);
     if (blocked) {
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
     issues.clear();
-    const old = snapshotExisting(mode);
+    const old = await snapshotExisting(mode);
     const tier = approach === "3tier" ? "3tier" : "2tier";
     try {
       if (mode === "scratch") {
@@ -756,7 +791,7 @@
       } else if (mode === "starter") {
         await createStarterSystem(tier);
       } else if (mode === "convert") {
-        convertStylesToTokens(tier);
+        await convertStylesToTokens(tier);
       }
     } catch (e) {
       const leftover = rollbackStaged();
@@ -766,37 +801,105 @@
     commitStaged(old);
     let json = "";
     try {
-      json = exportVariablesToJSON();
+      json = await exportVariablesToJSON();
     } catch (_e) {
       warn(`Tokens were created, but the JSON export failed. Use Refresh JSON to retry.`);
     }
-    const total = figma.variables.getLocalVariables().length;
-    const cols = figma.variables.getLocalVariableCollections().length;
+    const total = (await figma.variables.getLocalVariablesAsync()).length;
+    const cols = (await figma.variables.getLocalVariableCollectionsAsync()).length;
     const warnings = collectIssues();
     figma.notify(warnings.length ? `\u26A0\uFE0F Done with ${warnings.length} warning${warnings.length > 1 ? "s" : ""}` : "\u2705 Done!");
     figma.ui.postMessage({ type: "generation-complete", json, total, cols, warnings });
   }
-  figma.ui.onmessage = async (msg) => {
-    if (msg.type === "generate") {
-      runSafely(() => runGeneration(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
+  var LIMITS = {
+    spacingBase: { min: 1, max: 32, label: "Spacing base unit" },
+    radiusBase: { min: 0, max: 64, label: "Border radius base" },
+    widthBase: { min: 1, max: 16, label: "Border width base" },
+    fontBase: { min: 10, max: 24, label: "Base font size" }
+  };
+  function intInRange(value, key) {
+    const { min, max, label } = LIMITS[key];
+    if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
+      throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
     }
-    if (msg.type === "confirm-continue") {
-      runSafely(() => generate(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
+    return value;
+  }
+  function parseRequest(msg) {
+    if (msg.approach !== "2tier" && msg.approach !== "3tier") throw new Error("Unknown architecture.");
+    if (msg.mode !== "scratch" && msg.mode !== "starter" && msg.mode !== "convert") throw new Error("Unknown mode.");
+    const request = { approach: msg.approach, mode: msg.mode };
+    if (msg.mode !== "scratch") return request;
+    const raw = msg.colors;
+    if (!raw || typeof raw !== "object") throw new Error("Brand colors are missing.");
+    const colors = {};
+    for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+      const hex = raw[key];
+      const required = key === "primary" || key === "secondary" || key === "accent";
+      if (typeof hex === "string" && HEX_RE.test(hex)) colors[key] = hex;
+      else if (!required && (hex === void 0 || hex === "" || hex === "#")) colors[key] = "";
+      else throw new Error(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
+    }
+    if (typeof msg.ratioKey !== "string" || !Object.prototype.hasOwnProperty.call(TS_RATIO, msg.ratioKey)) {
+      throw new Error("Unknown type scale ratio.");
+    }
+    if (typeof msg.fontFamily !== "string" || !msg.fontFamily || msg.fontFamily.length > 200) {
+      throw new Error("Choose a font family.");
+    }
+    return __spreadProps(__spreadValues({}, request), {
+      colors,
+      spacingBase: intInRange(msg.spacingBase, "spacingBase"),
+      radiusBase: intInRange(msg.radiusBase, "radiusBase"),
+      widthBase: intInRange(msg.widthBase, "widthBase"),
+      fontBase: intInRange(msg.fontBase, "fontBase"),
+      ratioKey: msg.ratioKey,
+      fontFamily: msg.fontFamily
+    });
+  }
+  var generating = false;
+  async function exclusive(run) {
+    if (generating) {
+      figma.notify("\u23F3 Still generating \u2014 please wait");
+      return;
+    }
+    generating = true;
+    figma.ui.postMessage({ type: "generation-started" });
+    try {
+      await run();
+    } finally {
+      generating = false;
+    }
+  }
+  figma.on("close", () => {
+    if (generating) rollbackStaged();
+  });
+  figma.ui.onmessage = async (msg) => {
+    var _a;
+    if (msg.type === "generate" || msg.type === "confirm-continue") {
+      await exclusive(() => runSafely(async () => {
+        const r = parseRequest(msg);
+        const args = [r.approach, r.mode, r.colors, r.spacingBase, r.radiusBase, r.widthBase, r.fontBase, r.ratioKey, r.fontFamily];
+        if (msg.type === "generate") await runGeneration(...args);
+        else await generate(...args);
+      }));
     }
     if (msg.type === "export-json") {
-      if (!tokensExist()) {
+      if (!await tokensExist()) {
         figma.notify("\u26A0\uFE0F No variables found \u2014 generate tokens first");
         return;
       }
-      const json = exportVariablesToJSON();
-      const total = figma.variables.getLocalVariables().length;
-      const cols = figma.variables.getLocalVariableCollections().length;
-      figma.ui.postMessage({ type: "export-ready", json, total, cols });
+      try {
+        const json = await exportVariablesToJSON();
+        const total = (await figma.variables.getLocalVariablesAsync()).length;
+        const cols = (await figma.variables.getLocalVariableCollectionsAsync()).length;
+        figma.ui.postMessage({ type: "export-ready", json, total, cols });
+      } catch (e) {
+        figma.notify(`\u274C Export failed: ${(_a = e == null ? void 0 : e.message) != null ? _a : String(e)}`, { error: true });
+      }
     }
     if (msg.type === "check-tokens") {
-      const exists = tokensExist();
-      const total = exists ? figma.variables.getLocalVariables().length : 0;
-      const cols = exists ? figma.variables.getLocalVariableCollections().length : 0;
+      const exists = await tokensExist();
+      const total = exists ? (await figma.variables.getLocalVariablesAsync()).length : 0;
+      const cols = exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0;
       figma.ui.postMessage({ type: "tokens-status", exists, total, cols });
     }
     if (msg.type === "get-fonts") {

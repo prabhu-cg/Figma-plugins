@@ -1,7 +1,7 @@
 import {
-  RampStop, RAMP_STOPS, STARTER_COLORS, TypeLevel, RGB,
-  hexToRgb, rgbToHsl, hslToRgb, rgbToHex, generateColorRamp, generateTypographyScale,
-  generateSpacingScale, generateRadiusScale, generateBorderWidthScale, getColorName,
+  RAMP_STOPS, STARTER_COLORS, TypeLevel, TS_RATIO,
+  generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
+  generateBorderWidthScale, getColorName,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -34,7 +34,7 @@ function createColor(
   name: string,
   r: number, g: number, b: number
 ): Variable {
-  const v = figma.variables.createVariable(name, collection.id, 'COLOR');
+  const v = figma.variables.createVariable(name, collection, 'COLOR');
   v.setValueForMode(collection.modes[0].modeId, { r, g, b, a: 1 });
   return v;
 }
@@ -84,13 +84,13 @@ interface ExistingTokens {
   textStyles: TextStyle[];
 }
 
-function snapshotExisting(mode: string): ExistingTokens {
+async function snapshotExisting(mode: string): Promise<ExistingTokens> {
   return {
-    collections: figma.variables.getLocalVariableCollections(),
-    variables:   figma.variables.getLocalVariables(),
+    collections: await figma.variables.getLocalVariableCollectionsAsync(),
+    variables:   await figma.variables.getLocalVariablesAsync(),
     // Smart Convert reads the local styles, so they are kept.
-    paintStyles: mode === 'convert' ? [] : figma.getLocalPaintStyles(),
-    textStyles:  mode === 'convert' ? [] : figma.getLocalTextStyles(),
+    paintStyles: mode === 'convert' ? [] : await figma.getLocalPaintStylesAsync(),
+    textStyles:  mode === 'convert' ? [] : await figma.getLocalTextStylesAsync(),
   };
 }
 
@@ -148,7 +148,7 @@ function createNumber(
   name: string,
   value: number
 ): Variable {
-  const v = figma.variables.createVariable(name, collection.id, 'FLOAT');
+  const v = figma.variables.createVariable(name, collection, 'FLOAT');
   v.setValueForMode(collection.modes[0].modeId, value);
   return v;
 }
@@ -159,30 +159,31 @@ function alias(
   ref: Variable | undefined
 ): Variable | undefined {
   if (!ref) return;
-  const v = figma.variables.createVariable(name, collection.id, ref.resolvedType);
+  const v = figma.variables.createVariable(name, collection, ref.resolvedType);
   v.setValueForMode(collection.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: ref.id });
   return v;
 }
 
-function tokensExist(): boolean {
-  return figma.variables.getLocalVariableCollections().length > 0;
+async function tokensExist(): Promise<boolean> {
+  return (await figma.variables.getLocalVariableCollectionsAsync()).length > 0;
 }
 
 // What a replace would delete, so the UI can show it before the user confirms.
-function describeExisting(mode: string): {
+async function describeExisting(mode: string): Promise<{
   collections: { name: string; variables: number }[];
   paintStyles: number;
   textStyles: number;
-} {
-  const vars = figma.variables.getLocalVariables();
+}> {
+  const vars = await figma.variables.getLocalVariablesAsync();
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
   return {
-    collections: figma.variables.getLocalVariableCollections().map(c => ({
+    collections: collections.map(c => ({
       name: c.name,
       variables: vars.filter(v => v.variableCollectionId === c.id).length,
     })),
     // Smart Convert reads the local styles, so they are kept.
-    paintStyles: mode === 'convert' ? 0 : figma.getLocalPaintStyles().length,
-    textStyles:  mode === 'convert' ? 0 : figma.getLocalTextStyles().length,
+    paintStyles: mode === 'convert' ? 0 : (await figma.getLocalPaintStylesAsync()).length,
+    textStyles:  mode === 'convert' ? 0 : (await figma.getLocalTextStylesAsync()).length,
   };
 }
 
@@ -197,9 +198,9 @@ async function createStarterSystem(tier: Tier): Promise<void> {
 // Smart Convert reads the local paint/text styles and rebuilds them as variables.
 // 3-tier adds a Component collection and names the alias colors `colors/…`;
 // 2-tier names them `color/…`. Both names are kept so existing output doesn't change.
-function convertStylesToTokens(tier: Tier): void {
-  const colorStyles = figma.getLocalPaintStyles();
-  const textStyles  = figma.getLocalTextStyles();
+async function convertStylesToTokens(tier: Tier): Promise<void> {
+  const colorStyles = await figma.getLocalPaintStylesAsync();
+  const textStyles  = await figma.getLocalTextStylesAsync();
   if (colorStyles.length === 0 && textStyles.length === 0) {
     throw new Error('No local styles found to convert.');
   }
@@ -220,7 +221,7 @@ function convertStylesToTokens(tier: Tier): void {
     // Parse "color-50" into "color" and "50" to create "color/color/50"
     const match = name.match(/^(.+?)(-\d+)$/);
     const varName = match ? `color/${match[1]}/${match[2].substring(1)}` : `color/${name}`;
-    const v = figma.variables.createVariable(varName, global.id, 'COLOR');
+    const v = figma.variables.createVariable(varName, global, 'COLOR');
     v.setValueForMode(modeId, { r: paint.color.r, g: paint.color.g, b: paint.color.b, a: 1 });
     globalColors.push({ name, brightness: paint.color.r + paint.color.g + paint.color.b, variable: v });
   });
@@ -229,8 +230,8 @@ function convertStylesToTokens(tier: Tier): void {
     throw new Error('No solid color styles found to convert.');
   }
 
-  const allGlobalVars = figma.variables.getLocalVariables()
-    .filter(v => v.variableCollectionId === global.id && v.name.startsWith('color/'));
+  // Every variable created above lives under color/, in creation order.
+  const allGlobalVars = globalColors.map(c => c.variable);
 
   // Group "color/red/50", "color/red/100", … by family ("red")
   const colorFamilies = new Map<string, Variable[]>();
@@ -258,12 +259,15 @@ function convertStylesToTokens(tier: Tier): void {
   const lightestFamily  = sortedFamilies[sortedFamilies.length - 1];
 
   // Alias every stop of a global color family under `<root>/<role>/<stop>`.
+  const aliasByName = new Map<string, Variable>();
   const aliasFamily = (family: Family | undefined, role: string): void => {
     if (!family) return;
     family[1].forEach(gVar => {
       const suffix = gVar.name.substring(`color/${family[0]}`.length);
-      const a = figma.variables.createVariable(`${aliasColorRoot}/${role}${suffix}`, aliasCol.id, 'COLOR');
+      const name = `${aliasColorRoot}/${role}${suffix}`;
+      const a = figma.variables.createVariable(name, aliasCol, 'COLOR');
       a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
+      if (!aliasByName.has(name)) aliasByName.set(name, a);
     });
   };
 
@@ -296,16 +300,15 @@ function convertStylesToTokens(tier: Tier): void {
     alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
   });
 
-  if (component) createComponentColorTokens(aliasCol, component, aliasColorRoot);
+  if (component) createComponentColorTokens(component, aliasByName, aliasColorRoot);
 }
 
 // Component-tier color tokens that point at the 500 stop of each alias role.
-function createComponentColorTokens(aliasCol: VariableCollection, component: VariableCollection, root: string): void {
+function createComponentColorTokens(component: VariableCollection, aliasVars: Map<string, Variable>, root: string): void {
   const modeId = component.modes[0].modeId;
-  const aliasVars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === aliasCol.id);
-  const stop500 = (role: string) => aliasVars.find(v => v.name === `${root}/${role}/500`);
+  const stop500 = (role: string) => aliasVars.get(`${root}/${role}/500`);
   const make = (name: string, target: Variable): void => {
-    const v = figma.variables.createVariable(name, component.id, 'COLOR');
+    const v = figma.variables.createVariable(name, component, 'COLOR');
     v.setValueForMode(modeId, { type: 'VARIABLE_ALIAS', id: target.id });
   };
 
@@ -415,7 +418,7 @@ function createTypographyVariables(
   font: string
 ): TypographyVars {
   const levels = generateTypographyScale(fontBase, ratioKey);
-  const fontFamily = figma.variables.createVariable('typography/font-family', global.id, 'STRING');
+  const fontFamily = figma.variables.createVariable('typography/font-family', global, 'STRING');
   fontFamily.setValueForMode(global.modes[0].modeId, font);
 
   const fontSize: Record<string, Variable> = {};
@@ -579,127 +582,96 @@ async function buildFromScratch(
 
 // ─── JSON EXPORT ─────────────────────────────────────────────────
 
-function exportVariablesToJSON(): string {
-  const collections = figma.variables.getLocalVariableCollections();
-  const allVars = figma.variables.getLocalVariables();
-  const result: { [key: string]: unknown } = {};
+// Token trees are keyed by names that come from the file (variable and collection names), so
+// they use prototype-less objects: a variable called "__proto__" is then just another key.
+type TokenNode = { [key: string]: unknown };
+const newNode = (): TokenNode => Object.create(null) as TokenNode;
+const childNode = (parent: TokenNode, key: string): TokenNode => {
+  if (!Object.prototype.hasOwnProperty.call(parent, key)) parent[key] = newNode();
+  return parent[key] as TokenNode;
+};
+
+async function exportVariablesToJSON(): Promise<string> {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const allVars = await figma.variables.getLocalVariablesAsync();
+  const result = newNode();
   const toCamelCase = (str: string) => str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
   const colorToHex = (c: { r: number; g: number; b: number }) => {
     const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
     return `#${h(c.r)}${h(c.g)}${h(c.b)}`.toUpperCase();
   };
 
-  // Build lookup map: varId -> { name, collectionName, token }
-  const varLookup = new Map<string, { name: string; collectionName: string; token: string }>();
+  const collectionById = new Map<string, VariableCollection>();
   const collectionNames = new Map<string, string>();
-
   collections.forEach(col => {
+    collectionById.set(col.id, col);
     collectionNames.set(col.id, toCamelCase(col.name));
   });
 
+  // Lookup for resolving aliases: varId -> "collection.path.to.token"
+  const varTokens = new Map<string, string>();
   allVars.forEach(v => {
     const colName = collectionNames.get(v.variableCollectionId) || 'unknown';
-    const token = v.name.split('/').map(p => toCamelCase(p)).join('.');
-    varLookup.set(v.id, { name: v.name, collectionName: colName, token: `${colName}.${token}` });
+    varTokens.set(v.id, `${colName}.${v.name.split('/').map(p => toCamelCase(p)).join('.')}`);
   });
 
-  // Process typography groups per collection
-  const typographyGroupsByCollection = new Map<string, Map<string, { fontSize?: number; lineHeight?: number; letterSpacing?: number }>>();
+  const isTypographyPart = (name: string) =>
+    name.includes('/fontSize/') || name.includes('/lineHeight/') || name.includes('/letterSpacing/');
 
+  // Typography groups per collection: text/<level>/{fontSize,lineHeight,letterSpacing}
+  type TypeParts = { fontSize?: number; lineHeight?: number; letterSpacing?: number };
+  const typographyByCollection = new Map<string, Map<string, TypeParts>>();
   allVars.forEach(v => {
-    if (v.name.includes('/fontSize/') || v.name.includes('/lineHeight/') || v.name.includes('/letterSpacing/')) {
-      const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
-      if (match) {
-        const colId = v.variableCollectionId;
-        const colName = collectionNames.get(colId) || 'unknown';
-        const baseKey = match[1];
-
-        if (!typographyGroupsByCollection.has(colName)) {
-          typographyGroupsByCollection.set(colName, new Map());
-        }
-
-        const groupMap = typographyGroupsByCollection.get(colName)!;
-        if (!groupMap.has(baseKey)) groupMap.set(baseKey, {});
-
-        const mode = figma.variables.getLocalVariableCollections().find(c => c.id === colId)?.modes[0];
-        if (mode) {
-          const val = v.valuesByMode[mode.modeId];
-          const group = groupMap.get(baseKey)!;
-          if (match[2] === 'fontSize') group.fontSize = val as number;
-          else if (match[2] === 'lineHeight') group.lineHeight = val as number;
-          else if (match[2] === 'letterSpacing') group.letterSpacing = val as number;
-        }
-      }
-    }
+    if (!isTypographyPart(v.name)) return;
+    const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
+    if (!match) return;
+    const colName = collectionNames.get(v.variableCollectionId) || 'unknown';
+    if (!typographyByCollection.has(colName)) typographyByCollection.set(colName, new Map());
+    const groups = typographyByCollection.get(colName)!;
+    if (!groups.has(match[1])) groups.set(match[1], {});
+    const mode = collectionById.get(v.variableCollectionId)?.modes[0];
+    if (mode) groups.get(match[1])![match[2] as keyof TypeParts] = v.valuesByMode[mode.modeId] as number;
   });
 
-  // Process collections
   collections.forEach(col => {
     const colName = toCamelCase(col.name);
-    const colResult: { [key: string]: unknown } = {};
-    const vars = allVars.filter(v => v.variableCollectionId === col.id);
+    const colResult = childNode(result, colName);
     const mode = col.modes[0];
 
-    vars.forEach(v => {
-      // Skip individual typography components (handled as groups)
-      if (v.name.includes('/fontSize/') || v.name.includes('/lineHeight/') || v.name.includes('/letterSpacing/')) {
-        return;
-      }
+    allVars.filter(v => v.variableCollectionId === col.id).forEach(v => {
+      // Typography parts are emitted as composite tokens below
+      if (isTypographyPart(v.name)) return;
 
       const val = v.valuesByMode[mode.modeId];
       const parts = v.name.split('/');
-      let current: any = colResult;
+      let current = colResult;
+      for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
 
-      // Navigate/create nested structure within collection
-      for (let i = 0; i < parts.length - 1; i++) {
-        const key = toCamelCase(parts[i]);
-        if (!current[key]) current[key] = {};
-        current = current[key];
-      }
-
-      const lastKey = toCamelCase(parts[parts.length - 1]);
       let type = 'unknown';
-      let value: any = val;
-
-      if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && (val as any).r !== undefined) {
-        value = colorToHex(val as any);
+      let value: unknown = val;
+      if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
+        value = colorToHex(val as { r: number; g: number; b: number });
         type = 'color';
-      } else if (typeof val === 'object' && (val as any).type === 'VARIABLE_ALIAS') {
-        // Resolve alias to {collection.path.to.token} format
-        const aliasId = (val as any).id;
-        const aliasVar = varLookup.get(aliasId);
-        if (aliasVar) {
-          value = `{${aliasVar.token}}`;
-          type = 'color';
-        }
+      } else if (val && typeof val === 'object' && (val as { type?: string }).type === 'VARIABLE_ALIAS') {
+        const token = varTokens.get((val as { id: string }).id);
+        if (token) { value = `{${token}}`; type = 'color'; }
       } else if (v.resolvedType === 'FLOAT') {
-        value = val;
         type = 'dimension';
       }
-
-      current[lastKey] = { value, type };
+      current[toCamelCase(parts[parts.length - 1])] = { value, type };
     });
 
-    // Add typography composite tokens for this collection
-    const typographyGroups = typographyGroupsByCollection.get(colName);
-    if (typographyGroups) {
-      typographyGroups.forEach((group, name) => {
-        if (group.fontSize !== undefined) {
-          if (!colResult['text']) colResult['text'] = {};
-          const textObj = colResult['text'] as { [key: string]: unknown };
-          textObj[name] = {
-            value: {
-              fontSize: group.fontSize,
-              lineHeight: group.lineHeight ?? group.fontSize * 1.4,
-              letterSpacing: group.letterSpacing ?? 0,
-            },
-            type: 'typography',
-          };
-        }
-      });
-    }
-
-    result[colName] = colResult;
+    typographyByCollection.get(colName)?.forEach((group, name) => {
+      if (group.fontSize === undefined) return;
+      childNode(colResult, 'text')[name] = {
+        value: {
+          fontSize: group.fontSize,
+          lineHeight: group.lineHeight ?? group.fontSize * 1.4,
+          letterSpacing: group.letterSpacing ?? 0,
+        },
+        type: 'typography',
+      };
+    });
   });
 
   return JSON.stringify(result, null, 2);
@@ -708,8 +680,8 @@ function exportVariablesToJSON(): string {
 // ─── ORCHESTRATION ────────────────────────────────────────────────
 
 // Smart Convert reads local styles; with none, running it would only delete the old tokens.
-function blockedReason(mode: string): string | null {
-  if (mode === 'convert' && figma.getLocalPaintStyles().length === 0 && figma.getLocalTextStyles().length === 0) {
+async function blockedReason(mode: string): Promise<string | null> {
+  if (mode === 'convert' && (await figma.getLocalPaintStylesAsync()).length === 0 && (await figma.getLocalTextStylesAsync()).length === 0) {
     return 'No local color or text styles found. Smart Convert needs styles to convert, so nothing was changed.';
   }
   return null;
@@ -749,10 +721,10 @@ async function runGeneration(
   ratioKey?: string,
   fontFamily?: string
 ): Promise<void> {
-  const blocked = blockedReason(mode);
+  const blocked = await blockedReason(mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
-  if (tokensExist()) {
-    figma.ui.postMessage({ type: 'confirm-replace', existing: describeExisting(mode) }); return;
+  if (await tokensExist()) {
+    figma.ui.postMessage({ type: 'confirm-replace', existing: await describeExisting(mode) }); return;
   }
   await generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
 }
@@ -770,10 +742,10 @@ async function generate(
   ratioKey?: string,
   fontFamily?: string
 ): Promise<void> {
-  const blocked = blockedReason(mode);
+  const blocked = await blockedReason(mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   issues.clear();
-  const old = snapshotExisting(mode);
+  const old = await snapshotExisting(mode);
   const tier: Tier = approach === '3tier' ? '3tier' : '2tier';
 
   try {
@@ -787,7 +759,7 @@ async function generate(
     } else if (mode === 'starter') {
       await createStarterSystem(tier);
     } else if (mode === 'convert') {
-      convertStylesToTokens(tier);
+      await convertStylesToTokens(tier);
     }
   } catch (e) {
     const leftover = rollbackStaged();
@@ -799,12 +771,12 @@ async function generate(
 
   let json = '';
   try {
-    json = exportVariablesToJSON();
+    json = await exportVariablesToJSON();
   } catch (_e) {
     warn(`Tokens were created, but the JSON export failed. Use Refresh JSON to retry.`);
   }
-  const total = figma.variables.getLocalVariables().length;
-  const cols  = figma.variables.getLocalVariableCollections().length;
+  const total = (await figma.variables.getLocalVariablesAsync()).length;
+  const cols  = (await figma.variables.getLocalVariableCollectionsAsync()).length;
   const warnings = collectIssues();
   figma.notify(warnings.length ? `⚠️ Done with ${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : '✅ Done!');
   figma.ui.postMessage({ type: 'generation-complete', json, total, cols, warnings });
@@ -812,10 +784,11 @@ async function generate(
 
 // ─── MESSAGES ────────────────────────────────────────────────────
 
-figma.ui.onmessage = async (msg: {
-  type: string;
-  approach?: string;
-  mode?: string;
+type Mode = 'scratch' | 'starter' | 'convert';
+
+interface GenerateRequest {
+  approach: Tier;
+  mode: Mode;
   colors?: ScratchColors;
   spacingBase?: number;
   radiusBase?: number;
@@ -823,24 +796,107 @@ figma.ui.onmessage = async (msg: {
   fontBase?: number;
   ratioKey?: string;
   fontFamily?: string;
-}) => {
-  if (msg.type === 'generate') {
-    runSafely(() => runGeneration(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
+}
+
+interface UiMessage extends Partial<GenerateRequest> {
+  type: string;
+}
+
+// Same limits as the inputs on the From Scratch screen.
+const LIMITS = {
+  spacingBase: { min: 1,  max: 32, label: 'Spacing base unit' },
+  radiusBase:  { min: 0,  max: 64, label: 'Border radius base' },
+  widthBase:   { min: 1,  max: 16, label: 'Border width base' },
+  fontBase:    { min: 10, max: 24, label: 'Base font size' },
+} as const;
+
+function intInRange(value: unknown, key: keyof typeof LIMITS): number {
+  const { min, max, label } = LIMITS[key];
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
   }
-  if (msg.type === 'confirm-continue') {
-    runSafely(() => generate(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
+  return value;
+}
+
+// The UI is trusted to be ours, but it is the only input to everything that follows, so check it.
+function parseRequest(msg: UiMessage): GenerateRequest {
+  if (msg.approach !== '2tier' && msg.approach !== '3tier') throw new Error('Unknown architecture.');
+  if (msg.mode !== 'scratch' && msg.mode !== 'starter' && msg.mode !== 'convert') throw new Error('Unknown mode.');
+  const request: GenerateRequest = { approach: msg.approach, mode: msg.mode };
+  if (msg.mode !== 'scratch') return request;
+
+  const raw = msg.colors as Record<string, unknown> | undefined;
+  if (!raw || typeof raw !== 'object') throw new Error('Brand colors are missing.');
+  const colors = {} as Record<string, string>;
+  for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+    const hex = raw[key];
+    const required = key === 'primary' || key === 'secondary' || key === 'accent';
+    if (typeof hex === 'string' && HEX_RE.test(hex)) colors[key] = hex;
+    else if (!required && (hex === undefined || hex === '' || hex === '#')) colors[key] = '';
+    else throw new Error(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
+  }
+  if (typeof msg.ratioKey !== 'string' || !Object.prototype.hasOwnProperty.call(TS_RATIO, msg.ratioKey)) {
+    throw new Error('Unknown type scale ratio.');
+  }
+  if (typeof msg.fontFamily !== 'string' || !msg.fontFamily || msg.fontFamily.length > 200) {
+    throw new Error('Choose a font family.');
+  }
+  return {
+    ...request,
+    colors: colors as unknown as ScratchColors,
+    spacingBase: intInRange(msg.spacingBase, 'spacingBase'),
+    radiusBase:  intInRange(msg.radiusBase, 'radiusBase'),
+    widthBase:   intInRange(msg.widthBase, 'widthBase'),
+    fontBase:    intInRange(msg.fontBase, 'fontBase'),
+    ratioKey: msg.ratioKey,
+    fontFamily: msg.fontFamily,
+  };
+}
+
+// Only one run at a time: staging state is shared, and a second click mid-run would interleave.
+let generating = false;
+
+async function exclusive(run: () => Promise<void>): Promise<void> {
+  if (generating) { figma.notify('⏳ Still generating — please wait'); return; }
+  generating = true;
+  figma.ui.postMessage({ type: 'generation-started' });
+  try {
+    await run();
+  } finally {
+    generating = false;
+  }
+}
+
+// Closing the plugin mid-build would leave half-built tokens in the file. Removal is synchronous,
+// so it can still run from the close handler.
+figma.on('close', () => {
+  if (generating) rollbackStaged();
+});
+
+figma.ui.onmessage = async (msg: UiMessage) => {
+  if (msg.type === 'generate' || msg.type === 'confirm-continue') {
+    await exclusive(() => runSafely(async () => {
+      const r = parseRequest(msg);
+      const args = [r.approach, r.mode, r.colors, r.spacingBase, r.radiusBase, r.widthBase, r.fontBase, r.ratioKey, r.fontFamily] as const;
+      if (msg.type === 'generate') await runGeneration(...args);
+      else await generate(...args);
+    }));
   }
   if (msg.type === 'export-json') {
-    if (!tokensExist()) { figma.notify('⚠️ No variables found — generate tokens first'); return; }
-    const json  = exportVariablesToJSON();
-    const total = figma.variables.getLocalVariables().length;
-    const cols  = figma.variables.getLocalVariableCollections().length;
-    figma.ui.postMessage({ type: 'export-ready', json, total, cols });
+    if (!(await tokensExist())) { figma.notify('⚠️ No variables found — generate tokens first'); return; }
+    try {
+      const json  = await exportVariablesToJSON();
+      const total = (await figma.variables.getLocalVariablesAsync()).length;
+      const cols  = (await figma.variables.getLocalVariableCollectionsAsync()).length;
+      figma.ui.postMessage({ type: 'export-ready', json, total, cols });
+    } catch (e) {
+      figma.notify(`❌ Export failed: ${(e as { message?: string } | null)?.message ?? String(e)}`, { error: true });
+    }
   }
   if (msg.type === 'check-tokens') {
-    const exists = tokensExist();
-    const total  = exists ? figma.variables.getLocalVariables().length : 0;
-    const cols   = exists ? figma.variables.getLocalVariableCollections().length : 0;
+    const exists = await tokensExist();
+    const total  = exists ? (await figma.variables.getLocalVariablesAsync()).length : 0;
+    const cols   = exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0;
     figma.ui.postMessage({ type: 'tokens-status', exists, total, cols });
   }
   if (msg.type === 'get-fonts') {

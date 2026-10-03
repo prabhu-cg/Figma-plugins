@@ -533,7 +533,7 @@
           <label>Base size (px)</label>
           <div class="scale-input-wrap">
             <div class="scale-input-row">
-              <input class="scale-input" id="inp-font-base" type="number" min="10" max="24" value="16" oninput="onTypoInput()">
+              <input class="scale-input" id="inp-font-base" type="number" min="10" max="24" value="16" oninput="onTypoInput(); validateScreen2()">
             </div>
             <div class="scale-hint">The body text size your entire scale is built from. 16px is the web standard.</div>
           </div>
@@ -859,14 +859,21 @@
 
   function validateScreen2() {
     const allBrandValid = REQUIRED_COLORS.every(f => isValidHex(normalizeHex(document.getElementById('inp-' + f).value)));
-    const spacingOk = parseInt(document.getElementById('inp-spacing').value) >= 1;
-    const radiusOk  = parseInt(document.getElementById('inp-radius').value)  >= 0;
-    const widthOk   = parseInt(document.getElementById('inp-width').value)   >= 1;
-    const ok = allBrandValid && spacingOk && radiusOk && widthOk;
+    const inRange = (id, min, max) => {
+      const raw = document.getElementById(id).value.trim();
+      const n = Number(raw);
+      return raw !== '' && Number.isInteger(n) && n >= min && n <= max;
+    };
+    const spacingOk = inRange('inp-spacing', 1, 32);
+    const radiusOk  = inRange('inp-radius', 0, 64);
+    const widthOk   = inRange('inp-width', 1, 16);
+    const fontOk    = inRange('inp-font-base', 10, 24);
+    const ok = allBrandValid && spacingOk && radiusOk && widthOk && fontOk;
     document.getElementById('btn-next2').disabled = !ok;
     document.getElementById('hint-next2').textContent = ok
       ? 'Ready — click Next to choose architecture'
-      : 'Fill in Primary, Secondary & Accent to continue';
+      : !allBrandValid ? 'Fill in Primary, Secondary & Accent to continue'
+      : 'Check the highlighted scale values: spacing 1–32, radius 0–64, border width 1–16, font size 10–24';
   }
 
   function backFromScreen3() {
@@ -989,12 +996,36 @@
     goTo('screen4', 'left');
   }
 
+  // navigator.clipboard is often blocked inside Figma's plugin frame, so fall back to execCommand.
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(() => legacyCopy(text));
+    }
+    return legacyCopy(text);
+  }
+
+  function legacyCopy(text) {
+    return new Promise((resolve, reject) => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (_e) { ok = false; }
+      ta.remove();
+      ok ? resolve() : reject(new Error('copy blocked'));
+    });
+  }
+
   function copyJSON() {
     const btn = document.getElementById('btn-copy');
-    navigator.clipboard.writeText(currentJSON).then(() => {
-      btn.textContent = '✅ Copied!';
-      setTimeout(() => { btn.textContent = 'Copy to clipboard'; }, 2000);
-    });
+    const reset = () => { btn.textContent = 'Copy to clipboard'; };
+    copyText(currentJSON).then(
+      () => { btn.textContent = '✅ Copied!'; setTimeout(reset, 2000); },
+      () => { btn.textContent = 'Copy blocked — use Download'; setTimeout(reset, 3000); }
+    );
   }
 
   function downloadJSON() {
@@ -1002,7 +1033,7 @@
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url; a.download = 'tokens.json'; a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function refreshJSON() {
@@ -1019,9 +1050,19 @@
   }
 
   // ── Messages from code.js ──────────────────────────────────────
+  function setGenerating(on) {
+    const btn = document.getElementById('btn-generate');
+    btn.disabled = on || !selectedArch;
+    btn.textContent = on ? 'Generating…' : 'Generate Tokens';
+  }
+
   window.onmessage = (event) => {
-    const msg = event.data.pluginMessage;
+    if (event.source !== parent) return; // only the plugin code may talk to this UI
+    const msg = event.data && event.data.pluginMessage;
     if (!msg) return;
+
+    if (msg.type === 'generation-started') setGenerating(true);
+    if (['confirm-replace', 'generation-complete', 'generation-failed', 'generation-blocked'].includes(msg.type)) setGenerating(false);
 
     if (msg.type === 'tokens-status') {
       if (msg.exists) {
