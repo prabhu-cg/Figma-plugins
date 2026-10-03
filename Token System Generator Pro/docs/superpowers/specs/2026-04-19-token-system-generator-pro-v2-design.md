@@ -1,5 +1,8 @@
 # Token System Generator Pro — v2 Design Spec
 
+> **Historical planning document (April 2026).** The plugin has since changed (OKLCH ramps, atomic generation, optional second font, font weight and paragraph spacing, async Figma APIs). The code and `README.md` are the source of truth; this file is kept for context only.
+
+
 **Date:** 2026-04-19
 **Status:** Approved
 

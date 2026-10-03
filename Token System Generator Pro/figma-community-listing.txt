@@ -3,6 +3,11 @@ TOKEN SYSTEM GENERATOR PRO — FIGMA COMMUNITY LISTING
 ================================================================================
 
 
+TAGLINE (keep to 100 characters)
+--------------------------------
+Free design tokens for Figma: OKLCH color ramps, spacing, radius, type scale.  [77 chars]
+
+
 SHORT DESCRIPTION
 -----------------
 Generate a complete design token system — colors, spacing, border radius, and
@@ -61,8 +66,9 @@ Typography
   - Live bar chart preview as you configure
 
 All variables are organized into named Figma Variable collections and follow
-consistent naming conventions compatible with Style Dictionary and most popular
-token tools.
+consistent naming conventions. The JSON export is a valid Style Dictionary
+source (v3 and v5): it builds to CSS, SCSS and JavaScript with every alias
+resolved.
 
 
 CHOOSE YOUR APPROACH
@@ -75,14 +81,15 @@ FROM SCRATCH
   and accent colors. Add your semantic colors (info, success, error, warning,
   neutral) or keep the sensible defaults. Set your spacing base, border radius,
   border width, and typography scale. The plugin generates complete 10-stop
-  color ramps for every color, auto-detects a descriptive name based on the hue
-  (e.g. "cobalt", "violet", "emerald"), and wires up semantic alias tokens on
-  top of the global primitives.
+  OKLCH color ramps for every color (stop 500 is exactly your color),
+  auto-detects a descriptive name based on the hue (e.g. "cobalt", "violet",
+  "emerald"), and wires up semantic alias tokens on top of the global
+  primitives. Tertiary and the semantic colors are optional.
 
 STARTER SYSTEM (Boilerplate)
   Best for: Rapid prototyping or teams just starting their design token journey.
   How it works: No color inputs needed. The plugin scaffolds a full token system
-  using a curated default palette — 9 color ramps (brand blues, purples, teals,
+  using a curated default palette — 9 OKLCH color ramps (brand blues, purples, teals,
   oranges), spacing (base 4), border radius (base 4), border width (base 1),
   and a 13-level Major Third type scale. Edit the values directly in Figma's
   Variable panel to match your brand whenever you're ready.
@@ -94,7 +101,8 @@ SMART CONVERT
   file, maps solid colors into Global primitive variables, and creates an Alias
   layer with semantic surface, text, and feedback tokens pointing back to them.
   Typography styles are converted into font-size, line-height, letter-spacing,
-  and paragraph-spacing variables at both the Global and Alias layers. Choose
+  paragraph-spacing, and font-weight variables at both the Global and Alias
+  layers. Your colors are used as they are (no ramps are generated). Choose
   2-tier or 3-tier and get a Component layer wired up automatically.
 
 ARCHITECTURE CHOICE (applies to all modes)
@@ -106,8 +114,8 @@ ARCHITECTURE CHOICE (applies to all modes)
 
   3-Tier System — Global + Alias + Component
     Full-scale. Built for mature design systems that need component-level
-    semantic control. Adds a Component collection with button, input, surface,
-    and text tokens pre-wired to the Alias layer.
+    semantic control. Adds a Component collection with text, icon, surface, and
+    border color tokens pre-wired to the Alias layer.
 
 
 HOW TO USE
@@ -127,19 +135,28 @@ HOW TO USE
 
 5. Choose your architecture: 2-tier or 3-tier.
 
-6. Click Generate Tokens. The plugin creates all Figma Variable collections
-   and variables. A success screen confirms the count and shows the exported
-   JSON for developer handoff.
+6. Click Generate Tokens. The plugin creates all Figma Variable collections,
+   variables and (for From Scratch and Starter) local paint and text styles.
+   A success screen confirms the count, lists any warnings, and shows the
+   exported JSON for developer handoff.
 
-7. Use Copy to clipboard or Download tokens.json to hand off Style Dictionary
-   v3-compatible JSON to your engineering team.
+7. Use Copy to clipboard or Download tokens.json to hand off the JSON to your
+   engineering team. (If copying is blocked in your Figma window, use
+   Download.)
 
 8. If you later edit variables manually in Figma, re-open the plugin and click
    Refresh JSON to get an up-to-date export without regenerating everything.
 
 TIP: To replace an existing token system, open the plugin and choose
-Regenerate Tokens from the Smart Landing screen. You'll be prompted to confirm
-before any existing variables are removed.
+Regenerate Tokens from the Smart Landing screen. A confirmation lists exactly
+what will be deleted before anything is removed.
+
+IMPORTANT: Replacing only removes what this plugin made: the collections named
+01 Global, 02 Alias and 03 Component, and (for From Scratch and Starter) paint
+styles named like ramp stops (cobalt/500) and the Display / Heading / Body copy
+text styles it creates. Your own collections and styles are never touched, and
+Smart Convert keeps all your styles. Generation is all or nothing: if anything
+fails, the file is left exactly as it was.
 
 
 LIMITATIONS
@@ -158,32 +175,39 @@ LIMITATIONS
 
 - Shadow and elevation tokens are not generated in this version.
 
-- The plugin creates Figma Variables (the Variables API) only. It does not
-  generate or modify Figma Styles (paint styles, text styles) as part of the
-  token generation flow.
+- From Scratch and Starter also create local paint styles and text styles, and
+  replace the ones this plugin created earlier. Smart Convert does not create
+  or change any styles.
 
 - Smart Convert reads existing paint styles and text styles only. It does not
   read or migrate existing Figma Variables.
+
+- The JSON export lists each typography value as its own token. The top-level
+  keys are global, alias and component, and references look like
+  {global.color.cobalt.50}. Sizes carry px units.
+
+- The plugin makes no network requests and sends no data anywhere.
 
 
 COMING SOON
 -----------
 - Dark mode support — generate light and dark mode values in a single Variable
   collection with multiple modes
-- Full JSON export — complete Style Dictionary v3 JSON output covering all
-  generated variables, with alias references preserved as {dot.path} tokens
+- Accessibility checks — WCAG contrast validation for semantic color pairs
+- Composite typography tokens in the JSON export
 - Shadow and elevation token scale
 - Opacity token scale
 - Z-index / layer token scale
 - One-click publish to Tokens Studio / W3C DTCG format
 
 
-TAGS
-----
-design tokens, design system, variables, token generator, color ramp, spacing,
-typography, border radius, style dictionary, component tokens, design ops,
-variables API, token architecture, alias tokens, global tokens, primitive tokens,
-semantic tokens, color palette, type scale, design foundation
+TAGS (12 priority tags first; the rest are spare)
+-------------------------------------------------
+design tokens, design system, variables, token generator, color ramp, oklch,
+typography, style dictionary, spacing, type scale, component tokens, color palette
+
+Spare: design ops, variables API, token architecture, alias tokens, global
+tokens, primitive tokens, semantic tokens, border radius, design foundation
 
 
 CATEGORY

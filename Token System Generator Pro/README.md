@@ -1,206 +1,204 @@
 # Token System Generator Pro
 
-A free Figma plugin that scaffolds a complete design token system — color ramps, spacing, border radius, and typography — directly into your Figma Variables in seconds.
+A free Figma plugin that scaffolds a complete design token system — color ramps, spacing, border radius, border width and typography — into Figma Variables and local styles in seconds, and exports it as JSON for developer handoff.
 
 ## Overview
 
-Token System Generator Pro creates production-ready Figma Variable collections following a 2-tier (Global + Alias) or 3-tier (Global + Alias + Component) token architecture. It generates tokens in multiple ways and exports them as collection-aware JSON following industry standards for seamless developer handoffs.
+Token System Generator Pro creates Figma Variable collections in a 2-tier (Global + Alias) or 3-tier (Global + Alias + Component) architecture. It can build a system from your brand colors, scaffold a starter system, or convert the paint and text styles already in your file. Everything runs locally in Figma: the plugin makes no network requests.
 
-## Key Features
+## Key features
 
-✨ **Three generation approaches** — pick what works for your workflow
-- **From Scratch** — brand hex input → complete token system
-- **Starter System** — boilerplate tokens ready to edit
-- **Smart Convert** — auto-scan local paint/text styles → token hierarchy
+**Three ways to start**
+- **From Scratch** — enter brand colors and scale settings → complete token system
+- **Starter System** — a ready-made system with a default palette, to edit in Figma
+- **Smart Convert** — scans your local paint and text styles → token hierarchy
 
-📐 **Two architecture options** — choose your scale
-- **2-Tier** (Global → Alias) — suitable for smaller design systems
-- **3-Tier** (Global → Alias → Component) — for complex systems with component-level tokens
+**Two architectures**
+- **2-Tier** (Global → Alias) — for smaller systems
+- **3-Tier** (Global → Alias → Component) — adds component-level color tokens
 
-🎨 **What gets generated**
-- **Color ramps** — 10-stop (50–900) per brand color with semantic aliases (Primary, Secondary, Tertiary, Accent, Feedback). Ramps are generated in [OKLCH](https://oklch.fyi/): stop 500 is exactly your color, every other stop keeps its hue and moves in perceptually even lightness steps, and chroma eases off toward the light and dark ends (gamut-mapped to sRGB)
-- **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios, each with font size, line height, letter spacing, **paragraph spacing** and **font weight** (displays and h1–h2 bold, h3–h6 semibold, body regular), all bound to the text styles. Weights map to the closest style the font actually has. Use one font throughout, or optionally a second font for body copy (headings and displays keep the first)
-- **Spacing scale** — 10-level scale from configurable base unit
-- **Border radius** — 7 semantic values (none → full circle)
-- **Border width** — 5 semantic values (hairline → xl)
-
-📦 **Collection-aware JSON export**
-```json
-{
-  "global": { 
-    "color": { "primary": { "50": "#...", "100": "#...", ... } },
-    "typography": { "heading": { "fontSize": 48, "lineHeight": 56, ... } },
-    "spacing": { ... },
-    "radius": { ... }
-  },
-  "alias": {
-    "color": { "primary": { "50": "{global.color.primary.50}", ... } },
-    "text": { ... }
-  },
-  "component": {
-    "surface": { ... },
-    "text": { ... },
-    "icon": { ... },
-    "border": { ... }
-  }
-}
-```
-
-Export includes proper token path references, composite typography objects, and is ready for Style Dictionary integration.
+**What gets generated**
+- **Color ramps** — 10 stops (50–900) per color, generated in [OKLCH](https://oklch.fyi/). Stop 500 is exactly your color; every other stop keeps its hue and moves in perceptually even lightness steps, with chroma easing off toward the light and dark ends (gamut-mapped to sRGB). Brand colors are named by hue (e.g. `cobalt`, `violet`); semantic colors use fixed names (`blue`, `green`, `red`, `amber`, `grey`).
+- **Typography** — 13 levels (display-lg → xs) across 5 scale ratios (Major Second, Minor Third, Major Third, Perfect Fourth, √2). Each level has font size, line height, letter spacing, **paragraph spacing** and **font weight**. Displays and h1–h2 are bold, h3–h6 semibold, body regular. Use one font throughout, or optionally a second font for body copy (headings and displays keep the first).
+- **Spacing** — 10 values from a configurable base unit
+- **Border radius** — 7 values (none, sm, md, lg, xl, 2xl, full)
+- **Border width** — 5 values (none, sm, md, lg, xl)
+- **Local styles** (From Scratch and Starter) — a paint style per color stop and text styles (Display, Heading, Body copy) bound to the variables
+- **JSON export** — all collections as JSON with alias references preserved, via Copy or Download
 
 ## How it works
 
+When you open the plugin, a file with no variables goes straight to mode selection. If variables already exist you can export them to JSON or regenerate.
+
 ### From Scratch
-1. Input brand colors (hex)
-2. Set spacing base, border radius base, typography base size
-3. Choose type scale ratio (5 options: Major Second, Minor Third, Major Third, Perfect Fourth, √2)
-4. Optional: select font family (defaults to Inter with fallback to Helvetica), and optionally a different font for body copy
-5. Choose 2-tier or 3-tier architecture
-6. Plugin generates all token collections + local text styles with font bindings
+1. Enter Primary, Secondary and Accent colors (required). Tertiary and the semantic colors (info, success, error, warning, neutral) are optional; a blank color is skipped.
+2. Set the spacing base (1–32), border radius base (0–64), border width base (1–16), base font size (10–24) and a scale ratio.
+3. Choose a font family (default Inter). Optionally tick **Use a different font for body copy** and choose a body font.
+4. Choose 2-tier or 3-tier and click **Generate Tokens**.
 
 ### Starter System
-1. Choose 2-tier or 3-tier architecture
-2. Plugin scaffolds collections with placeholder values
-3. Edit directly in Figma Variables UI
-4. Export to JSON for dev handoff
+Choose 2-tier or 3-tier. The plugin scaffolds a system from a curated default palette (9 OKLCH ramps), spacing base 4, radius base 4, border width base 1 and a Major Third type scale in Inter. Edit the values in Figma afterwards.
 
 ### Smart Convert
-1. Plugin scans existing **local paint styles** and **local text styles** in your file
-2. Auto-extracts color families (e.g., `Red 50`, `Red 100` → `red` family with 10 stops)
-3. Organizes into Global → Alias hierarchy
-4. For 3-tier, creates Component collection with text, icon, surface, border tokens
-5. Text styles are converted to typography variables with font family binding
-6. All mappings are automatically wired (Alias → Global, Component → Alias)
+Reads your local paint styles and text styles, keeps them as they are, and builds variables from them. Colors are used as-is (no ramps are generated). See [Smart Convert](#smart-convert-1) below.
 
-## Token Architecture Details
+## Replacing existing tokens
 
-### 2-Tier (Global + Alias)
-- **Global** — raw primitives, not for direct use
-  - `color/primary/50` ... `color/primary/900`
-  - `color/secondary/50` ... (all primary colors with stops)
-  - `typography/font-family` (or `typography/font-family/heading` + `/body` when a second body font is chosen)
-  - `typography/font-size/*`, `typography/line-height/*`, `typography/letter-spacing/*`, `typography/paragraph-spacing/*`
-  - `typography/font-weight/{regular,semibold,bold}` (weights shared by levels)
-  - `spacing/*`, `radius/*`, `border-width/*`
+Generating again **replaces what this plugin made**, and only that. The confirmation dialog lists exactly what will be deleted, with counts. Everything else in your file stays as it is.
+- **Collections:** only the ones named `01 Global`, `02 Alias` and `03 Component`. Your other variable collections are never touched.
+- **Styles (From Scratch and Starter):** paint styles named like a ramp stop (`cobalt/500`) and text styles named like the ones this plugin creates (`Heading/h1`, `Display/display-lg`, `Body copy/body`). Your own styles, such as `Brand/Primary`, are kept.
+- **Smart Convert** keeps all your styles, since it reads them, and replaces only the three collections above.
+- If the file has none of those, there is nothing to replace and no confirmation is shown.
 
-- **Alias** — semantic decisions, for use in designs
-  - `color/primary/50` ... (all stops mapped to Global)
-  - `text/*` — typography values per level (font-size, line-height, letter-spacing, paragraph-spacing, font-weight)
+Generation is **all or nothing**. The new tokens are built under temporary names first, and your existing tokens are only removed once the whole build has succeeded. If anything fails, everything the run created is removed and your file is left exactly as it was; the panel says so. If the plugin is closed mid-generation, the half-built items are removed too.
 
-### 3-Tier (Global + Alias + Component)
-Adds **Component** collection:
-- `surface/*` — surface background tokens mapped to Alias
-- `text/*` — text color tokens mapped to Alias
-- `icon/*` — icon color tokens mapped to Alias
-- `border/*` — border color tokens mapped to Alias
+Smaller problems (a font without a requested weight, an old item that couldn't be removed) don't fail the run. They are listed as warnings on the done screen.
 
-All component tokens reference Alias tokens, which reference Global tokens. This creates a clear dependency chain for maintenance.
+## Token architecture
 
-## Smart Convert — What happens to your styles
+### Global — raw primitives
+- `color/<name>/50` … `/900` — brand colors by hue name (`color/cobalt/500`), semantic colors by fixed name (`color/blue/500`)
+- `spacing/<px>`, `borderRadius/<px>`, `borderWidth/<px>` — named by pixel value
+- `typography/font-family` — or `typography/font-family/heading` and `/body` when a second body font is chosen
+- `typography/font-size/<level>`, `line-height/<level>`, `letter-spacing/<level>`, `paragraph-spacing/<level>` — all in px
+- `typography/font-weight/regular`, `/semibold`, `/bold` — shared by the levels that use them
 
-| Your Local Style | → Global Variable | → Alias Reference |
+### Alias — semantic names that point at Global
+- `color/primary|secondary|tertiary|accent/<stop>`
+- `color/feedback/info|success|error|warning|neutral/<stop>`
+- `borderRadius/none…full`, `borderWidth/none…xl`
+- `typography/font-family` (or `/heading` + `/body`)
+- `text/<level>/font-size`, `line-height`, `letter-spacing`, `paragraph-spacing`, `font-weight`
+
+### Component (3-tier only) — points at Alias
+- `text/default|subtle|disabled|inverse`
+- `icon/default|subtle|disabled|inverse`
+- `surface/primary|secondary|tertiary|accent` — one per brand color you provided (no `surface/tertiary` if Tertiary is blank)
+- `border/default|subtle|disabled|inverse`
+
+Component tokens reference Alias tokens, which reference Global tokens.
+
+### Text styles
+Text styles use the real style of the chosen font for each weight (for example Inter's "Semi Bold" or Playfair Display's "SemiBold"). If a font doesn't have the exact weight, the closest available style is used and a warning says so. If the chosen font isn't available, Helvetica is used (also with a warning). Italic styles are not generated.
+
+## Smart Convert
+
+Smart Convert reads your local styles and creates variables from them. It does not create or change any styles.
+
+| Your local style | Global variable | Alias |
 |---|---|---|
-| `Red 50` | `color/red/50` | `color/red/50: {global.color.red.50}` |
-| `Red 100` | `color/red/100` | `color/red/100: {global.color.red.100}` |
-| `...` (up to 900) | ... | ... |
-| `Heading/h1` (Inter, 48px, 1.4× LH) | `typography/font-size/h1`, `typography/line-height/h1`, etc. | `text/h1: { fontSize: {global.typography.font-size.h1}, ... }` |
+| `Red 500` or `red-500` | `color/red/500` | `color/<role>/500` (2-tier: `color/…`, 3-tier: `colors/…`) |
+| `Heading/h1` | `typography/fontSize/heading/h1`, `lineHeight`, `letterSpacing`, `paragraphSpacing`, `fontWeight` | `text/heading/h1/fontSize` … `fontWeight` |
 
-**Key improvements in Smart Convert (latest):**
-- Proper color family extraction — groups `Red 50`, `Red 100`, etc. by base name
-- Correct slash-based variable naming (`color/red/50` not `color/red-50`)
-- All color stops (50–900) for each family
-- Full typography variable support with font binding
-- Proper alias resolution to collection-aware paths (e.g., `{global.color.primary.50}`)
-- 3-tier component collection automatically wired to Alias
+- Color families are grouped by name; the plugin picks primary, secondary, tertiary and accent families by position in a brightness-sorted list, and feedback colors from the darkest, lightest and primary families. This is a heuristic, so check the Alias layer afterwards.
+- Font weight is read from each text style's font style name ("Bold" → 700, "Semi Bold" → 600). A style name it doesn't recognise becomes 400.
+- For 3-tier it also creates a Component collection (text, icon, surface, border) from the 500 stops.
+- With no local styles, or no solid color styles, it stops without changing anything.
 
-## JSON Export Format
+## JSON export
 
-The export is **collection-aware** and **standards-compliant**:
-- Root nodes mirror Figma collections: `global`, `alias`, `component`
-- Token paths use dot-notation (camelCase): `{global.color.primary.50}`
-- Variable aliases resolve to `{collection.path.to.token}` format
-- Typography tokens are composite objects (not scattered individual variables)
-- Type metadata included (`{ value, type }`) for Style Dictionary compatibility
+The export mirrors the collections in your file. The three plugin collections become `global`, `alias` and `component`; any other collection you have gets a camelCase key from its name (`My Tokens` → `myTokens`). Every token is `{ value, type }`.
 
-**Example:**
 ```json
 {
   "global": {
-    "color": {
-      "primary": {
-        "50": { "value": "#EBF2FF", "type": "color" },
-        "500": { "value": "#3B6BE8", "type": "color" }
-      }
-    },
+    "color": { "cobalt": { "50": { "value": "#F0F5FF", "type": "color" } } },
+    "spacing": { "4": { "value": "4px", "type": "dimension" } },
     "typography": {
-      "fontSize": {
-        "h1": { "value": 48, "type": "dimension" }
-      }
+      "fontFamily": { "value": "Inter", "type": "fontFamily" },
+      "fontWeight": { "bold": { "value": 700, "type": "fontWeight" } }
     }
   },
   "alias": {
-    "color": {
-      "primary": {
-        "50": { "value": "{global.color.primary.50}", "type": "color" },
-        "500": { "value": "{global.color.primary.500}", "type": "color" }
-      }
-    },
-    "text": {
-      "h1": {
-        "value": {
-          "fontSize": 48,
-          "lineHeight": 56,
-          "letterSpacing": 0
-        },
-        "type": "typography"
-      }
-    }
+    "color": { "primary": { "50": { "value": "{global.color.cobalt.50}", "type": "color" } } }
+  },
+  "component": {
+    "surface": { "primary": { "value": "{alias.color.primary.500}", "type": "color" } }
   }
 }
 ```
 
-## Font Loading & Fallback
+- Names are camelCased (`font-size` → `fontSize`) and nested by `/`.
+- Aliases resolve to `{collection.path.to.token}`, for example `{global.color.cobalt.50}`.
+- **Units:** sizes are strings with a unit (`"4px"`, `"1.5px"`, `"-2.28px"`), so tools don't have to guess. Font weights are plain numbers (`700`). Numbers in collections the plugin didn't create stay plain numbers with type `number`.
+- Types: `color`, `dimension`, `fontFamily`, `fontWeight`, `number`.
+- Each typography value is its own token (not combined into one composite object).
+- **Refresh JSON** re-exports the current variables without regenerating, so manual edits in Figma are included.
 
-- **From Scratch** approach binds local text styles to your selected font family (default: Inter)
-- If the selected font is unavailable on your system, the plugin automatically falls back to Helvetica
-- Font loading is async and safe — no permission warnings or font errors
+### Using it with Style Dictionary
+
+The file is a valid Style Dictionary source. It uses the `value` / `type` format and `{path}` references, which work in Style Dictionary v3 and in the current v5. Every reference resolves, and the Starter, From Scratch and Smart Convert exports all build in both.
+
+```js
+// build.mjs — Style Dictionary v5
+import StyleDictionary from 'style-dictionary';
+
+const sd = new StyleDictionary({
+  source: ['tokens.json'],
+  platforms: {
+    css: {
+      transformGroup: 'css',
+      buildPath: 'build/',
+      files: [{ destination: 'tokens.css', format: 'css/variables' }],
+    },
+  },
+});
+await sd.buildAllPlatforms();
+```
+
+This produces CSS custom properties such as `--global-spacing-4: 4px;`, `--alias-color-primary-500: #3d6be8;` and `--global-typography-letter-spacing-display-lg: -7.4px;`. SCSS and JavaScript outputs work the same way.
+
+Things to know:
+- **All three layers are exported.** Names start with the layer (`--global-…`, `--alias-…`, `--component-…`). Most apps should use the Alias or Component layer; filter on `token.path[0]` in your config if you only want those.
+- **Letter spacing is in pixels**, like every other size (for example `-7.4px` for display-lg), so it matches the Figma text style.
+- **Font families** that contain spaces or digits (such as `Source Sans 3`) are quoted automatically by Style Dictionary v5. v3 leaves them unquoted, which isn't valid CSS, so quote them in your config if you use v3.
+- Sizes stay in `px` with the default `css` group; add Style Dictionary's `size/rem` transform if you want rem.
+
+## Privacy and safety
+
+- The plugin makes no network requests (`networkAccess` is `none`) and uses no external services.
+- It only reads and writes local variables and styles in the current file, and only replaces the collections and styles it created itself.
+- It uses Figma's async APIs and `documentAccess: dynamic-page`.
+- Inputs are validated both in the panel and again in the plugin. Names that come from your file (for example variable names such as `__proto__`) can't affect the plugin.
 
 ## Development
 
-Built with TypeScript + Figma Plugin API. No external dependencies.
+Built with TypeScript against the Figma Plugin API, bundled with esbuild into a single `code.js`. There are no runtime dependencies.
 
 ```bash
 npm install
-npm run build          # Builds once
-npm run watch         # Auto-rebuilds on file changes
-npm test              # Algorithm tests + generation tests (incl. failure injection)
-npm run test:memory   # Repeated-run heap/state check
-npm run lint          # ESLint with the Figma plugin rules
+npm run build          # type-check, then bundle code.ts → code.js
+npm run watch          # rebuild on change
+npm test               # algorithm tests + generation tests (incl. failure injection)
+npm run test:memory    # repeated-run heap and state check
+npm run lint           # ESLint with the Figma plugin rules
 ```
 
+In Figma: **Plugins → Development → Import plugin from manifest…** and choose `manifest.json`. Run `npm run build` first; Figma loads `code.js`.
+
 ### Project structure
-- `code.ts` — Figma plugin logic, token generation, variable management
-- `ui.html` — UI shell, form inputs, wizard screens, JSON display
-- `algorithms.ts` — Pure color/scale algorithms (OKLCH ramps, type, spacing); no Figma API
-- `tests/algorithms.test.js` — Algorithm tests (OKLCH conversions, ramps, type scales)
-- `tests/generation.test.js` + `tests/figma-mock.js` — Runs the real plugin against an in-memory Figma mock; checks failed runs leave the file unchanged
-- `tests/memory.test.js` — Heap and state check across hundreds of runs
-- `tsconfig.json` — TypeScript config (strict mode, ES2020 target)
+- `code.ts` — plugin logic: generation, staging and rollback, messages, JSON export
+- `algorithms.ts` — pure functions with no Figma API: OKLCH conversion and ramps, type scale, spacing, radius, font-weight matching
+- `ui.html` — the panel: wizard screens, inputs, confirmation dialog, JSON view
+- `tests/algorithms.test.js` — OKLCH conversions, ramps, type scale, font weights
+- `tests/generation.test.js` + `tests/figma-mock.js` — run the real plugin against an in-memory Figma mock; include failure injection (a failed run must leave the file unchanged)
+- `tests/memory.test.js` — heap and state across hundreds of runs
+- `docs/superpowers/` — original planning documents (historical; the code is the source of truth)
 
-## How to contribute
+## Limitations
+- Only one set of values is generated (no light/dark modes yet).
+- Italic text styles are not generated; text styles use upright weights.
+- Smart Convert's alias mapping is a heuristic.
+- No shadow, elevation, opacity or z-index tokens yet.
 
-Suggestions for next features:
-1. **Accessibility Validator** — WCAG AA/AAA contrast checking for semantic color pairs
-2. **Dark Mode Generator** — auto-generate dark mode from light palette
-3. **Import from JSON** — reverse-engineer Style Dictionary JSON back to Figma variables
-4. **Token Health Audit** — scan and flag duplicates, off-scale values, missing aliases
-5. **Variable Scope Auto-Assignment** — auto-set correct Figma scopes per token type
-6. **Elevation/Shadow Scale** — box-shadow tokens from neutral color base
+## Ideas for next
+1. **Accessibility Validator** — WCAG AA/AAA contrast checks for semantic color pairs
+2. **Dark Mode Generator** — a dark mode from the light palette
+3. **Import from JSON** — Style Dictionary JSON back into Figma variables
+4. **Token Health Audit** — flag duplicates, off-scale values and missing aliases
+5. **Variable Scope Auto-Assignment** — set Figma scopes per token type
+6. **Elevation/Shadow Scale**
 
 ## License
 
-Free for all Figma plan tiers. No restrictions.
-
----
-
-Made for designers and developers who want production-ready design systems, fast.
+Free for all Figma plan tiers.

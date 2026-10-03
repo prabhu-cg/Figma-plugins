@@ -1,5 +1,8 @@
 # Token System Generator Pro v2 Implementation Plan
 
+> **Historical planning document (April 2026).** The plugin has since changed (OKLCH ramps, atomic generation, optional second font, font weight and paragraph spacing, async Figma APIs). The code and `README.md` are the source of truth; this file is kept for context only.
+
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extend the plugin to support From Scratch color ramp generation, configurable spacing/radius scales, and a Style Dictionary v3 JSON export — all within a 4-screen wizard that adds a Smart Landing screen for re-entrant export.
