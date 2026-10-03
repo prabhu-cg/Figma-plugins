@@ -11,6 +11,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["tests/**/*.test.ts"],
+    // UI tests opt in to jsdom per file with a `// @vitest-environment jsdom` docblock; everything else stays on node.
+    include: ["tests/**/*.test.{ts,tsx}"],
   },
 });

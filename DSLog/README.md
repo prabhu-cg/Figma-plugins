@@ -155,6 +155,10 @@ Figma (Figma does not hot-reload plugin code).
   real plugin message handlers (`main.ts` → `handlers/`) against a simulated `figma` global for the
   baseline → scan → release flow, deprecation, rename confirmation,
   review-state updates, and the document-wide impact-index build
+- UI tests (`tests/ui/`, jsdom + React Testing Library): the Changes, Releases and Overview pages, search
+  combobox, tabs, nav, banners, and the theme / dismiss-once hooks, rendered with the real
+  `ProjectProvider` against a mocked `bridge` and a small fake plugin that answers review and release
+  messages. A test file opts in with a `// @vitest-environment jsdom` docblock; the rest stay on node
 - the instance scanner (per-component counts, "potentially affected"
   container names, and "component contains component" edges found via
   ancestor-chain walking) and the dependency graph / token-impact
