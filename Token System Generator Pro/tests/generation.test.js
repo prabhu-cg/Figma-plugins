@@ -875,6 +875,170 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(p && p.contrast.stops.find(s => s.stop === 500).hex === '#0000ff', JSON.stringify(p && p.contrast.stops.map(s => s.hex)));
   });
 
+  // ── Canvas foundation ──
+  const CANVAS = { canvas: true };
+  const frameNamed = (fig, name = 'Token System Foundation') => fig.page.children.filter(n => n.type === 'FRAME' && n.name === name);
+  const descendants = (n) => n.children.flatMap(c => [c, ...descendants(c)]);
+  const sectionTitles = (root) => root.children.map(c => (c.children[0] && c.children[0].characters) || '').filter(Boolean);
+  const drawn = async (doc, msgOver, mode = 'scratch') => {
+    const fig = createFigma(doc || {}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', mode, options: CANVAS, ...msgOver }));
+    const result = await fig.finished();
+    return { fig, result, root: frameNamed(fig)[0] };
+  };
+
+  await test('canvas is off by default: nothing is drawn', async () => {
+    for (const mode of ['scratch', 'starter']) {
+      const { fig, result } = await drawn({}, { options: {} }, mode);
+      assert(result.type === 'generation-complete' && fig.page.children.length === 0, `${mode}: ${fig.page.children.length} nodes drawn`);
+    }
+  });
+
+  await test('canvas on: one marked frame with every section for the tokens that exist', async () => {
+    const { result, root } = await drawn({}, { extras: ALL3 });
+    assert(result.type === 'generation-complete' && result.warnings.length === 0, JSON.stringify(result.warnings));
+    assert(root && root.getPluginData('tsg-foundation') === '1' && root.layoutMode === 'VERTICAL', 'frame or marker missing');
+    assert(JSON.stringify(sectionTitles(root)) === JSON.stringify(['Token System', 'Color ramps', 'Type scale', 'Spacing', 'Radius and border width', 'Elevation', 'Opacity', 'Z-index']), sectionTitles(root).join(' | '));
+  });
+
+  await test('canvas: sections for tokens that were not generated are left out', async () => {
+    const { root } = await drawn({}, { extras: { elevation: false, opacity: true, zIndex: false } });
+    const titles = sectionTitles(root);
+    assert(titles.includes('Opacity') && !titles.includes('Elevation') && !titles.includes('Z-index'), titles.join(' | '));
+  });
+
+  await test('canvas colour ramps: one row per ramp, every swatch bound to its Global colour variable', async () => {
+    const { fig, root } = await drawn({}, { colors: { ...COLORS, tertiary: '' } });
+    const section = root.children.find(c => c.name === 'Color ramps');
+    const rows = section.children.filter(c => c.type === 'FRAME');
+    assert(rows.length === 8, `${rows.length} rows`);
+    const swatches = descendants(section).filter(n => n.type === 'RECTANGLE');
+    assert(swatches.length === 80, `${swatches.length} swatches`);
+    const byId = Object.fromEntries(fig.state.variables.map(v => [v.id, v]));
+    const primary = rows[0].children.filter(c => c.type === 'FRAME').slice(0, 10);     // first child is the label column
+    const first = descendants(rows[0]).filter(n => n.type === 'RECTANGLE')[5];         // stop 500
+    const bound = byId[first.fills[0].boundVariables.color.id];
+    assert(bound && bound.name === 'color/cobalt/500', bound && bound.name);
+    assert(swatches.every(s => s.fills[0].boundVariables && byId[s.fills[0].boundVariables.color.id].name.startsWith('color/')), 'a swatch is not bound');
+  });
+
+  await test('canvas type scale: 13 samples, each using its real text style', async () => {
+    const { fig, root } = await drawn({}, {});
+    const type = root.children.find(c => c.name === 'Type scale');
+    const samples = descendants(type).filter(n => n.type === 'TEXT' && n.textStyleId);
+    assert(samples.length === 13, `${samples.length} samples`);
+    const names = samples.map(s => fig.state.textStyles.find(t => t.id === s.textStyleId).name);
+    assert(names.includes('Display/display-lg') && names.includes('Heading/h1') && names.includes('Body copy/body'), names.join());
+  });
+
+  await test('canvas spacing, radius, border width, elevation, opacity and z-index show the tokens', async () => {
+    const { fig, root } = await drawn({}, { extras: ALL3 });
+    const bars = descendants(root.children.find(c => c.name === 'Spacing')).filter(n => n.type === 'RECTANGLE');
+    assert(JSON.stringify(bars.map(b => b._w)) === JSON.stringify([4, 8, 12, 16, 20, 24, 32, 40, 48, 64]), bars.map(b => b._w).join());
+    const shape = descendants(root.children.find(c => c.name === 'Radius and border width')).filter(n => n.type === 'RECTANGLE');
+    const radiusBoxes = shape.slice(0, 7), widthBoxes = shape.slice(7);
+    assert(radiusBoxes.length === 7 && radiusBoxes.every(b => b.boundVariables.topLeftRadius && b.boundVariables.bottomRightRadius), 'radius boxes not bound');
+    assert(widthBoxes.length === 5 && widthBoxes.slice(1).every(b => b.boundVariables.strokeWeight), 'border width boxes not bound');
+    const cards = descendants(root.children.find(c => c.name === 'Elevation')).filter(n => n.type === 'RECTANGLE');
+    const effectIds = fig.state.effectStyles.map(s => s.id);
+    assert(cards.length === 5 && cards.every((c, i) => c.effectStyleId === effectIds[i]), 'elevation cards do not use the effect styles');
+    const chips = descendants(root.children.find(c => c.name === 'Opacity')).filter(n => n.type === 'RECTANGLE');
+    assert(chips.length === 6 && chips.every(c => c.boundVariables.opacity), 'opacity chips not bound');
+    const layers = root.children.find(c => c.name === 'Z-index').children.filter(c => c.type === 'FRAME');
+    assert(layers.length === 8, `${layers.length} layers`);
+  });
+
+  await test('canvas: Starter draws every section, Smart Convert only the colour families it found', async () => {
+    const starter = await drawn({}, {}, 'starter');
+    assert(sectionTitles(starter.root).includes('Elevation') && sectionTitles(starter.root).includes('Type scale'), sectionTitles(starter.root).join());
+    const conv = await drawn(CONVERT_DOC, {}, 'convert');
+    assert(JSON.stringify(sectionTitles(conv.root)) === JSON.stringify(['Token System', 'Color ramps']), sectionTitles(conv.root).join(' | '));
+    assert(conv.root.children.find(c => c.name === 'Color ramps').children.filter(c => c.type === 'FRAME').length >= 1, 'no colour rows');
+  });
+
+  await test('canvas placement: beside existing work, never on top of it', async () => {
+    const { root } = await drawn({ pageNodes: [{ name: 'Mine A', x: 0, y: 100, width: 500, height: 300 }, { name: 'Mine B', x: 200, y: 40, width: 900, height: 200 }] }, {});
+    assert(root.x === 1100 + 200 && root.y === 40, `placed at ${root.x}, ${root.y}`);
+  });
+
+  await test('canvas placement: an empty page centres it on the viewport', async () => {
+    const { root } = await drawn({}, {});
+    assert(Math.abs((root.x + root.width / 2) - 500) < 2, `centre x ${root.x + root.width / 2}`);
+  });
+
+  await test('regenerating with the canvas on replaces the previous frame in place', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', options: CANVAS }));
+    await fig.finished();
+    const first = frameNamed(fig)[0]; first.x = 777; first.y = 333;                  // the user moved it
+    fig.state.messages.length = 0;
+    await fig.send(scratchMsg({ type: 'generate', options: CANVAS }));
+    const ask = fig.state.messages.find(m => m.type === 'confirm-replace');
+    assert(ask && ask.existing.foundationFrames === 1, JSON.stringify(ask && ask.existing));
+    fig.state.messages.length = 0;
+    await fig.send(scratchMsg({ options: CANVAS }));
+    await fig.finished();
+    const frames = frameNamed(fig);
+    assert(frames.length === 1 && frames[0] !== first && frames[0].x === 777 && frames[0].y === 333, `${frames.length} frames, at ${frames[0] && frames[0].x},${frames[0] && frames[0].y}`);
+  });
+
+  await test('regenerating with the canvas off leaves an earlier frame alone, and never touches the user\'s own frames', async () => {
+    const fig = createFigma({ pageNodes: [{ name: 'My Design', x: 0, y: 0, width: 400, height: 400 }] }); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', options: CANVAS }));
+    await fig.finished();
+    fig.state.messages.length = 0;
+    await fig.send(scratchMsg({}));
+    await fig.finished();
+    assert(frameNamed(fig).length === 1 && frameNamed(fig, 'My Design').length === 1, 'frames changed');
+  });
+
+  await test('a problem while drawing is a warning: the frame is removed and the tokens still complete', async () => {
+    for (const op of ['createFrame', 'createRectangle', 'createText', 'bindPaint']) {
+      const probe = createFigma({}); probe.load(BUNDLE);
+      await probe.send(scratchMsg({ type: 'generate', options: CANVAS })); await probe.finished();
+      const n = probe.counts[op];
+      for (const k of [1, Math.ceil(n / 2), n]) {
+        const fig = createFigma({ faults: { [op]: k } }); fig.load(BUNDLE);
+        await fig.send(scratchMsg({ type: 'generate', options: CANVAS }));
+        const result = await fig.finished();
+        assert(result.type === 'generation-complete' && result.warnings.some(w => /foundation/.test(w)), `${op} #${k}: ${result.type} ${JSON.stringify(result.warnings)}`);
+        assert(fig.page.children.length === 0, `${op} #${k}: ${fig.page.children.length} nodes left on the page`);
+        assert(fig.state.variables.some(v => v.name === 'color/cobalt/500') && fig.state.collections.length === 2, `${op} #${k}: tokens missing`);
+      }
+    }
+  });
+
+  await test('with the canvas on, a failure while building tokens still restores the page and the file exactly', async () => {
+    const probe = createFigma(EXISTING); probe.load(BUNDLE);
+    await probe.send(scratchMsg({ options: CANVAS, extras: ALL3 })); await probe.finished();
+    for (const op of ['createVariable', 'setValue', 'createEffectStyle', 'createTextStyle', 'createCollection']) {
+      const n = probe.counts[op];
+      for (const k of [1, Math.ceil(n / 2), n]) {
+        const fig = createFigma({ ...EXISTING, pageNodes: [{ name: 'Mine', x: 0, y: 0, width: 100, height: 100 }], faults: { [op]: k } }); fig.load(BUNDLE);
+        const before = fig.snapshot();
+        fig.send(scratchMsg({ options: CANVAS, extras: ALL3 }));
+        const result = await fig.finished();
+        assert(result.type === 'generation-failed' && fig.snapshot() === before, `${op} #${k}: ${result.type}`);
+      }
+    }
+  });
+
+  await test('rejects a non-boolean canvas option', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    const before = fig.snapshot();
+    fig.send(scratchMsg({ options: { canvas: 'yes' } }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-failed' && fig.snapshot() === before, result.type);
+  });
+
+  // ── Window size ──
+  await test('the plugin opens at 560 x 510 and ignores resize messages', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    assert(fig.state.window.width === 560 && fig.state.window.height === 510, JSON.stringify(fig.state.window));
+    await fig.send({ type: 'resize', width: 900, height: 900 });
+    assert(fig.state.resizes.length === 0, 'the window was resized');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

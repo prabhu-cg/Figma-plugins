@@ -3,7 +3,7 @@ import {
   generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
   generateBorderWidthScale, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey,
   ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS, scopesFor, webCodeSyntax, ScopeLayer,
-  analyzeRamp, brandColorNames, RampContrast, weightFromStyleName, FONT_WEIGHT_NAMES,
+  analyzeRamp, brandColorNames, RampContrast, rgbToHex, hexToRgb, weightFromStyleName, FONT_WEIGHT_NAMES,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -52,12 +52,18 @@ const PENDING_PREFIX = '(generating) ';
 const staged = {
   collections: [] as { collection: VariableCollection; finalName: string }[],
   styles: [] as BaseStyle[],
+  nodes: [] as SceneNode[],   // canvas nodes (the foundation frame)
 };
 
 function stageCollection(name: string): VariableCollection {
   const collection = figma.variables.createVariableCollection(PENDING_PREFIX + name);
   staged.collections.push({ collection, finalName: name });
   return collection;
+}
+
+function stageNode<T extends SceneNode>(node: T): T {
+  staged.nodes.push(node);
+  return node;
 }
 
 function stageStyle<T extends BaseStyle>(style: T): T {
@@ -68,6 +74,9 @@ function stageStyle<T extends BaseStyle>(style: T): T {
 // Returns how many staged items could not be removed.
 function rollbackStaged(): number {
   let failed = 0;
+  for (const node of staged.nodes) {
+    try { node.remove(); } catch (_e) { failed++; }
+  }
   for (const style of staged.styles) {
     try { style.remove(); } catch (_e) { failed++; }
   }
@@ -75,6 +84,7 @@ function rollbackStaged(): number {
     try { collection.remove(); } catch (_e) { failed++; }
   }
   staged.styles = [];
+  staged.nodes = [];
   staged.collections = [];
   return failed;
 }
@@ -85,6 +95,7 @@ interface ExistingTokens {
   paintStyles: PaintStyle[];
   textStyles: TextStyle[];
   effectStyles: EffectStyle[];
+  foundationFrames: FrameNode[];
 }
 
 // Replacing only touches what this plugin makes. Anything else in the file is left alone:
@@ -103,7 +114,10 @@ const isPluginTextStyle = (name: string): boolean => {
   return rest.length === 0 && TEXT_STYLE_GROUPS.includes(group) && (TYPE_LEVEL_NAMES as readonly string[]).includes(level);
 };
 
-async function snapshotExisting(mode: string): Promise<ExistingTokens> {
+const FOUNDATION_MARKER = 'tsg-foundation';
+const isFoundationFrame = (n: SceneNode): n is FrameNode => n.type === 'FRAME' && n.getPluginData(FOUNDATION_MARKER) === '1';
+
+async function snapshotExisting(mode: string, options: OutputOptions): Promise<ExistingTokens> {
   const collections = (await figma.variables.getLocalVariableCollectionsAsync()).filter(c => PLUGIN_COLLECTIONS.includes(c.name));
   const ids = new Set(collections.map(c => c.id));
   return {
@@ -113,6 +127,8 @@ async function snapshotExisting(mode: string): Promise<ExistingTokens> {
     paintStyles: mode === 'convert' ? [] : (await figma.getLocalPaintStylesAsync()).filter(s => isPluginPaintStyle(s.name)),
     textStyles:  mode === 'convert' ? [] : (await figma.getLocalTextStylesAsync()).filter(s => isPluginTextStyle(s.name)),
     effectStyles: mode === 'convert' ? [] : (await figma.getLocalEffectStylesAsync()).filter(s => EFFECT_STYLE_RE.test(s.name)),
+    // Drawing a new foundation replaces the one this plugin drew earlier on this page.
+    foundationFrames: options.canvas ? figma.currentPage.findChildren(isFoundationFrame) as FrameNode[] : [],
   };
 }
 
@@ -136,11 +152,15 @@ function commitStaged(old: ExistingTokens): void {
   for (const style of old.effectStyles) {
     try { style.remove(); } catch (_e) { warn(`Couldn't remove an old effect style`); }
   }
+  for (const frame of old.foundationFrames) {
+    try { frame.remove(); } catch (_e) { warn(`Couldn't remove the previous foundation frame`); }
+  }
   for (const { collection, finalName } of staged.collections) {
     try { collection.name = finalName; } catch (_e) { warn(`Couldn't rename "${finalName}"`); }
   }
   staged.collections = [];
   staged.styles = [];
+  staged.nodes = [];
 }
 
 function createLocalPaintStyle(path: string, r: number, g: number, b: number): void {
@@ -253,13 +273,14 @@ async function tokensExist(): Promise<boolean> {
 }
 
 // What a replace would delete, so the UI can show it before the user confirms.
-async function describeExisting(mode: string): Promise<{
+async function describeExisting(mode: string, options: OutputOptions): Promise<{
   collections: { name: string; variables: number }[];
   paintStyles: number;
   textStyles: number;
   effectStyles: number;
+  foundationFrames: number;
 }> {
-  const old = await snapshotExisting(mode);
+  const old = await snapshotExisting(mode, options);
   return {
     collections: old.collections.map(c => ({
       name: c.name,
@@ -268,6 +289,7 @@ async function describeExisting(mode: string): Promise<{
     paintStyles: old.paintStyles.length,
     textStyles: old.textStyles.length,
     effectStyles: old.effectStyles.length,
+    foundationFrames: old.foundationFrames.length,
   };
 }
 
@@ -288,6 +310,7 @@ const ALL_EXTRAS: Extras = { elevation: true, opacity: true, zIndex: true };
 interface OutputOptions {
   scopes: boolean;      // set variable scopes and hide Global primitives that have an Alias counterpart
   codeSyntax: boolean;  // add a WEB code syntax (var(--…)) to every variable
+  canvas: boolean;      // draw a labelled foundation frame (colour ramps, type, spacing …) on the current page
 }
 
 interface ScratchOptions {
@@ -303,7 +326,7 @@ interface ScratchOptions {
   extras: Extras;
 }
 
-async function createStarterSystem(tier: Tier): Promise<void> {
+async function createStarterSystem(tier: Tier): Promise<FoundationData> {
   return buildFromScratch({
     colors: STARTER_COLORS, spacingBase: 4, radiusBase: 4, widthBase: 1,
     fontBase: 16, ratioKey: 'major-third', tier, extras: ALL_EXTRAS,
@@ -313,7 +336,7 @@ async function createStarterSystem(tier: Tier): Promise<void> {
 // Smart Convert reads the local paint/text styles and rebuilds them as variables.
 // 3-tier adds a Component collection and names the alias colors `colors/…`;
 // 2-tier names them `color/…`. Both names are kept so existing output doesn't change.
-async function convertStylesToTokens(tier: Tier): Promise<void> {
+async function convertStylesToTokens(tier: Tier): Promise<FoundationData> {
   const colorStyles = await figma.getLocalPaintStylesAsync();
   const textStyles  = await figma.getLocalTextStylesAsync();
   if (colorStyles.length === 0 && textStyles.length === 0) {
@@ -418,6 +441,14 @@ async function convertStylesToTokens(tier: Tier): Promise<void> {
   });
 
   if (component) createComponentColorTokens(component, aliasByName, aliasColorRoot);
+
+  // Smart Convert has no ramps of its own, so the foundation shows the colour families it found.
+  return {
+    ramps: sortedFamilies.map(([family, vars]) => ({
+      label: titleCase(family), name: family,
+      stops: vars.map(v => ({ label: v.name.split('/').pop() ?? '', hex: variableHex(v, modeId), variable: v })),
+    })),
+  };
 }
 
 // Component-tier color tokens that point at the 500 stop of each alias role.
@@ -509,10 +540,13 @@ function createGlobalColors(
   return { ramps, brandNames };
 }
 
-function createSpacingVariables(global: VariableCollection, base: number): void {
+function createSpacingVariables(global: VariableCollection, base: number): { name: string; value: number }[] {
+  const made: { name: string; value: number }[] = [];
   for (const [k, v] of Object.entries(generateSpacingScale(base))) {
     createNumber(global, `spacing/${k}`, v);
+    made.push({ name: k, value: v });
   }
+  return made;
 }
 
 // Radius and border-width globals are named by pixel value; duplicate values share one variable.
@@ -622,7 +656,7 @@ function textStyleGroup(levelName: string): string {
 
 // Local text styles for each level, then bound to the typography variables.
 // Body copy uses the body font; displays and headings use the heading font.
-async function createTextStyles(typo: TypographyVars): Promise<void> {
+async function createTextStyles(typo: TypographyVars): Promise<Map<string, TextStyle>> {
   fontCatalog = null;
   const created: { made: CreatedTextStyle; level: string; role: 'heading' | 'body' }[] = [];
   for (const t of typo.levels) {
@@ -651,6 +685,7 @@ async function createTextStyles(typo: TypographyVars): Promise<void> {
       warn(`Couldn't link a text style to its variables`);
     }
   }
+  return new Map(created.map(c => [c.level, c.made.style]));
 }
 
 // Local paint styles mirroring each color ramp (brand names from the global step, semantic fixed).
@@ -669,10 +704,18 @@ function shadowRgb(ramps: Ramps, modeId: string): RGB {
   return value && typeof value === 'object' && 'r' in value ? { r: value.r, g: value.g, b: value.b } : { r: 0, g: 0, b: 0 };
 }
 
-function createExtraTokens(global: VariableCollection, extras: Extras, ramps: Ramps): ElevationVars[] {
+interface ExtraTokenData {
+  elevation: ElevationVars[];
+  opacity: { value: number; variable: Variable }[];
+  zIndex: { name: string; value: number }[];
+}
+
+function createExtraTokens(global: VariableCollection, extras: Extras, ramps: Ramps): ExtraTokenData {
   const modeId = global.modes[0].modeId;
-  if (extras.opacity) for (const n of OPACITY_STEPS) createNumber(global, `opacity/${n}`, n);
-  if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) createNumber(global, `z-index/${name}`, value);
+  const opacity: ExtraTokenData['opacity'] = [];
+  const zIndex: ExtraTokenData['zIndex'] = [];
+  if (extras.opacity) for (const n of OPACITY_STEPS) opacity.push({ value: n, variable: createNumber(global, `opacity/${n}`, n) });
+  if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) { createNumber(global, `z-index/${name}`, value); zIndex.push({ name, value }); }
 
   const elevation: ElevationVars[] = [];
   if (extras.elevation) {
@@ -689,11 +732,12 @@ function createExtraTokens(global: VariableCollection, extras: Extras, ramps: Ra
       });
     }
   }
-  return elevation;
+  return { elevation, opacity, zIndex };
 }
 
 // One Elevation/<level> effect style per level, its shadow bound to that level's variables.
-function createElevationStyles(levels: ElevationVars[]): void {
+function createElevationStyles(levels: ElevationVars[]): { name: string; style: EffectStyle }[] {
+  const made: { name: string; style: EffectStyle }[] = [];
   for (const v of levels) {
     const style = stageStyle(figma.createEffectStyle());
     style.name = `Elevation/${v.name}`;
@@ -711,7 +755,9 @@ function createElevationStyles(levels: ElevationVars[]): void {
       warn(`Couldn't link an elevation style to its variables`);
     }
     style.effects = [effect];
+    made.push({ name: v.name, style });
   }
+  return made;
 }
 
 // Scopes decide which Figma pickers list a variable; code syntax is the name shown in Dev Mode.
@@ -785,24 +831,57 @@ function createComponentCollection(colorAliases: AliasRamps): void {
   }
 }
 
-async function buildFromScratch(o: ScratchOptions): Promise<void> {
+// Everything the canvas foundation draws, handed over by whichever mode just built the tokens.
+interface FoundationData {
+  ramps: { label: string; name: string; stops: { label: string; hex: string; variable: Variable }[] }[];
+  spacing?: { name: string; value: number }[];
+  radius?: ScaleVars;
+  width?: ScaleVars;
+  typography?: { levels: TypeLevel[]; styles: Map<string, TextStyle> };
+  elevation?: { name: string; style: EffectStyle }[];
+  opacity?: { value: number; variable: Variable }[];
+  zIndex?: { name: string; value: number }[];
+}
+
+const titleCase = (s: string): string => s[0].toUpperCase() + s.slice(1);
+
+function variableHex(v: Variable, modeId: string): string {
+  const c = v.valuesByMode[modeId];
+  return c && typeof c === 'object' && 'r' in c ? rgbToHex(c.r, c.g, c.b).toUpperCase() : '';
+}
+
+async function buildFromScratch(o: ScratchOptions): Promise<FoundationData> {
   // 01 Global
   const global = stageCollection('01 Global');
   const { ramps, brandNames } = createGlobalColors(global, o.colors);
-  createSpacingVariables(global, o.spacingBase);
+  const spacing = createSpacingVariables(global, o.spacingBase);
   const radius = createScaleGlobals(global, 'borderRadius', generateRadiusScale(o.radiusBase));
   const width  = createScaleGlobals(global, 'borderWidth', generateBorderWidthScale(o.widthBase));
   const typo   = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || 'Inter', o.bodyFontFamily);
-  const elevation = createExtraTokens(global, o.extras, ramps);
+  const extra = createExtraTokens(global, o.extras, ramps);
 
   // 02 Alias, then the local styles that mirror the tokens
   const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
-  await createTextStyles(typo);
+  const textStyles = await createTextStyles(typo);
   createPaintStyles(global, ramps, brandNames);
-  createElevationStyles(elevation);
+  const elevationStyles = createElevationStyles(extra.elevation);
 
   // 03 Component
   if (o.tier === '3tier') createComponentCollection(colorAliases);
+
+  const modeId = global.modes[0].modeId;
+  return {
+    ramps: [...BRAND_KEYS, ...SEMANTIC_KEYS].filter(key => ramps[key]).map(key => ({
+      label: titleCase(key),
+      name: (BRAND_KEYS as readonly string[]).includes(key) ? brandNames[key] : SEMANTIC_GLOBAL[key as typeof SEMANTIC_KEYS[number]],
+      stops: RAMP_STOPS.map(stop => ({ label: String(stop), hex: variableHex(ramps[key][stop], modeId), variable: ramps[key][stop] })),
+    })),
+    spacing, radius, width,
+    typography: { levels: typo.levels, styles: textStyles },
+    elevation: elevationStyles.length ? elevationStyles : undefined,
+    opacity: extra.opacity.length ? extra.opacity : undefined,
+    zIndex: extra.zIndex.length ? extra.zIndex : undefined,
+  };
 }
 
 // ─── JSON EXPORT ─────────────────────────────────────────────────
@@ -925,8 +1004,8 @@ async function runGeneration(r: GenerateRequest): Promise<void> {
   const blocked = await blockedReason(r.mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   // Only ask when something this plugin made would actually be replaced.
-  const existing = await describeExisting(r.mode);
-  if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0) {
+  const existing = await describeExisting(r.mode, r.options);
+  if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0 || existing.foundationFrames > 0) {
     figma.ui.postMessage({ type: 'confirm-replace', existing }); return;
   }
   await generate(r);
@@ -952,14 +1031,16 @@ async function generate(r: GenerateRequest): Promise<void> {
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   issues.clear();
   fontCatalog = null;
-  const old = await snapshotExisting(r.mode);
+  const old = await snapshotExisting(r.mode, r.options);
   const tier = r.approach;
 
   try {
-    if (r.mode === 'scratch') await buildFromScratch(scratchOptions(r));
-    else if (r.mode === 'starter') await createStarterSystem(tier);
-    else if (r.mode === 'convert') await convertStylesToTokens(tier);
+    let data: FoundationData | undefined;
+    if (r.mode === 'scratch') data = await buildFromScratch(scratchOptions(r));
+    else if (r.mode === 'starter') data = await createStarterSystem(tier);
+    else if (r.mode === 'convert') data = await convertStylesToTokens(tier);
     await applyVariableMetadata(r.options);
+    if (r.options.canvas && data) await drawFoundationSafely(data, old.foundationFrames[0]);
   } catch (e) {
     const leftover = rollbackStaged();
     const reason = (e as { message?: string } | null)?.message ?? String(e);
@@ -981,6 +1062,250 @@ async function generate(r: GenerateRequest): Promise<void> {
   figma.ui.postMessage({ type: 'generation-complete', json, total, cols, warnings });
 }
 
+// ─── CANVAS FOUNDATION ───────────────────────────────────────────
+// An optional, labelled frame on the current page that shows the tokens just generated: colour ramps
+// (fills bound to the variables), the type scale (real text styles), spacing, radius, border width,
+// elevation, opacity and z-index. Regenerating with the option on replaces the previous frame.
+
+const INK: RGB = { r: 0.09, g: 0.09, b: 0.11 };
+const MUTED: RGB = { r: 0.42, g: 0.43, b: 0.47 };
+const PAPER: RGB = { r: 1, g: 1, b: 1 };
+const WELL: RGB = { r: 0.95, g: 0.96, b: 0.97 };
+const solid = (color: RGB, opacity = 1): SolidPaint => ({ type: 'SOLID', color, opacity });
+
+function frameOf(parent: FrameNode | null, name: string, dir: 'HORIZONTAL' | 'VERTICAL', gap: number): FrameNode {
+  const f = figma.createFrame();
+  f.name = name;
+  f.layoutMode = dir;
+  f.primaryAxisSizingMode = 'AUTO';
+  f.counterAxisSizingMode = 'AUTO';
+  f.itemSpacing = gap;
+  f.fills = [];
+  if (parent) parent.appendChild(f);
+  return f;
+}
+
+// A column of fixed width that grows downward, so labels line up across rows.
+function columnOf(parent: FrameNode, width: number, gap: number): FrameNode {
+  const f = frameOf(parent, 'Label', 'VERTICAL', gap);
+  f.resize(width, 10);
+  f.primaryAxisSizingMode = 'AUTO';
+  f.counterAxisSizingMode = 'FIXED';
+  return f;
+}
+
+function textOf(parent: FrameNode, chars: string, size: number, font: FontName, color: RGB): TextNode {
+  const t = figma.createText();
+  parent.appendChild(t);
+  t.fontName = font;
+  t.fontSize = size;
+  t.characters = chars;
+  t.fills = [solid(color)];
+  return t;
+}
+
+function rectOf(parent: FrameNode, w: number, h: number, radius: number): RectangleNode {
+  const r = figma.createRectangle();
+  parent.appendChild(r);
+  r.resize(w, h);
+  r.cornerRadius = radius;
+  return r;
+}
+
+const sampleText = (level: string): string =>
+  level.startsWith('display') ? 'Display' : /^h[1-6]$/.test(level) ? 'Heading text' : 'The quick brown fox jumps over the lazy dog';
+
+// Beside the existing work on the page (or centred on an empty page); in place of the previous
+// foundation when there is one.
+function placeFoundation(root: FrameNode, previous: FrameNode | undefined): void {
+  if (previous) { root.x = previous.x; root.y = previous.y; return; }
+  const others = figma.currentPage.children.filter(n => n !== root);
+  if (others.length === 0) {
+    const c = figma.viewport.center;
+    root.x = Math.round(c.x - root.width / 2);
+    root.y = Math.round(c.y - Math.min(root.height, 800) / 2);
+    return;
+  }
+  root.x = Math.max(...others.map(n => n.x + n.width)) + 200;
+  root.y = Math.min(...others.map(n => n.y));
+}
+
+async function drawFoundation(data: FoundationData, previous: FrameNode | undefined): Promise<void> {
+  const regular = (await resolveTextFont('Inter', 400)).font;
+  const strong = (await resolveTextFont('Inter', 600)).font;
+
+  const root = stageNode(figma.createFrame());
+  root.name = 'Token System Foundation';
+  root.setPluginData(FOUNDATION_MARKER, '1');
+  root.layoutMode = 'VERTICAL';
+  root.primaryAxisSizingMode = 'AUTO';
+  root.counterAxisSizingMode = 'AUTO';
+  root.paddingLeft = root.paddingRight = root.paddingTop = root.paddingBottom = 64;
+  root.itemSpacing = 72;
+  root.cornerRadius = 24;
+  root.fills = [solid(PAPER)];
+
+  const head = frameOf(root, 'Header', 'VERTICAL', 8);
+  textOf(head, 'Token System', 44, strong, INK);
+  textOf(head, 'Foundation generated by Token System Generator Pro', 16, regular, MUTED);
+
+  const section = (title: string): FrameNode => {
+    const s = frameOf(root, title, 'VERTICAL', 28);
+    textOf(s, title, 28, strong, INK);
+    return s;
+  };
+  const caption = (parent: FrameNode, name: string, detail: string): void => {
+    textOf(parent, name, 13, strong, INK);
+    textOf(parent, detail, 12, regular, MUTED);
+  };
+
+  // Colour ramps
+  const colors = section('Color ramps');
+  for (const ramp of data.ramps) {
+    const row = frameOf(colors, ramp.label, 'HORIZONTAL', 12);
+    const label = columnOf(row, 150, 4);
+    textOf(label, ramp.label, 16, strong, INK);
+    textOf(label, ramp.name, 13, regular, MUTED);
+    for (const stop of ramp.stops) {
+      const cell = frameOf(row, stop.label, 'VERTICAL', 6);
+      const swatch = rectOf(cell, 96, 64, 8);
+      swatch.fills = [figma.variables.setBoundVariableForPaint(solid(hexToRgb(stop.hex)), 'color', stop.variable)];
+      swatch.strokes = [solid(INK, 0.1)];
+      swatch.strokeWeight = 1;
+      swatch.strokeAlign = 'INSIDE';
+      textOf(cell, stop.label, 13, strong, INK);
+      textOf(cell, stop.hex, 12, regular, MUTED);
+    }
+  }
+
+  // Type scale: each sample uses the real text style
+  if (data.typography) {
+    const type = section('Type scale');
+    for (const level of data.typography.levels) {
+      const style = data.typography.styles.get(level.name);
+      if (!style) continue;
+      const row = frameOf(type, level.name, 'HORIZONTAL', 32);
+      row.counterAxisAlignItems = 'CENTER';
+      const meta = columnOf(row, 260, 2);
+      textOf(meta, level.name, 14, strong, INK);
+      textOf(meta, `${level.fontSize}px · weight ${level.fontWeight}`, 12, regular, MUTED);
+      const sample = figma.createText();
+      row.appendChild(sample);
+      sample.characters = sampleText(level.name);
+      await sample.setTextStyleIdAsync(style.id);
+      sample.fills = [solid(INK)];
+    }
+  }
+
+  // Spacing
+  if (data.spacing) {
+    const spacing = section('Spacing');
+    for (const step of data.spacing) {
+      const row = frameOf(spacing, `spacing/${step.name}`, 'HORIZONTAL', 16);
+      row.counterAxisAlignItems = 'CENTER';
+      textOf(columnOf(row, 120, 0), `${step.value}px`, 13, strong, INK);
+      const bar = rectOf(row, step.value, 16, 3);
+      bar.fills = [solid(INK, 0.85)];
+    }
+  }
+
+  // Radius + border width
+  if (data.radius || data.width) {
+    const shape = section('Radius and border width');
+    if (data.radius) {
+      const row = frameOf(shape, 'Radius', 'HORIZONTAL', 28);
+      for (const [name, value] of data.radius.entries) {
+        const cell = frameOf(row, `radius/${name}`, 'VERTICAL', 10);
+        const box = rectOf(cell, 72, 72, Math.min(value, 36));
+        box.fills = [solid(WELL)];
+        box.strokes = [solid(INK, 0.2)];
+        box.strokeWeight = 1;
+        const variable = data.radius.byValue.get(value);
+        if (variable) for (const corner of ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'] as const) box.setBoundVariable(corner, variable);
+        caption(cell, name, `${value}px`);
+      }
+    }
+    if (data.width) {
+      const row = frameOf(shape, 'Border width', 'HORIZONTAL', 28);
+      for (const [name, value] of data.width.entries) {
+        const cell = frameOf(row, `border/${name}`, 'VERTICAL', 10);
+        const box = rectOf(cell, 72, 72, 8);
+        box.fills = [solid(PAPER)];
+        if (value > 0) {
+          box.strokes = [solid(INK)];
+          box.strokeWeight = value;
+          box.strokeAlign = 'INSIDE';
+          const variable = data.width.byValue.get(value);
+          if (variable) box.setBoundVariable('strokeWeight', variable);
+        } else {
+          box.strokes = [solid(INK, 0.15)];
+          box.strokeWeight = 1;
+        }
+        caption(cell, name, `${value}px`);
+      }
+    }
+  }
+
+  // Elevation: white cards on a light well, each with its effect style
+  if (data.elevation) {
+    const elevation = section('Elevation');
+    const well = frameOf(elevation, 'Elevation levels', 'HORIZONTAL', 40);
+    well.paddingLeft = well.paddingRight = well.paddingTop = well.paddingBottom = 40;
+    well.cornerRadius = 16;
+    well.fills = [solid(WELL)];
+    for (const level of data.elevation) {
+      const cell = frameOf(well, `elevation/${level.name}`, 'VERTICAL', 14);
+      const card = rectOf(cell, 96, 96, 12);
+      card.fills = [solid(PAPER)];
+      await card.setEffectStyleIdAsync(level.style.id);
+      caption(cell, level.name, level.style.name);
+    }
+  }
+
+  // Opacity
+  if (data.opacity) {
+    const opacity = section('Opacity');
+    const well = frameOf(opacity, 'Opacity steps', 'HORIZONTAL', 28);
+    well.paddingLeft = well.paddingRight = well.paddingTop = well.paddingBottom = 32;
+    well.cornerRadius = 16;
+    well.fills = [solid(WELL)];
+    for (const step of data.opacity) {
+      const cell = frameOf(well, `opacity/${step.value}`, 'VERTICAL', 10);
+      const chip = rectOf(cell, 72, 72, 10);
+      chip.fills = [solid(INK)];
+      chip.setBoundVariable('opacity', step.variable);
+      caption(cell, `${step.value}%`, `opacity/${step.value}`);
+    }
+  }
+
+  // Z-index
+  if (data.zIndex) {
+    const layers = section('Z-index');
+    for (const layer of data.zIndex) {
+      const row = frameOf(layers, `z-index/${layer.name}`, 'HORIZONTAL', 16);
+      textOf(columnOf(row, 160, 0), layer.name, 14, strong, INK);
+      textOf(row, String(layer.value), 14, regular, MUTED);
+    }
+  }
+
+  placeFoundation(root, previous);
+  figma.viewport.scrollAndZoomIntoView([root]);
+}
+
+// The foundation is decoration, so a drawing problem must not fail the tokens: take back whatever
+// was drawn and carry on with a warning.
+async function drawFoundationSafely(data: FoundationData, previous: FrameNode | undefined): Promise<void> {
+  const before = staged.nodes.length;
+  try {
+    await drawFoundation(data, previous);
+  } catch (e) {
+    for (const node of staged.nodes.splice(before)) {
+      try { node.remove(); } catch (_e) { warn(`Couldn't remove a partly drawn foundation frame`); }
+    }
+    warn(`Couldn't draw the foundation on the canvas: ${(e as { message?: string } | null)?.message ?? String(e)}`);
+  }
+}
+
 // ─── CONTRAST + PREVIEW ──────────────────────────────────────────
 
 interface RampReport {
@@ -989,8 +1314,6 @@ interface RampReport {
   name: string;       // the colour's name ("cobalt")
   contrast: RampContrast;
 }
-
-const titleCase = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
 // The ramps From Scratch would generate for the colours typed so far, with their contrast.
 // Anything that isn't a valid hex yet is skipped, so this is safe to call on every keystroke.
@@ -1117,7 +1440,7 @@ function parseRequest(msg: UiMessage): GenerateRequest {
   const request: GenerateRequest = {
     approach: msg.approach, mode: msg.mode,
     extras: msg.mode === 'starter' ? ALL_EXTRAS : NO_EXTRAS,
-    options: parseFlags(msg.options, { scopes: true, codeSyntax: true }, 'options'),
+    options: parseFlags(msg.options, { scopes: true, codeSyntax: true, canvas: false }, 'options'),
   };
   if (msg.mode !== 'scratch') return request;
 

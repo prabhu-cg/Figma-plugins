@@ -440,12 +440,18 @@
   var PENDING_PREFIX = "(generating) ";
   var staged = {
     collections: [],
-    styles: []
+    styles: [],
+    nodes: []
+    // canvas nodes (the foundation frame)
   };
   function stageCollection(name) {
     const collection = figma.variables.createVariableCollection(PENDING_PREFIX + name);
     staged.collections.push({ collection, finalName: name });
     return collection;
+  }
+  function stageNode(node) {
+    staged.nodes.push(node);
+    return node;
   }
   function stageStyle(style) {
     staged.styles.push(style);
@@ -453,6 +459,13 @@
   }
   function rollbackStaged() {
     let failed = 0;
+    for (const node of staged.nodes) {
+      try {
+        node.remove();
+      } catch (_e) {
+        failed++;
+      }
+    }
     for (const style of staged.styles) {
       try {
         style.remove();
@@ -468,6 +481,7 @@
       }
     }
     staged.styles = [];
+    staged.nodes = [];
     staged.collections = [];
     return failed;
   }
@@ -480,7 +494,9 @@
     const [group, level, ...rest] = name.split("/");
     return rest.length === 0 && TEXT_STYLE_GROUPS.includes(group) && TYPE_LEVEL_NAMES.includes(level);
   };
-  async function snapshotExisting(mode) {
+  var FOUNDATION_MARKER = "tsg-foundation";
+  var isFoundationFrame = (n) => n.type === "FRAME" && n.getPluginData(FOUNDATION_MARKER) === "1";
+  async function snapshotExisting(mode, options) {
     const collections = (await figma.variables.getLocalVariableCollectionsAsync()).filter((c) => PLUGIN_COLLECTIONS.includes(c.name));
     const ids = new Set(collections.map((c) => c.id));
     return {
@@ -489,7 +505,9 @@
       // Smart Convert reads the local styles, so they are kept.
       paintStyles: mode === "convert" ? [] : (await figma.getLocalPaintStylesAsync()).filter((s) => isPluginPaintStyle(s.name)),
       textStyles: mode === "convert" ? [] : (await figma.getLocalTextStylesAsync()).filter((s) => isPluginTextStyle(s.name)),
-      effectStyles: mode === "convert" ? [] : (await figma.getLocalEffectStylesAsync()).filter((s) => EFFECT_STYLE_RE.test(s.name))
+      effectStyles: mode === "convert" ? [] : (await figma.getLocalEffectStylesAsync()).filter((s) => EFFECT_STYLE_RE.test(s.name)),
+      // Drawing a new foundation replaces the one this plugin drew earlier on this page.
+      foundationFrames: options.canvas ? figma.currentPage.findChildren(isFoundationFrame) : []
     };
   }
   function commitStaged(old) {
@@ -530,6 +548,13 @@
         warn(`Couldn't remove an old effect style`);
       }
     }
+    for (const frame of old.foundationFrames) {
+      try {
+        frame.remove();
+      } catch (_e) {
+        warn(`Couldn't remove the previous foundation frame`);
+      }
+    }
     for (const { collection, finalName } of staged.collections) {
       try {
         collection.name = finalName;
@@ -539,6 +564,7 @@
     }
     staged.collections = [];
     staged.styles = [];
+    staged.nodes = [];
   }
   function createLocalPaintStyle(path, r, g, b) {
     const style = stageStyle(figma.createPaintStyle());
@@ -612,8 +638,8 @@
   async function tokensExist() {
     return (await figma.variables.getLocalVariableCollectionsAsync()).length > 0;
   }
-  async function describeExisting(mode) {
-    const old = await snapshotExisting(mode);
+  async function describeExisting(mode, options) {
+    const old = await snapshotExisting(mode, options);
     return {
       collections: old.collections.map((c) => ({
         name: c.name,
@@ -621,7 +647,8 @@
       })),
       paintStyles: old.paintStyles.length,
       textStyles: old.textStyles.length,
-      effectStyles: old.effectStyles.length
+      effectStyles: old.effectStyles.length,
+      foundationFrames: old.foundationFrames.length
     };
   }
   var NO_EXTRAS = { elevation: false, opacity: false, zIndex: false };
@@ -721,6 +748,16 @@
       alias(aliasCol, `text/${name}/fontWeight`, fw);
     });
     if (component) createComponentColorTokens(component, aliasByName, aliasColorRoot);
+    return {
+      ramps: sortedFamilies.map(([family, vars]) => ({
+        label: titleCase(family),
+        name: family,
+        stops: vars.map((v) => {
+          var _a;
+          return { label: (_a = v.name.split("/").pop()) != null ? _a : "", hex: variableHex(v, modeId), variable: v };
+        })
+      }))
+    };
   }
   function createComponentColorTokens(component, aliasVars, root) {
     const modeId = component.modes[0].modeId;
@@ -775,9 +812,12 @@
     return { ramps, brandNames };
   }
   function createSpacingVariables(global, base) {
+    const made = [];
     for (const [k, v] of Object.entries(generateSpacingScale(base))) {
       createNumber(global, `spacing/${k}`, v);
+      made.push({ name: k, value: v });
     }
+    return made;
   }
   function createScaleGlobals(global, prefix, scale) {
     const entries = Object.entries(scale);
@@ -890,6 +930,7 @@
         warn(`Couldn't link a text style to its variables`);
       }
     }
+    return new Map(created.map((c) => [c.level, c.made.style]));
   }
   function shadowRgb(ramps, modeId) {
     var _a, _b;
@@ -898,8 +939,13 @@
   }
   function createExtraTokens(global, extras, ramps) {
     const modeId = global.modes[0].modeId;
-    if (extras.opacity) for (const n of OPACITY_STEPS) createNumber(global, `opacity/${n}`, n);
-    if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) createNumber(global, `z-index/${name}`, value);
+    const opacity = [];
+    const zIndex = [];
+    if (extras.opacity) for (const n of OPACITY_STEPS) opacity.push({ value: n, variable: createNumber(global, `opacity/${n}`, n) });
+    if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) {
+      createNumber(global, `z-index/${name}`, value);
+      zIndex.push({ name, value });
+    }
     const elevation = [];
     if (extras.elevation) {
       const rgb = shadowRgb(ramps, modeId);
@@ -917,9 +963,10 @@
         });
       }
     }
-    return elevation;
+    return { elevation, opacity, zIndex };
   }
   function createElevationStyles(levels) {
+    const made = [];
     for (const v of levels) {
       const style = stageStyle(figma.createEffectStyle());
       style.name = `Elevation/${v.name}`;
@@ -942,7 +989,9 @@
         warn(`Couldn't link an elevation style to its variables`);
       }
       style.effects = [effect];
+      made.push({ name: v.name, style });
     }
+    return made;
   }
   async function applyVariableMetadata(options) {
     if (!options.scopes && !options.codeSyntax) return;
@@ -1003,19 +1052,39 @@
       alias(comp, "border/inverse", primary[900]);
     }
   }
+  var titleCase = (s) => s[0].toUpperCase() + s.slice(1);
+  function variableHex(v, modeId) {
+    const c = v.valuesByMode[modeId];
+    return c && typeof c === "object" && "r" in c ? rgbToHex(c.r, c.g, c.b).toUpperCase() : "";
+  }
   async function buildFromScratch(o) {
     const global = stageCollection("01 Global");
     const { ramps, brandNames } = createGlobalColors(global, o.colors);
-    createSpacingVariables(global, o.spacingBase);
+    const spacing = createSpacingVariables(global, o.spacingBase);
     const radius = createScaleGlobals(global, "borderRadius", generateRadiusScale(o.radiusBase));
     const width = createScaleGlobals(global, "borderWidth", generateBorderWidthScale(o.widthBase));
     const typo = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || "Inter", o.bodyFontFamily);
-    const elevation = createExtraTokens(global, o.extras, ramps);
+    const extra = createExtraTokens(global, o.extras, ramps);
     const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
-    await createTextStyles(typo);
+    const textStyles = await createTextStyles(typo);
     createPaintStyles(global, ramps, brandNames);
-    createElevationStyles(elevation);
+    const elevationStyles = createElevationStyles(extra.elevation);
     if (o.tier === "3tier") createComponentCollection(colorAliases);
+    const modeId = global.modes[0].modeId;
+    return {
+      ramps: [...BRAND_KEYS, ...SEMANTIC_KEYS].filter((key) => ramps[key]).map((key) => ({
+        label: titleCase(key),
+        name: BRAND_KEYS.includes(key) ? brandNames[key] : SEMANTIC_GLOBAL[key],
+        stops: RAMP_STOPS.map((stop) => ({ label: String(stop), hex: variableHex(ramps[key][stop], modeId), variable: ramps[key][stop] }))
+      })),
+      spacing,
+      radius,
+      width,
+      typography: { levels: typo.levels, styles: textStyles },
+      elevation: elevationStyles.length ? elevationStyles : void 0,
+      opacity: extra.opacity.length ? extra.opacity : void 0,
+      zIndex: extra.zIndex.length ? extra.zIndex : void 0
+    };
   }
   var newNode = () => /* @__PURE__ */ Object.create(null);
   var childNode = (parent, key) => {
@@ -1109,8 +1178,8 @@
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
-    const existing = await describeExisting(r.mode);
-    if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0) {
+    const existing = await describeExisting(r.mode, r.options);
+    if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0 || existing.foundationFrames > 0) {
       figma.ui.postMessage({ type: "confirm-replace", existing });
       return;
     }
@@ -1142,13 +1211,15 @@
     }
     issues.clear();
     fontCatalog = null;
-    const old = await snapshotExisting(r.mode);
+    const old = await snapshotExisting(r.mode, r.options);
     const tier = r.approach;
     try {
-      if (r.mode === "scratch") await buildFromScratch(scratchOptions(r));
-      else if (r.mode === "starter") await createStarterSystem(tier);
-      else if (r.mode === "convert") await convertStylesToTokens(tier);
+      let data;
+      if (r.mode === "scratch") data = await buildFromScratch(scratchOptions(r));
+      else if (r.mode === "starter") data = await createStarterSystem(tier);
+      else if (r.mode === "convert") data = await convertStylesToTokens(tier);
       await applyVariableMetadata(r.options);
+      if (r.options.canvas && data) await drawFoundationSafely(data, old.foundationFrames[0]);
     } catch (e) {
       const leftover = rollbackStaged();
       const reason = (_a = e == null ? void 0 : e.message) != null ? _a : String(e);
@@ -1167,7 +1238,221 @@
     figma.notify(warnings.length ? `\u26A0\uFE0F Done with ${warnings.length} warning${warnings.length > 1 ? "s" : ""}` : "\u2705 Done!");
     figma.ui.postMessage({ type: "generation-complete", json, total, cols, warnings });
   }
-  var titleCase = (s) => s[0].toUpperCase() + s.slice(1);
+  var INK = { r: 0.09, g: 0.09, b: 0.11 };
+  var MUTED = { r: 0.42, g: 0.43, b: 0.47 };
+  var PAPER = { r: 1, g: 1, b: 1 };
+  var WELL = { r: 0.95, g: 0.96, b: 0.97 };
+  var solid = (color, opacity = 1) => ({ type: "SOLID", color, opacity });
+  function frameOf(parent, name, dir, gap) {
+    const f = figma.createFrame();
+    f.name = name;
+    f.layoutMode = dir;
+    f.primaryAxisSizingMode = "AUTO";
+    f.counterAxisSizingMode = "AUTO";
+    f.itemSpacing = gap;
+    f.fills = [];
+    if (parent) parent.appendChild(f);
+    return f;
+  }
+  function columnOf(parent, width, gap) {
+    const f = frameOf(parent, "Label", "VERTICAL", gap);
+    f.resize(width, 10);
+    f.primaryAxisSizingMode = "AUTO";
+    f.counterAxisSizingMode = "FIXED";
+    return f;
+  }
+  function textOf(parent, chars, size, font, color) {
+    const t = figma.createText();
+    parent.appendChild(t);
+    t.fontName = font;
+    t.fontSize = size;
+    t.characters = chars;
+    t.fills = [solid(color)];
+    return t;
+  }
+  function rectOf(parent, w, h, radius) {
+    const r = figma.createRectangle();
+    parent.appendChild(r);
+    r.resize(w, h);
+    r.cornerRadius = radius;
+    return r;
+  }
+  var sampleText = (level) => level.startsWith("display") ? "Display" : /^h[1-6]$/.test(level) ? "Heading text" : "The quick brown fox jumps over the lazy dog";
+  function placeFoundation(root, previous) {
+    if (previous) {
+      root.x = previous.x;
+      root.y = previous.y;
+      return;
+    }
+    const others = figma.currentPage.children.filter((n) => n !== root);
+    if (others.length === 0) {
+      const c = figma.viewport.center;
+      root.x = Math.round(c.x - root.width / 2);
+      root.y = Math.round(c.y - Math.min(root.height, 800) / 2);
+      return;
+    }
+    root.x = Math.max(...others.map((n) => n.x + n.width)) + 200;
+    root.y = Math.min(...others.map((n) => n.y));
+  }
+  async function drawFoundation(data, previous) {
+    const regular = (await resolveTextFont("Inter", 400)).font;
+    const strong = (await resolveTextFont("Inter", 600)).font;
+    const root = stageNode(figma.createFrame());
+    root.name = "Token System Foundation";
+    root.setPluginData(FOUNDATION_MARKER, "1");
+    root.layoutMode = "VERTICAL";
+    root.primaryAxisSizingMode = "AUTO";
+    root.counterAxisSizingMode = "AUTO";
+    root.paddingLeft = root.paddingRight = root.paddingTop = root.paddingBottom = 64;
+    root.itemSpacing = 72;
+    root.cornerRadius = 24;
+    root.fills = [solid(PAPER)];
+    const head = frameOf(root, "Header", "VERTICAL", 8);
+    textOf(head, "Token System", 44, strong, INK);
+    textOf(head, "Foundation generated by Token System Generator Pro", 16, regular, MUTED);
+    const section = (title) => {
+      const s = frameOf(root, title, "VERTICAL", 28);
+      textOf(s, title, 28, strong, INK);
+      return s;
+    };
+    const caption = (parent, name, detail) => {
+      textOf(parent, name, 13, strong, INK);
+      textOf(parent, detail, 12, regular, MUTED);
+    };
+    const colors = section("Color ramps");
+    for (const ramp of data.ramps) {
+      const row = frameOf(colors, ramp.label, "HORIZONTAL", 12);
+      const label = columnOf(row, 150, 4);
+      textOf(label, ramp.label, 16, strong, INK);
+      textOf(label, ramp.name, 13, regular, MUTED);
+      for (const stop of ramp.stops) {
+        const cell = frameOf(row, stop.label, "VERTICAL", 6);
+        const swatch = rectOf(cell, 96, 64, 8);
+        swatch.fills = [figma.variables.setBoundVariableForPaint(solid(hexToRgb(stop.hex)), "color", stop.variable)];
+        swatch.strokes = [solid(INK, 0.1)];
+        swatch.strokeWeight = 1;
+        swatch.strokeAlign = "INSIDE";
+        textOf(cell, stop.label, 13, strong, INK);
+        textOf(cell, stop.hex, 12, regular, MUTED);
+      }
+    }
+    if (data.typography) {
+      const type = section("Type scale");
+      for (const level of data.typography.levels) {
+        const style = data.typography.styles.get(level.name);
+        if (!style) continue;
+        const row = frameOf(type, level.name, "HORIZONTAL", 32);
+        row.counterAxisAlignItems = "CENTER";
+        const meta = columnOf(row, 260, 2);
+        textOf(meta, level.name, 14, strong, INK);
+        textOf(meta, `${level.fontSize}px \xB7 weight ${level.fontWeight}`, 12, regular, MUTED);
+        const sample = figma.createText();
+        row.appendChild(sample);
+        sample.characters = sampleText(level.name);
+        await sample.setTextStyleIdAsync(style.id);
+        sample.fills = [solid(INK)];
+      }
+    }
+    if (data.spacing) {
+      const spacing = section("Spacing");
+      for (const step of data.spacing) {
+        const row = frameOf(spacing, `spacing/${step.name}`, "HORIZONTAL", 16);
+        row.counterAxisAlignItems = "CENTER";
+        textOf(columnOf(row, 120, 0), `${step.value}px`, 13, strong, INK);
+        const bar = rectOf(row, step.value, 16, 3);
+        bar.fills = [solid(INK, 0.85)];
+      }
+    }
+    if (data.radius || data.width) {
+      const shape = section("Radius and border width");
+      if (data.radius) {
+        const row = frameOf(shape, "Radius", "HORIZONTAL", 28);
+        for (const [name, value] of data.radius.entries) {
+          const cell = frameOf(row, `radius/${name}`, "VERTICAL", 10);
+          const box = rectOf(cell, 72, 72, Math.min(value, 36));
+          box.fills = [solid(WELL)];
+          box.strokes = [solid(INK, 0.2)];
+          box.strokeWeight = 1;
+          const variable = data.radius.byValue.get(value);
+          if (variable) for (const corner of ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]) box.setBoundVariable(corner, variable);
+          caption(cell, name, `${value}px`);
+        }
+      }
+      if (data.width) {
+        const row = frameOf(shape, "Border width", "HORIZONTAL", 28);
+        for (const [name, value] of data.width.entries) {
+          const cell = frameOf(row, `border/${name}`, "VERTICAL", 10);
+          const box = rectOf(cell, 72, 72, 8);
+          box.fills = [solid(PAPER)];
+          if (value > 0) {
+            box.strokes = [solid(INK)];
+            box.strokeWeight = value;
+            box.strokeAlign = "INSIDE";
+            const variable = data.width.byValue.get(value);
+            if (variable) box.setBoundVariable("strokeWeight", variable);
+          } else {
+            box.strokes = [solid(INK, 0.15)];
+            box.strokeWeight = 1;
+          }
+          caption(cell, name, `${value}px`);
+        }
+      }
+    }
+    if (data.elevation) {
+      const elevation = section("Elevation");
+      const well = frameOf(elevation, "Elevation levels", "HORIZONTAL", 40);
+      well.paddingLeft = well.paddingRight = well.paddingTop = well.paddingBottom = 40;
+      well.cornerRadius = 16;
+      well.fills = [solid(WELL)];
+      for (const level of data.elevation) {
+        const cell = frameOf(well, `elevation/${level.name}`, "VERTICAL", 14);
+        const card = rectOf(cell, 96, 96, 12);
+        card.fills = [solid(PAPER)];
+        await card.setEffectStyleIdAsync(level.style.id);
+        caption(cell, level.name, level.style.name);
+      }
+    }
+    if (data.opacity) {
+      const opacity = section("Opacity");
+      const well = frameOf(opacity, "Opacity steps", "HORIZONTAL", 28);
+      well.paddingLeft = well.paddingRight = well.paddingTop = well.paddingBottom = 32;
+      well.cornerRadius = 16;
+      well.fills = [solid(WELL)];
+      for (const step of data.opacity) {
+        const cell = frameOf(well, `opacity/${step.value}`, "VERTICAL", 10);
+        const chip = rectOf(cell, 72, 72, 10);
+        chip.fills = [solid(INK)];
+        chip.setBoundVariable("opacity", step.variable);
+        caption(cell, `${step.value}%`, `opacity/${step.value}`);
+      }
+    }
+    if (data.zIndex) {
+      const layers = section("Z-index");
+      for (const layer of data.zIndex) {
+        const row = frameOf(layers, `z-index/${layer.name}`, "HORIZONTAL", 16);
+        textOf(columnOf(row, 160, 0), layer.name, 14, strong, INK);
+        textOf(row, String(layer.value), 14, regular, MUTED);
+      }
+    }
+    placeFoundation(root, previous);
+    figma.viewport.scrollAndZoomIntoView([root]);
+  }
+  async function drawFoundationSafely(data, previous) {
+    var _a;
+    const before = staged.nodes.length;
+    try {
+      await drawFoundation(data, previous);
+    } catch (e) {
+      for (const node of staged.nodes.splice(before)) {
+        try {
+          node.remove();
+        } catch (_e) {
+          warn(`Couldn't remove a partly drawn foundation frame`);
+        }
+      }
+      warn(`Couldn't draw the foundation on the canvas: ${(_a = e == null ? void 0 : e.message) != null ? _a : String(e)}`);
+    }
+  }
   function previewRamps(raw) {
     if (!raw || typeof raw !== "object") return [];
     const input = raw;
@@ -1253,7 +1538,7 @@
       approach: msg.approach,
       mode: msg.mode,
       extras: msg.mode === "starter" ? ALL_EXTRAS : NO_EXTRAS,
-      options: parseFlags(msg.options, { scopes: true, codeSyntax: true }, "options")
+      options: parseFlags(msg.options, { scopes: true, codeSyntax: true, canvas: false }, "options")
     };
     if (msg.mode !== "scratch") return request;
     const raw = msg.colors;

@@ -145,7 +145,7 @@
     .dialog h3 { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 4px; }
     .dialog-lede { font-size: 12px; color: #666; line-height: 1.5; margin-bottom: 12px; }
     .dialog-list {
-      list-style: none; max-height: 168px; overflow-y: auto;
+      list-style: none; max-height: 204px; overflow-y: auto;
       border: 1px solid #eee; border-radius: 8px; background: #fafafa; margin-bottom: 14px;
     }
     .dialog-list li {
@@ -297,6 +297,12 @@
       margin-top: 0;
     }
     .color-swatch.invalid { border-color: #ff4444 !important; }
+    /* The swatch is also the picker: a transparent native color input sits on top of it. */
+    .color-swatch { position: relative; cursor: pointer; }
+    .color-swatch:hover { border-color: #EE661D; }
+    .color-swatch:focus-within { outline: 2px solid #EE661D; outline-offset: 2px; }
+    .swatch-picker { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+
     .color-input:focus { border-color: #EE661D; }
     .color-input.invalid { border-color: #ff4444; }
 
@@ -500,7 +506,7 @@
       <span class="color-section-label">Brand Colors</span>
       <div class="color-row">
         <label>Primary<span class="label-note">(required)</span></label>
-        <div class="color-swatch" id="sw-primary"></div>
+        <div class="color-swatch" id="sw-primary"><input type="color" class="swatch-picker" id="pick-primary" value="#6600ff" title="Pick a color" aria-label="Pick the primary color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-primary" type="text" placeholder="#6600FF" oninput="onColorInput('primary')">
           <p class="color-desc">Your main brand color — used for primary buttons, links, and key UI actions.</p>
@@ -508,7 +514,7 @@
       </div>
       <div class="color-row">
         <label>Secondary<span class="label-note">(required)</span></label>
-        <div class="color-swatch" id="sw-secondary"></div>
+        <div class="color-swatch" id="sw-secondary"><input type="color" class="swatch-picker" id="pick-secondary" value="#00aaff" title="Pick a color" aria-label="Pick the secondary color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-secondary" type="text" placeholder="#00AAFF" oninput="onColorInput('secondary')">
           <p class="color-desc">A complementary brand color — used for secondary actions and supporting elements.</p>
@@ -516,7 +522,7 @@
       </div>
       <div class="color-row">
         <label>Tertiary<span class="label-note opt">(optional)</span></label>
-        <div class="color-swatch" id="sw-tertiary"></div>
+        <div class="color-swatch" id="sw-tertiary"><input type="color" class="swatch-picker" id="pick-tertiary" value="#ff6600" title="Pick a color" aria-label="Pick the tertiary color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-tertiary" type="text" placeholder="#FF6600" oninput="onColorInput('tertiary')">
           <p class="color-desc">A third brand color — used for highlights, decorative elements, or tertiary CTAs.</p>
@@ -524,7 +530,7 @@
       </div>
       <div class="color-row">
         <label>Accent<span class="label-note">(required)</span></label>
-        <div class="color-swatch" id="sw-accent"></div>
+        <div class="color-swatch" id="sw-accent"><input type="color" class="swatch-picker" id="pick-accent" value="#f59e0b" title="Pick a color" aria-label="Pick the accent color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-accent" type="text" placeholder="#F59E0B" oninput="onColorInput('accent')">
           <p class="color-desc">A bold contrasting color — used for badges, callouts, notifications, or promotional moments.</p>
@@ -534,7 +540,7 @@
       <span class="color-section-label" style="margin-top:16px">Semantic Colors</span>
       <div class="color-row">
         <label>Info</label>
-        <div class="color-swatch" id="sw-info" style="background:#0066FF"></div>
+        <div class="color-swatch" id="sw-info" style="background:#0066FF"><input type="color" class="swatch-picker" id="pick-info" value="#0066ff" title="Pick a color" aria-label="Pick the info color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-info" type="text" value="#0066FF" oninput="onColorInput('info')">
           <p class="color-desc">Communicates informational messages, tips, and neutral notifications.</p>
@@ -542,7 +548,7 @@
       </div>
       <div class="color-row">
         <label>Success</label>
-        <div class="color-swatch" id="sw-success" style="background:#00BB66"></div>
+        <div class="color-swatch" id="sw-success" style="background:#00BB66"><input type="color" class="swatch-picker" id="pick-success" value="#00bb66" title="Pick a color" aria-label="Pick the success color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-success" type="text" value="#00BB66" oninput="onColorInput('success')">
           <p class="color-desc">Confirms completed actions, valid states, and positive outcomes.</p>
@@ -550,7 +556,7 @@
       </div>
       <div class="color-row">
         <label>Error</label>
-        <div class="color-swatch" id="sw-error" style="background:#FF3333"></div>
+        <div class="color-swatch" id="sw-error" style="background:#FF3333"><input type="color" class="swatch-picker" id="pick-error" value="#ff3333" title="Pick a color" aria-label="Pick the error color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-error" type="text" value="#FF3333" oninput="onColorInput('error')">
           <p class="color-desc">Signals errors, destructive actions, and critical failures requiring immediate attention.</p>
@@ -558,7 +564,7 @@
       </div>
       <div class="color-row">
         <label>Warning</label>
-        <div class="color-swatch" id="sw-warning" style="background:#FFAA00"></div>
+        <div class="color-swatch" id="sw-warning" style="background:#FFAA00"><input type="color" class="swatch-picker" id="pick-warning" value="#ffaa00" title="Pick a color" aria-label="Pick the warning color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-warning" type="text" value="#FFAA00" oninput="onColorInput('warning')">
           <p class="color-desc">Alerts users to potential issues or reversible actions that need attention.</p>
@@ -566,7 +572,7 @@
       </div>
       <div class="color-row">
         <label>Neutral</label>
-        <div class="color-swatch" id="sw-neutral" style="background:#6B7280"></div>
+        <div class="color-swatch" id="sw-neutral" style="background:#6B7280"><input type="color" class="swatch-picker" id="pick-neutral" value="#6b7280" title="Pick a color" aria-label="Pick the neutral color"></div>
         <div class="color-input-wrap">
           <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
           <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
@@ -755,6 +761,10 @@
           <div class="output-options">
         <strong>Output options</strong>
         <div class="check-list">
+          <label class="check-row">
+            <input type="checkbox" id="chk-canvas">
+            <span><span class="check-title">Draw the foundation on the canvas</span><span class="check-desc">Adds a labeled frame beside your work showing the color ramps, type scale and more. Regenerating replaces it.</span></span>
+          </label>
           <label class="check-row">
             <input type="checkbox" id="chk-scopes" checked>
             <span><span class="check-title">Set variable scopes</span><span class="check-desc">Hides Global primitives from Figma's pickers so designers reach for Alias tokens.</span></span>
@@ -1088,12 +1098,22 @@
     }
   }
 
+  // Picking in the native color popup writes the hex text and runs the same path as typing it.
+  ALL_COLOR_FIELDS.forEach((field) => {
+    document.getElementById('pick-' + field).addEventListener('input', (e) => {
+      document.getElementById('inp-' + field).value = e.target.value.toUpperCase();
+      onColorInput(field);
+    });
+  });
+
   function onColorInput(field) {
     const input  = document.getElementById('inp-' + field);
     const swatch = document.getElementById('sw-' + field);
     const val    = normalizeHex(input.value);
     const valid  = isValidHex(val);
     swatch.style.background = valid ? val : '#eee';
+    const picker = document.getElementById('pick-' + field);
+    if (valid && picker) picker.value = val.toLowerCase();   // typing moves the picker (setting it does not fire 'input')
     swatch.classList.toggle('invalid', !valid);
     input.classList.toggle('invalid', input.value !== '' && !valid);
     validateScreen2();
@@ -1249,6 +1269,7 @@
     return {
       scopes:     document.getElementById('chk-scopes').checked,
       codeSyntax: document.getElementById('chk-syntax').checked,
+      canvas:     document.getElementById('chk-canvas').checked,
     };
   }
 
@@ -1278,6 +1299,7 @@
     if (existing.paintStyles) add('Local color styles', plural(existing.paintStyles, 'style'));
     if (existing.textStyles)  add('Local text styles',  plural(existing.textStyles, 'style'));
     if (existing.effectStyles) add('Local effect styles', plural(existing.effectStyles, 'style'));
+    if (existing.foundationFrames) add('Foundation frame on this page', plural(existing.foundationFrames, 'frame'));
     replaceTrigger = document.activeElement;
     const scrim = document.getElementById('replace-scrim');
     scrim.classList.add('open'); scrim.setAttribute('aria-hidden', 'false');
