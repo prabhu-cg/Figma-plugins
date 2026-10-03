@@ -85,6 +85,7 @@ src/
 ├── ui/                # runs in the plugin iframe (React)
 │   ├── pages/            # Overview, Track, Changes, Releases, History, Settings
 │   │   └── history/      # one file per History tab (Releases, Components/Tokens, Deprecations, Compare)
+│   │   ├── changes/      # Changes page parts: view hook, filter bar, list, bulk/undo bars
 │   │   └── releases/     # Releases page parts: draft hook, create/past tabs, footer, cards
 │   ├── components/
 │   ├── state/            # postMessage bridge + React context
@@ -147,7 +148,8 @@ Figma (Figma does not hot-reload plugin code).
 - rename detection (component/token key and structural-signature matching)
   and its confirm/dismiss flow through `handlers/review.ts`
 - deprecation and bulk review-state updates through `handlers/`
-- entity history reconstruction across releases and rename chains, token
+- review logic for the Changes page (filters, keyboard shortcuts, auto-advance, undo grouping),
+  entity history reconstruction across releases and rename chains, token
   alias dependency-chain resolution, and the global search index
 - end-to-end integration tests (`tests/helpers/fakeFigma.ts`) that load the
   real plugin message handlers (`main.ts` → `handlers/`) against a simulated `figma` global for the
