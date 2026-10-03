@@ -654,13 +654,11 @@ function createComponentCollection(colorAliases: AliasRamps): void {
     alias(comp, 'icon/inverse',  primary[50]);
   }
 
-  // Surfaces map each brand role's 500 stop, and only exist when all four brand colors do.
-  const { secondary, tertiary, accent } = colorAliases;
-  if (primary && secondary && tertiary && accent) {
-    alias(comp, 'surface/primary',   primary[500]);
-    alias(comp, 'surface/secondary', secondary[500]);
-    alias(comp, 'surface/tertiary',  tertiary[500]);
-    alias(comp, 'surface/accent',    accent[500]);
+  // One surface per brand color, mapped to its 500 stop. Tertiary is optional on the From Scratch
+  // screen, so each surface exists whenever its own color does rather than only when all four do.
+  for (const role of BRAND_KEYS) {
+    const ramp = colorAliases[role];
+    if (ramp) alias(comp, `surface/${role}`, ramp[500]);
   }
 
   if (primary) {

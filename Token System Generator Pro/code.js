@@ -749,12 +749,9 @@
       alias(comp, "icon/disabled", primary[400]);
       alias(comp, "icon/inverse", primary[50]);
     }
-    const { secondary, tertiary, accent } = colorAliases;
-    if (primary && secondary && tertiary && accent) {
-      alias(comp, "surface/primary", primary[500]);
-      alias(comp, "surface/secondary", secondary[500]);
-      alias(comp, "surface/tertiary", tertiary[500]);
-      alias(comp, "surface/accent", accent[500]);
+    for (const role of BRAND_KEYS) {
+      const ramp = colorAliases[role];
+      if (ramp) alias(comp, `surface/${role}`, ramp[500]);
     }
     if (primary) {
       alias(comp, "border/default", primary[500]);

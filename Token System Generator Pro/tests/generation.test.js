@@ -453,6 +453,37 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(out['02 Alias'].text.h1.fontWeight.value === '{01 Global.typography.fontWeight.bold}', JSON.stringify(out['02 Alias'].text.h1.fontWeight));
   });
 
+  // ── 03 Component tokens ──
+  const componentNames = (fig) => {
+    const comp = fig.state.collections.find(c => c.name === '03 Component');
+    return fig.state.variables.filter(v => v.variableCollectionId === comp.id).map(v => v.name).sort();
+  };
+  const SURFACES = (roles) => roles.map(r => `surface/${r}`);
+  const TEXT_ICON_BORDER = ['border/default', 'border/disabled', 'border/inverse', 'border/subtle', 'icon/default', 'icon/disabled', 'icon/inverse', 'icon/subtle', 'text/default', 'text/disabled', 'text/inverse', 'text/subtle'];
+
+  for (const [label, over, roles] of [
+    ['all four brand colors', {}, ['primary', 'secondary', 'tertiary', 'accent']],
+    ['Tertiary left blank (it is optional)', { colors: { ...COLORS, tertiary: '' } }, ['primary', 'secondary', 'accent']],
+    ['Tertiary missing entirely', { colors: (({ tertiary, ...rest }) => rest)(COLORS) }, ['primary', 'secondary', 'accent']],
+  ]) {
+    await test(`3-tier Component has a surface group with ${label}`, async () => {
+      const fig = createFigma({}); fig.load(BUNDLE);
+      await fig.send(scratchMsg({ type: 'generate', approach: '3tier', ...over }));
+      const result = await fig.finished();
+      assert(result.type === 'generation-complete', `${result.type}: ${result.message}`);
+      assert(JSON.stringify(componentNames(fig)) === JSON.stringify([...TEXT_ICON_BORDER, ...SURFACES(roles)].sort()), JSON.stringify(componentNames(fig)));
+    });
+  }
+
+  await test('Component surface tokens point at the 500 stop of their own color', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', approach: '3tier', colors: { ...COLORS, tertiary: '' } }));
+    await fig.finished();
+    const byId = Object.fromEntries(fig.state.variables.map(v => [v.id, v.name]));
+    const target = (n) => byId[Object.values(fig.state.variables.find(v => v.name === n).valuesByMode)[0].id];
+    assert(target('surface/primary') === 'color/primary/500' && target('surface/secondary') === 'color/secondary/500' && target('surface/accent') === 'color/accent/500', 'surface targets');
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();
