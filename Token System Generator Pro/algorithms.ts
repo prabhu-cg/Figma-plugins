@@ -151,6 +151,11 @@ export const TS_RATIO: Record<string, number> = {
   'aug-fourth':     1.414,
 };
 
+// The 13 level names, used for the typography scale and to recognise the text styles this plugin makes.
+export const TYPE_LEVEL_NAMES = [
+  'display-lg', 'display-md', 'display-sm', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body-lg', 'body', 'caption', 'xs',
+] as const;
+
 export interface TypeLevel {
   name: string;
   fontSize: number;
@@ -295,3 +300,15 @@ export function getColorName(hex: string): string {
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────
+
+// ─── JSON EXPORT KEYS ────────────────────────────────────────────
+
+// The top-level key for a collection in the JSON export: any leading ordering number is dropped
+// and the rest is camelCased, so "01 Global" becomes "global" and "My Own Collection" becomes
+// "myOwnCollection". Keys then work as plain identifiers and reference paths.
+export function collectionKey(name: string): string {
+  const stripped = name.replace(/^\s*\d+[\s._:-]*/, '');
+  const words = (stripped || name).split(/[^A-Za-z0-9]+/).filter(Boolean).map(w => w.toLowerCase());
+  if (words.length === 0) return 'collection';
+  return words[0] + words.slice(1).map(w => w[0].toUpperCase() + w.slice(1)).join('');
+}

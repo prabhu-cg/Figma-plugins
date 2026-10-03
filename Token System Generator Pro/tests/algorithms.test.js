@@ -21,7 +21,7 @@ const {
   hexToRgb, rgbToHsl, rgbToHex, generateColorRamp, generateSpacingScale, generateRadiusScale,
   generateTypographyScale, generateBorderWidthScale, getColorName,
   rgbToOklch, oklchToRgb, STARTER_COLORS,
-  weightFromStyleName, pickFontStyle,
+  weightFromStyleName, pickFontStyle, collectionKey,
 } = require('../.test-build/algorithms.js');
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -241,6 +241,18 @@ test('typography scale: paragraph spacing is on the 4pt grid, none for displays,
 test('typography scale: body paragraph spacing grows with the base size', () => {
   const ps = (base) => generateTypographyScale(base, 'major-third').find(l => l.name === 'body').paragraphSpacing;
   if (!(ps(12) < ps(16) && ps(16) < ps(24))) throw new Error('not increasing');
+});
+
+test('collectionKey drops ordering numbers and camelCases', () => {
+  const cases = { '01 Global': 'global', '02 Alias': 'alias', '03 Component': 'component', 'My Own Collection': 'myOwnCollection',
+    'design-tokens': 'designTokens', 'UI Kit': 'uiKit', '2024 Tokens': 'tokens', 'Global': 'global', 'brand_colors': 'brandColors' };
+  for (const [name, key] of Object.entries(cases)) assertEqual(collectionKey(name), key, name);
+});
+test('collectionKey always returns a usable identifier', () => {
+  for (const name of ['01', '  ', '---', '日本語', '__proto__']) {
+    const k = collectionKey(name);
+    if (!/^[A-Za-z0-9]+$/.test(k) && k !== 'collection') throw new Error(`${JSON.stringify(name)} -> ${JSON.stringify(k)}`);
+  }
 });
 
 // ── Summary ───────────────────────────────────────────────────────

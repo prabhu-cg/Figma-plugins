@@ -142,6 +142,21 @@
     "perfect-fourth": 1.333,
     "aug-fourth": 1.414
   };
+  var TYPE_LEVEL_NAMES = [
+    "display-lg",
+    "display-md",
+    "display-sm",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "body-lg",
+    "body",
+    "caption",
+    "xs"
+  ];
   function generateTypographyScale(fontBase, ratioKey) {
     const ratio = Object.prototype.hasOwnProperty.call(TS_RATIO, ratioKey) ? TS_RATIO[ratioKey] : 1.25;
     const levels = [
@@ -263,6 +278,12 @@
     else if (sPct < 28) return `muted-${base}`;
     return base;
   }
+  function collectionKey(name) {
+    const stripped = name.replace(/^\s*\d+[\s._:-]*/, "");
+    const words = (stripped || name).split(/[^A-Za-z0-9]+/).filter(Boolean).map((w) => w.toLowerCase());
+    if (words.length === 0) return "collection";
+    return words[0] + words.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join("");
+  }
 
   // code.ts
   figma.showUI(__html__, { width: 560, height: 510 });
@@ -313,13 +334,23 @@
     staged.collections = [];
     return failed;
   }
+  var PLUGIN_COLLECTIONS = ["01 Global", "02 Alias", "03 Component"];
+  var PAINT_STYLE_RE = new RegExp(`^[a-z][a-z0-9-]*/(${RAMP_STOPS.join("|")})$`);
+  var TEXT_STYLE_GROUPS = ["Display", "Heading", "Body copy"];
+  var isPluginPaintStyle = (name) => PAINT_STYLE_RE.test(name);
+  var isPluginTextStyle = (name) => {
+    const [group, level, ...rest] = name.split("/");
+    return rest.length === 0 && TEXT_STYLE_GROUPS.includes(group) && TYPE_LEVEL_NAMES.includes(level);
+  };
   async function snapshotExisting(mode) {
+    const collections = (await figma.variables.getLocalVariableCollectionsAsync()).filter((c) => PLUGIN_COLLECTIONS.includes(c.name));
+    const ids = new Set(collections.map((c) => c.id));
     return {
-      collections: await figma.variables.getLocalVariableCollectionsAsync(),
-      variables: await figma.variables.getLocalVariablesAsync(),
+      collections,
+      variables: (await figma.variables.getLocalVariablesAsync()).filter((v) => ids.has(v.variableCollectionId)),
       // Smart Convert reads the local styles, so they are kept.
-      paintStyles: mode === "convert" ? [] : await figma.getLocalPaintStylesAsync(),
-      textStyles: mode === "convert" ? [] : await figma.getLocalTextStylesAsync()
+      paintStyles: mode === "convert" ? [] : (await figma.getLocalPaintStylesAsync()).filter((s) => isPluginPaintStyle(s.name)),
+      textStyles: mode === "convert" ? [] : (await figma.getLocalTextStylesAsync()).filter((s) => isPluginTextStyle(s.name))
     };
   }
   function commitStaged(old) {
@@ -436,16 +467,14 @@
     return (await figma.variables.getLocalVariableCollectionsAsync()).length > 0;
   }
   async function describeExisting(mode) {
-    const vars = await figma.variables.getLocalVariablesAsync();
-    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const old = await snapshotExisting(mode);
     return {
-      collections: collections.map((c) => ({
+      collections: old.collections.map((c) => ({
         name: c.name,
-        variables: vars.filter((v) => v.variableCollectionId === c.id).length
+        variables: old.variables.filter((v) => v.variableCollectionId === c.id).length
       })),
-      // Smart Convert reads the local styles, so they are kept.
-      paintStyles: mode === "convert" ? 0 : (await figma.getLocalPaintStylesAsync()).length,
-      textStyles: mode === "convert" ? 0 : (await figma.getLocalTextStylesAsync()).length
+      paintStyles: old.paintStyles.length,
+      textStyles: old.textStyles.length
     };
   }
   async function createStarterSystem(tier) {
@@ -567,6 +596,9 @@
     neutral: "grey"
   };
   var HEX_RE = /^#[0-9A-Fa-f]{6}$/;
+  function letterSpacingPx(t) {
+    return Math.round(t.fontSize * t.letterSpacing * 100) / 100;
+  }
   function lineHeightPx(t) {
     return Math.round(t.fontSize * t.lineHeight / 4) * 4;
   }
@@ -642,7 +674,7 @@
     for (const t of levels) {
       fontSize[t.name] = createNumber(global, `typography/font-size/${t.name}`, t.fontSize);
       lineHeight[t.name] = createNumber(global, `typography/line-height/${t.name}`, lineHeightPx(t));
-      letterSpacing[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, t.letterSpacing);
+      letterSpacing[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, letterSpacingPx(t));
       paragraphSpacing[t.name] = createNumber(global, `typography/paragraph-spacing/${t.name}`, t.paragraphSpacing);
       fontWeight[t.name] = weightVars.get(t.fontWeight);
     }
@@ -699,7 +731,7 @@
         path: `${group}/${t.name}`,
         fontSize: t.fontSize,
         lineHeight: lineHeightPx(t),
-        letterSpacing: t.fontSize * t.letterSpacing,
+        letterSpacing: letterSpacingPx(t),
         paragraphSpacing: t.paragraphSpacing,
         fontFamily: typo.fonts[role],
         fontWeight: t.fontWeight
@@ -777,7 +809,7 @@
     if (!Object.prototype.hasOwnProperty.call(parent, key)) parent[key] = newNode();
     return parent[key];
   };
-  var TOKEN_TYPES = { COLOR: "color", FLOAT: "dimension", STRING: "fontFamily", BOOLEAN: "boolean" };
+  var TOKEN_TYPES = { COLOR: "color", FLOAT: "number", STRING: "fontFamily", BOOLEAN: "boolean" };
   async function exportVariablesToJSON() {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const allVars = await figma.variables.getLocalVariablesAsync();
@@ -789,62 +821,42 @@
     };
     const collectionById = /* @__PURE__ */ new Map();
     const collectionNames = /* @__PURE__ */ new Map();
+    const usedKeys = /* @__PURE__ */ new Set();
     collections.forEach((col) => {
       collectionById.set(col.id, col);
-      collectionNames.set(col.id, toCamelCase(col.name));
+      let key = collectionKey(col.name);
+      for (let n = 2; usedKeys.has(key); n++) key = `${collectionKey(col.name)}${n}`;
+      usedKeys.add(key);
+      collectionNames.set(col.id, key);
     });
     const varTokens = /* @__PURE__ */ new Map();
     allVars.forEach((v) => {
       const colName = collectionNames.get(v.variableCollectionId) || "unknown";
       varTokens.set(v.id, `${colName}.${v.name.split("/").map((p) => toCamelCase(p)).join(".")}`);
     });
-    const isTypographyPart = (name) => name.includes("/fontSize/") || name.includes("/lineHeight/") || name.includes("/letterSpacing/");
-    const typographyByCollection = /* @__PURE__ */ new Map();
-    allVars.forEach((v) => {
-      var _a;
-      if (!isTypographyPart(v.name)) return;
-      const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
-      if (!match) return;
-      const colName = collectionNames.get(v.variableCollectionId) || "unknown";
-      if (!typographyByCollection.has(colName)) typographyByCollection.set(colName, /* @__PURE__ */ new Map());
-      const groups = typographyByCollection.get(colName);
-      if (!groups.has(match[1])) groups.set(match[1], {});
-      const mode = (_a = collectionById.get(v.variableCollectionId)) == null ? void 0 : _a.modes[0];
-      if (mode) groups.get(match[1])[match[2]] = v.valuesByMode[mode.modeId];
-    });
     collections.forEach((col) => {
-      var _a;
-      const colName = toCamelCase(col.name);
+      const colName = collectionNames.get(col.id);
       const colResult = childNode(result, colName);
       const mode = col.modes[0];
       allVars.filter((v) => v.variableCollectionId === col.id).forEach((v) => {
-        var _a2;
-        if (isTypographyPart(v.name)) return;
+        var _a;
         const val = v.valuesByMode[mode.modeId];
         const parts = v.name.split("/");
         let current = colResult;
         for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
-        const type = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name) ? "fontWeight" : (_a2 = TOKEN_TYPES[v.resolvedType]) != null ? _a2 : "unknown";
+        const isWeight = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name);
+        const isPixelSize = v.resolvedType === "FLOAT" && !isWeight && PLUGIN_COLLECTIONS.includes(col.name);
+        const type = isWeight ? "fontWeight" : isPixelSize ? "dimension" : (_a = TOKEN_TYPES[v.resolvedType]) != null ? _a : "unknown";
         let value = val;
-        if (v.resolvedType === "COLOR" && val && typeof val === "object" && "r" in val) {
+        if (isPixelSize && typeof val === "number") {
+          value = `${val}px`;
+        } else if (v.resolvedType === "COLOR" && val && typeof val === "object" && "r" in val) {
           value = colorToHex(val);
         } else if (val && typeof val === "object" && val.type === "VARIABLE_ALIAS") {
           const token = varTokens.get(val.id);
           if (token) value = `{${token}}`;
         }
         current[toCamelCase(parts[parts.length - 1])] = { value, type };
-      });
-      (_a = typographyByCollection.get(colName)) == null ? void 0 : _a.forEach((group, name) => {
-        var _a2, _b;
-        if (group.fontSize === void 0) return;
-        childNode(colResult, "text")[name] = {
-          value: {
-            fontSize: group.fontSize,
-            lineHeight: (_a2 = group.lineHeight) != null ? _a2 : group.fontSize * 1.4,
-            letterSpacing: (_b = group.letterSpacing) != null ? _b : 0
-          },
-          type: "typography"
-        };
       });
     });
     return JSON.stringify(result, null, 2);
@@ -879,8 +891,9 @@
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
-    if (await tokensExist()) {
-      figma.ui.postMessage({ type: "confirm-replace", existing: await describeExisting(r.mode) });
+    const existing = await describeExisting(r.mode);
+    if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0) {
+      figma.ui.postMessage({ type: "confirm-replace", existing });
       return;
     }
     await generate(r);

@@ -13,8 +13,10 @@ const EXISTING = {
   paintStyles: [
     ['red-50', .9, .8, .8], ['red-500', .9, .1, .1], ['red-900', .3, 0, 0], ['blue-50', .8, .8, .9],
     ['blue-500', .1, .1, .9], ['blue-900', 0, 0, .3], ['green-500', .1, .8, .1], ['grey-500', .5, .5, .5],
+    ['indigo/500', .3, .3, .8],      // looks like a ramp stop this plugin made earlier (a colour that is no longer in use)
+    ['Brand/Primary', .2, .2, .2],   // the user's own style
   ],
-  textStyles: [['Heading/h1', 32], ['Body/body', 16]],
+  textStyles: [['Heading/h1', 32], ['Body/body', 16], ['Label/small', 12]],   // Heading/h1 is this plugin's; the others are the user's
 };
 
 let passed = 0, failed = 0;
@@ -45,8 +47,18 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
       assert(!names.some(n => n.includes('(generating)')), `staging name left over: ${names}`);
       assert(names.includes('01 Global') && names.includes('02 Alias'), `collections: ${names}`);
       assert(names.includes('03 Component') === (approach === '3tier'), `component tier wrong: ${names}`);
-      assert(!names.includes('My Own Collection') && !fig.state.variables.some(v => v.name.startsWith('old/')), 'old tokens survived');
-      if (mode === 'convert') assert(fig.state.paintStyles.length === EXISTING.paintStyles.length, 'convert must keep local styles');
+      assert(!fig.state.variables.some(v => v.name.startsWith('old/')), 'old tokens in a plugin collection survived');
+      // Anything that isn't one of this plugin's collections or styles is left alone.
+      assert(names.includes('My Own Collection') && fig.state.variables.some(v => v.name === 'mine/x'), "the user's own collection was removed");
+      const paint = fig.state.paintStyles.map(s => s.name), text = fig.state.textStyles.map(s => s.name);
+      assert(paint.includes('Brand/Primary') && paint.includes('red-50'), "the user's own paint styles were removed");
+      assert(text.includes('Body/body') && text.includes('Label/small'), "the user's own text styles were removed");
+      if (mode === 'convert') {
+        assert(paint.length === EXISTING.paintStyles.length && text.length === EXISTING.textStyles.length, 'convert must keep every local style');
+      } else {
+        assert(!paint.includes('indigo/500'), "a stale plugin ramp style survived");
+        assert(text.filter(n => n === 'Heading/h1').length === 1, 'Heading/h1 was duplicated instead of replaced');
+      }
     });
   }
 
@@ -118,7 +130,7 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     const { fig, run } = request(EXISTING, { approach: '2tier', mode: 'scratch', fontFamily: 'Missing Font' });
     const result = await run();
     assert(result.type === 'generation-complete' && result.warnings.some(w => /Helvetica/.test(w)), JSON.stringify(result.warnings));
-    assert(fig.state.textStyles.length === 13, `text styles: ${fig.state.textStyles.length}`);
+    assert(fig.state.textStyles.filter(s => /^(Display|Heading|Body copy)\//.test(s.name)).length === 13, `text styles: ${fig.state.textStyles.length}`);
   });
 
   await test('failing to link a text style is a warning, not a rollback', async () => {
@@ -179,7 +191,7 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(done.length === 1, `completed ${done.length} times`);
     assert(fig.state.notes.some(n => /Still generating/.test(n)), 'no busy notice');
     const names = fig.state.collections.map(c => c.name).sort();
-    assert(JSON.stringify(names) === JSON.stringify(['01 Global', '02 Alias']), `collections: ${names}`);
+    assert(JSON.stringify(names) === JSON.stringify(['01 Global', '02 Alias', 'My Own Collection']), `collections: ${names}`);
   });
 
   await test('the plugin can run again after a failed run', async () => {
@@ -325,9 +337,9 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     fig.state.messages.length = 0;
     await fig.send({ type: 'export-json' });
     const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
-    const g = out['01 Global'].typography.fontFamily, a = out['02 Alias'].typography.fontFamily;
+    const g = out.global.typography.fontFamily, a = out.alias.typography.fontFamily;
     assert(g.heading.type === 'fontFamily' && g.heading.value === 'Playfair Display' && g.body.value === 'Source Sans 3', JSON.stringify(g));
-    assert(a.heading.type === 'fontFamily' && /^\{01 Global\.typography\.fontFamily\.heading\}$/.test(a.heading.value), JSON.stringify(a));
+    assert(a.heading.type === 'fontFamily' && /^\{global\.typography\.fontFamily\.heading\}$/.test(a.heading.value), JSON.stringify(a));
   });
 
   // ── Paragraph spacing + font weight ──
@@ -407,7 +419,7 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     await fig.send(scratchMsg({ type: 'generate', approach: '2tier' }));
     const result = await fig.finished();
     assert(result.type === 'generation-complete', `${result.type}: ${result.message}`);
-    assert(fig.state.textStyles.length === 13, 'text styles missing');
+    assert(fig.state.textStyles.filter(s => /^(Display|Heading|Body copy)\//.test(s.name)).length === 13, 'text styles missing');
   });
 
   await test('Smart Convert: font weight and paragraph spacing come from the existing text styles', async () => {
@@ -435,10 +447,10 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     fig.state.messages.length = 0;
     await fig.send({ type: 'export-json' });
     const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
-    const alias = out['02 Alias'].text.h1;
-    assert(alias.fontWeight.type === 'fontWeight' && alias.fontWeight.value === '{01 Global.typography.fontWeight.h1}', JSON.stringify(alias.fontWeight));
-    assert(alias.paragraphSpacing.type === 'dimension' && alias.paragraphSpacing.value === '{01 Global.typography.paragraphSpacing.h1}', JSON.stringify(alias.paragraphSpacing));
-    assert(out['01 Global'].typography.fontWeight.h1.type === 'fontWeight' && out['01 Global'].typography.fontWeight.h1.value === 700, JSON.stringify(out['01 Global'].typography));
+    const alias = out.alias.text.h1;
+    assert(alias.fontWeight.type === 'fontWeight' && alias.fontWeight.value === '{global.typography.fontWeight.h1}', JSON.stringify(alias.fontWeight));
+    assert(alias.paragraphSpacing.type === 'dimension' && alias.paragraphSpacing.value === '{global.typography.paragraphSpacing.h1}', JSON.stringify(alias.paragraphSpacing));
+    assert(out.global.typography.fontWeight.h1.type === 'fontWeight' && out.global.typography.fontWeight.h1.value === 700, JSON.stringify(out.global.typography));
   });
 
   await test('scratch JSON export: weight and paragraph-spacing tokens are exported with sensible types', async () => {
@@ -447,10 +459,10 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     fig.state.messages.length = 0;
     await fig.send({ type: 'export-json' });
     const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
-    const g = out['01 Global'].typography;
+    const g = out.global.typography;
     assert(g.fontWeight.bold.type === 'fontWeight' && g.fontWeight.bold.value === 700, JSON.stringify(g.fontWeight));
-    assert(g.paragraphSpacing.body.type === 'dimension' && g.paragraphSpacing.body.value === 12, JSON.stringify(g.paragraphSpacing));
-    assert(out['02 Alias'].text.h1.fontWeight.value === '{01 Global.typography.fontWeight.bold}', JSON.stringify(out['02 Alias'].text.h1.fontWeight));
+    assert(g.paragraphSpacing.body.type === 'dimension' && g.paragraphSpacing.body.value === '12px', JSON.stringify(g.paragraphSpacing));
+    assert(out.alias.text.h1.fontWeight.value === '{global.typography.fontWeight.bold}', JSON.stringify(out.alias.text.h1.fontWeight));
   });
 
   // ── 03 Component tokens ──
@@ -482,6 +494,123 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     const byId = Object.fromEntries(fig.state.variables.map(v => [v.id, v.name]));
     const target = (n) => byId[Object.values(fig.state.variables.find(v => v.name === n).valuesByMode)[0].id];
     assert(target('surface/primary') === 'color/primary/500' && target('surface/secondary') === 'color/secondary/500' && target('surface/accent') === 'color/accent/500', 'surface targets');
+  });
+
+  // ── Replace only touches what the plugin made ──
+  await test('the confirmation lists only the plugin\'s own collections and styles', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate' }));
+    const msg = fig.state.messages.find(m => m.type === 'confirm-replace');
+    assert(msg, 'no confirmation shown');
+    assert(JSON.stringify(msg.existing.collections) === JSON.stringify([{ name: '01 Global', variables: 2 }]), JSON.stringify(msg.existing.collections));
+    assert(msg.existing.paintStyles === 1 && msg.existing.textStyles === 1, `styles: ${msg.existing.paintStyles} paint, ${msg.existing.textStyles} text`);
+    assert(!fig.state.messages.some(m => m.type === 'generation-complete'), 'generated without asking');
+  });
+
+  await test('Smart Convert\'s confirmation lists collections only (styles are kept)', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', mode: 'convert' }));
+    const msg = fig.state.messages.find(m => m.type === 'confirm-replace');
+    assert(msg && msg.existing.paintStyles === 0 && msg.existing.textStyles === 0 && msg.existing.collections.length === 1, JSON.stringify(msg && msg.existing));
+  });
+
+  await test('no confirmation when the file only has the user\'s own collections and styles', async () => {
+    const doc = { collections: [{ name: 'My Own Collection', variables: ['x'] }], paintStyles: [['Brand/Primary', .2, .2, .2]], textStyles: [['Label/small', 12]] };
+    const fig = createFigma(doc); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate' }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-complete' && !fig.state.messages.some(m => m.type === 'confirm-replace'), JSON.stringify(result));
+    const names = fig.state.collections.map(c => c.name).sort();
+    assert(JSON.stringify(names) === JSON.stringify(['01 Global', '02 Alias', 'My Own Collection']), names.join());
+    assert(fig.state.paintStyles.some(s => s.name === 'Brand/Primary') && fig.state.textStyles.some(s => s.name === 'Label/small'), "the user's styles were removed");
+  });
+
+  await test('a failed run still leaves the user\'s own items and the plugin\'s old ones untouched', async () => {
+    const { fig, run } = request({ ...EXISTING, faults: { createTextStyle: 6 } }, { approach: '2tier', mode: 'scratch' });
+    const before = fig.snapshot();
+    const result = await run();
+    assert(result.type === 'generation-failed' && fig.snapshot() === before, result.type);
+  });
+
+  // ── JSON export keys ──
+  const exportJSON = async (fig) => { fig.state.messages.length = 0; await fig.send({ type: 'export-json' }); return JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json); };
+
+  await test('JSON export uses global / alias / component as the top-level keys, and references use them', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', approach: '3tier' }));
+    const out = await exportJSON(fig);
+    assert(JSON.stringify(Object.keys(out)) === JSON.stringify(['global', 'alias', 'component']), Object.keys(out).join());
+    const refs = JSON.stringify(out).match(/\{[^{}"]+\}/g) || [];
+    assert(refs.length > 50 && refs.every(r => /^\{(global|alias|component)\.[A-Za-z0-9.]+\}$/.test(r)), `unexpected references: ${refs.filter(r => !/^\{(global|alias|component)\./.test(r)).slice(0, 3)}`);
+  });
+
+  const CONVERT_DOC = {
+    paintStyles: [['Red 50', .95, .9, .9], ['Red 500', .9, .1, .1], ['Red 900', .3, 0, 0], ['Blue 50', .9, .9, .95], ['Blue 500', .1, .1, .9], ['Blue 900', 0, 0, .3], ['Green 500', .1, .8, .1]],
+    textStyles: [['Heading/h1', 32, 'Bold'], ['Body/body', 16, 'Regular']],
+  };
+  for (const [mode, doc, extra] of [['scratch', {}, { bodyFontFamily: 'Source Sans 3' }], ['scratch', {}, {}], ['starter', {}, {}], ['convert', CONVERT_DOC, {}]]) {
+    for (const approach of ['2tier', '3tier']) {
+      await test(`${approach} ${mode}${extra.bodyFontFamily ? ' (two fonts)' : ''}: every reference in the export points at a token that exists`, async () => {
+        const fig = createFigma(doc); fig.load(BUNDLE);
+        await fig.send({ ...scratchMsg({ type: 'generate', approach, mode, ...extra }) });
+        const done = await fig.finished();
+        assert(done.type === 'generation-complete', `${done.type}: ${done.message}`);
+        const out = await exportJSON(fig);
+        const find = (path) => path.split('.').reduce((o, k) => (o && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined), out);
+        const missing = []; let refs = 0;
+        const walk = (node) => { for (const v of Object.values(node)) {
+          if (v && typeof v === 'object' && 'value' in v) {
+            if (typeof v.value === 'string' && /^\{.+\}$/.test(v.value)) { refs++; const hit = find(v.value.slice(1, -1)); if (!hit || !('value' in hit)) missing.push(v.value); }
+            else if (v.value && typeof v.value === 'object') missing.push(`unresolved object value: ${JSON.stringify(v.value)}`);
+          } else if (v && typeof v === 'object') walk(v);
+        } };
+        walk(out);
+        assert(refs > 20, `only ${refs} references`);
+        assert(missing.length === 0, `${missing.length} dangling: ${missing.slice(0, 3)}`);
+      });
+    }
+  }
+
+  await test('a collection the user made gets a camelCase key and keeps working references', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    const c = fig.figma.variables.createVariableCollection('My Own Collection');
+    const v = fig.figma.variables.createVariable('brand-color/primary', c, 'COLOR'); v.setValueForMode(c.modes[0].modeId, { r: 1, g: 0, b: 0, a: 1 });
+    const c2 = fig.figma.variables.createVariableCollection('Semantic');
+    const a = fig.figma.variables.createVariable('action', c2, 'COLOR'); a.setValueForMode(c2.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: v.id });
+    const out = await exportJSON(fig);
+    assert(out.myOwnCollection.brandColor.primary.value === '#FF0000', JSON.stringify(out));
+    assert(out.semantic.action.value === '{myOwnCollection.brandColor.primary}', JSON.stringify(out.semantic));
+  });
+
+  await test('collections that reduce to the same key still get distinct keys', async () => {
+    const fig = createFigma({ collections: [{ name: '01 Global', variables: ['a'] }, { name: 'Global', variables: ['b'] }] }); fig.load(BUNDLE);
+    const out = await exportJSON(fig);
+    assert(JSON.stringify(Object.keys(out)) === JSON.stringify(['global', 'global2']) && out.global.a && out.global2.b, JSON.stringify(Object.keys(out)));
+  });
+
+  // ── Units ──
+  await test('letter spacing: the variable is in px, matching the text style it is bound to', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', confirmed: false });
+    await run();
+    for (const [level, group, expected] of [['display-lg', 'Display', -7.4], ['h1', 'Heading', -2.28], ['body', 'Body copy', 0], ['xs', 'Body copy', 0.24]]) {
+      const v = varNamed(fig, `typography/letter-spacing/${level}`), style = textStyle(fig, `${group}/${level}`);
+      assert(Object.values(v.valuesByMode)[0] === expected, `${level}: variable ${Object.values(v.valuesByMode)[0]}, expected ${expected}`);
+      assert(style.letterSpacing.unit === 'PIXELS' && style.letterSpacing.value === expected, `${level}: style ${JSON.stringify(style.letterSpacing)}`);
+    }
+  });
+
+  await test('JSON export: pixel sizes carry px, weights and families do not, user numbers stay plain', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', approach: '2tier' }));
+    const c = fig.figma.variables.createVariableCollection('Motion');
+    const o = fig.figma.variables.createVariable('opacity/disabled', c, 'FLOAT'); o.setValueForMode(c.modes[0].modeId, 0.4);
+    const out = await exportJSON(fig);
+    assert(out.global.spacing['4'].value === '4px' && out.global.spacing['4'].type === 'dimension', JSON.stringify(out.global.spacing['4']));
+    assert(out.global.borderRadius['0'].value === '0px' && out.global.borderRadius['9999'].value === '9999px', 'radius units');
+    assert(out.global.typography.lineHeight.body.value === '24px' && out.global.typography.letterSpacing.displayLg.value === '-7.4px', JSON.stringify(out.global.typography.letterSpacing.displayLg));
+    assert(out.global.typography.fontWeight.bold.value === 700 && out.global.typography.fontFamily.value === 'Inter', 'weight/family must not get units');
+    assert(out.alias.borderRadius.sm.value === '{global.borderRadius.2}' && out.alias.borderRadius.sm.type === 'dimension', 'aliases stay references');
+    assert(out.motion.opacity.disabled.value === 0.4 && out.motion.opacity.disabled.type === 'number', JSON.stringify(out.motion));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

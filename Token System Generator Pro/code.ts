@@ -1,7 +1,7 @@
 import {
   RAMP_STOPS, STARTER_COLORS, TypeLevel, TS_RATIO,
   generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
-  generateBorderWidthScale, getColorName, pickFontStyle, weightFromStyleName, FONT_WEIGHT_NAMES,
+  generateBorderWidthScale, getColorName, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey, weightFromStyleName, FONT_WEIGHT_NAMES,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -84,13 +84,29 @@ interface ExistingTokens {
   textStyles: TextStyle[];
 }
 
+// Replacing only touches what this plugin makes. Anything else in the file is left alone:
+//  - collections named exactly like the ones it creates,
+//  - paint styles named "<color>/<stop>" (e.g. cobalt/500),
+//  - text styles named "<Display|Heading|Body copy>/<level>" (e.g. Heading/h1).
+const PLUGIN_COLLECTIONS: readonly string[] = ['01 Global', '02 Alias', '03 Component'];
+const PAINT_STYLE_RE = new RegExp(`^[a-z][a-z0-9-]*/(${RAMP_STOPS.join('|')})$`);
+const TEXT_STYLE_GROUPS: readonly string[] = ['Display', 'Heading', 'Body copy'];
+
+const isPluginPaintStyle = (name: string): boolean => PAINT_STYLE_RE.test(name);
+const isPluginTextStyle = (name: string): boolean => {
+  const [group, level, ...rest] = name.split('/');
+  return rest.length === 0 && TEXT_STYLE_GROUPS.includes(group) && (TYPE_LEVEL_NAMES as readonly string[]).includes(level);
+};
+
 async function snapshotExisting(mode: string): Promise<ExistingTokens> {
+  const collections = (await figma.variables.getLocalVariableCollectionsAsync()).filter(c => PLUGIN_COLLECTIONS.includes(c.name));
+  const ids = new Set(collections.map(c => c.id));
   return {
-    collections: await figma.variables.getLocalVariableCollectionsAsync(),
-    variables:   await figma.variables.getLocalVariablesAsync(),
+    collections,
+    variables: (await figma.variables.getLocalVariablesAsync()).filter(v => ids.has(v.variableCollectionId)),
     // Smart Convert reads the local styles, so they are kept.
-    paintStyles: mode === 'convert' ? [] : await figma.getLocalPaintStylesAsync(),
-    textStyles:  mode === 'convert' ? [] : await figma.getLocalTextStylesAsync(),
+    paintStyles: mode === 'convert' ? [] : (await figma.getLocalPaintStylesAsync()).filter(s => isPluginPaintStyle(s.name)),
+    textStyles:  mode === 'convert' ? [] : (await figma.getLocalTextStylesAsync()).filter(s => isPluginTextStyle(s.name)),
   };
 }
 
@@ -233,16 +249,14 @@ async function describeExisting(mode: string): Promise<{
   paintStyles: number;
   textStyles: number;
 }> {
-  const vars = await figma.variables.getLocalVariablesAsync();
-  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const old = await snapshotExisting(mode);
   return {
-    collections: collections.map(c => ({
+    collections: old.collections.map(c => ({
       name: c.name,
-      variables: vars.filter(v => v.variableCollectionId === c.id).length,
+      variables: old.variables.filter(v => v.variableCollectionId === c.id).length,
     })),
-    // Smart Convert reads the local styles, so they are kept.
-    paintStyles: mode === 'convert' ? 0 : (await figma.getLocalPaintStylesAsync()).length,
-    textStyles:  mode === 'convert' ? 0 : (await figma.getLocalTextStylesAsync()).length,
+    paintStyles: old.paintStyles.length,
+    textStyles: old.textStyles.length,
   };
 }
 
@@ -429,6 +443,11 @@ interface TypographyVars {
   fonts: { heading: string; body: string };
 }
 
+// Letter spacing in px, like every other size. The style is in px, so a bound variable must be too.
+function letterSpacingPx(t: TypeLevel): number {
+  return Math.round(t.fontSize * t.letterSpacing * 100) / 100;
+}
+
 function lineHeightPx(t: TypeLevel): number {
   return Math.round(t.fontSize * t.lineHeight / 4) * 4;
 }
@@ -527,7 +546,7 @@ function createTypographyVariables(
   for (const t of levels) {
     fontSize[t.name]         = createNumber(global, `typography/font-size/${t.name}`,         t.fontSize);
     lineHeight[t.name]       = createNumber(global, `typography/line-height/${t.name}`,       lineHeightPx(t));
-    letterSpacing[t.name]    = createNumber(global, `typography/letter-spacing/${t.name}`,    t.letterSpacing);
+    letterSpacing[t.name]    = createNumber(global, `typography/letter-spacing/${t.name}`,    letterSpacingPx(t));
     paragraphSpacing[t.name] = createNumber(global, `typography/paragraph-spacing/${t.name}`, t.paragraphSpacing);
     fontWeight[t.name]       = weightVars.get(t.fontWeight) as Variable;
   }
@@ -597,7 +616,7 @@ async function createTextStyles(typo: TypographyVars): Promise<void> {
     const role = group === 'Body copy' ? 'body' : 'heading';
     const made = await createLocalTextStyle({
       path: `${group}/${t.name}`, fontSize: t.fontSize, lineHeight: lineHeightPx(t),
-      letterSpacing: t.fontSize * t.letterSpacing, paragraphSpacing: t.paragraphSpacing,
+      letterSpacing: letterSpacingPx(t), paragraphSpacing: t.paragraphSpacing,
       fontFamily: typo.fonts[role], fontWeight: t.fontWeight,
     });
     created.push({ made, level: t.name, role });
@@ -699,7 +718,7 @@ const childNode = (parent: TokenNode, key: string): TokenNode => {
 };
 
 // Token type follows the variable's own type, so an alias to a font or number isn't mislabelled as a color.
-const TOKEN_TYPES: Record<string, string> = { COLOR: 'color', FLOAT: 'dimension', STRING: 'fontFamily', BOOLEAN: 'boolean' };
+const TOKEN_TYPES: Record<string, string> = { COLOR: 'color', FLOAT: 'number', STRING: 'fontFamily', BOOLEAN: 'boolean' };
 
 async function exportVariablesToJSON(): Promise<string> {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
@@ -713,9 +732,14 @@ async function exportVariablesToJSON(): Promise<string> {
 
   const collectionById = new Map<string, VariableCollection>();
   const collectionNames = new Map<string, string>();
+  const usedKeys = new Set<string>();
   collections.forEach(col => {
     collectionById.set(col.id, col);
-    collectionNames.set(col.id, toCamelCase(col.name));
+    // Two collections can reduce to the same key ("Global" and "01 Global"), so keys are made unique.
+    let key = collectionKey(col.name);
+    for (let n = 2; usedKeys.has(key); n++) key = `${collectionKey(col.name)}${n}`;
+    usedKeys.add(key);
+    collectionNames.set(col.id, key);
   });
 
   // Lookup for resolving aliases: varId -> "collection.path.to.token"
@@ -725,59 +749,33 @@ async function exportVariablesToJSON(): Promise<string> {
     varTokens.set(v.id, `${colName}.${v.name.split('/').map(p => toCamelCase(p)).join('.')}`);
   });
 
-  const isTypographyPart = (name: string) =>
-    name.includes('/fontSize/') || name.includes('/lineHeight/') || name.includes('/letterSpacing/');
-
-  // Typography groups per collection: text/<level>/{fontSize,lineHeight,letterSpacing}
-  type TypeParts = { fontSize?: number; lineHeight?: number; letterSpacing?: number };
-  const typographyByCollection = new Map<string, Map<string, TypeParts>>();
-  allVars.forEach(v => {
-    if (!isTypographyPart(v.name)) return;
-    const match = v.name.match(/^text\/([^/]+)\/(fontSize|lineHeight|letterSpacing)$/);
-    if (!match) return;
-    const colName = collectionNames.get(v.variableCollectionId) || 'unknown';
-    if (!typographyByCollection.has(colName)) typographyByCollection.set(colName, new Map());
-    const groups = typographyByCollection.get(colName)!;
-    if (!groups.has(match[1])) groups.set(match[1], {});
-    const mode = collectionById.get(v.variableCollectionId)?.modes[0];
-    if (mode) groups.get(match[1])![match[2] as keyof TypeParts] = v.valuesByMode[mode.modeId] as number;
-  });
-
   collections.forEach(col => {
-    const colName = toCamelCase(col.name);
+    const colName = collectionNames.get(col.id) as string;
     const colResult = childNode(result, colName);
     const mode = col.modes[0];
 
     allVars.filter(v => v.variableCollectionId === col.id).forEach(v => {
-      // Typography parts are emitted as composite tokens below
-      if (isTypographyPart(v.name)) return;
-
       const val = v.valuesByMode[mode.modeId];
       const parts = v.name.split('/');
       let current = colResult;
       for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
 
-      const type = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name) ? 'fontWeight' : (TOKEN_TYPES[v.resolvedType] ?? 'unknown');
+      // Numbers in this plugin's own collections are pixel sizes, except font weights. They are exported
+      // as "16px" strings so tools like Style Dictionary know the unit instead of guessing (a bare 16
+      // would become 16rem). Numbers in other collections are left as plain numbers.
+      const isWeight = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name);
+      const isPixelSize = v.resolvedType === 'FLOAT' && !isWeight && PLUGIN_COLLECTIONS.includes(col.name);
+      const type = isWeight ? 'fontWeight' : isPixelSize ? 'dimension' : (TOKEN_TYPES[v.resolvedType] ?? 'unknown');
       let value: unknown = val;
-      if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
+      if (isPixelSize && typeof val === 'number') {
+        value = `${val}px`;
+      } else if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
         value = colorToHex(val as { r: number; g: number; b: number });
       } else if (val && typeof val === 'object' && (val as { type?: string }).type === 'VARIABLE_ALIAS') {
         const token = varTokens.get((val as { id: string }).id);
         if (token) value = `{${token}}`;
       }
       current[toCamelCase(parts[parts.length - 1])] = { value, type };
-    });
-
-    typographyByCollection.get(colName)?.forEach((group, name) => {
-      if (group.fontSize === undefined) return;
-      childNode(colResult, 'text')[name] = {
-        value: {
-          fontSize: group.fontSize,
-          lineHeight: group.lineHeight ?? group.fontSize * 1.4,
-          letterSpacing: group.letterSpacing ?? 0,
-        },
-        type: 'typography',
-      };
     });
   });
 
@@ -820,8 +818,10 @@ async function runSafely(run: () => Promise<void>): Promise<void> {
 async function runGeneration(r: GenerateRequest): Promise<void> {
   const blocked = await blockedReason(r.mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
-  if (await tokensExist()) {
-    figma.ui.postMessage({ type: 'confirm-replace', existing: await describeExisting(r.mode) }); return;
+  // Only ask when something this plugin made would actually be replaced.
+  const existing = await describeExisting(r.mode);
+  if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0) {
+    figma.ui.postMessage({ type: 'confirm-replace', existing }); return;
   }
   await generate(r);
 }
