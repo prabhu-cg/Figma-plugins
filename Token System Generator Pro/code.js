@@ -284,6 +284,62 @@
     if (words.length === 0) return "collection";
     return words[0] + words.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join("");
   }
+  var ELEVATION_LEVELS = [
+    { name: "xs", offsetY: 1, blur: 2, spread: 0, alpha: 0.06 },
+    { name: "sm", offsetY: 1, blur: 3, spread: 0, alpha: 0.1 },
+    { name: "md", offsetY: 4, blur: 6, spread: -1, alpha: 0.1 },
+    { name: "lg", offsetY: 10, blur: 15, spread: -3, alpha: 0.12 },
+    { name: "xl", offsetY: 20, blur: 25, spread: -5, alpha: 0.15 }
+  ];
+  var OPACITY_STEPS = [0, 20, 40, 60, 80, 100];
+  var Z_INDEX_LAYERS = [
+    ["base", 0],
+    ["dropdown", 1e3],
+    ["sticky", 1100],
+    ["overlay", 1200],
+    ["modal", 1300],
+    ["popover", 1400],
+    ["toast", 1500],
+    ["tooltip", 1600]
+  ];
+  var kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  function scopesFor(layer, name, type) {
+    const parts = name.split("/").map(kebab);
+    const root = parts[0];
+    const leaf = parts[parts.length - 1];
+    if (layer === "global") {
+      if (root === "spacing") return ["GAP", "WIDTH_HEIGHT"];
+      if (root === "opacity") return ["OPACITY"];
+      if (root === "elevation") return type === "COLOR" ? ["EFFECT_COLOR"] : ["EFFECT_FLOAT"];
+      return [];
+    }
+    if (layer === "component") {
+      if (root === "text") return ["TEXT_FILL"];
+      if (root === "icon") return ["SHAPE_FILL"];
+      if (root === "surface") return ["FRAME_FILL", "SHAPE_FILL"];
+      if (root === "border") return ["STROKE_COLOR"];
+      return null;
+    }
+    if (root === "color" || root === "colors") return ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"];
+    if (root === "border-radius") return ["CORNER_RADIUS"];
+    if (root === "border-width") return ["STROKE_FLOAT"];
+    if (root === "typography" && parts[1] === "font-family") return ["FONT_FAMILY"];
+    if (root === "text") {
+      const byLeaf = {
+        "font-size": "FONT_SIZE",
+        "line-height": "LINE_HEIGHT",
+        "letter-spacing": "LETTER_SPACING",
+        "paragraph-spacing": "PARAGRAPH_SPACING",
+        "font-weight": "FONT_WEIGHT"
+      };
+      return byLeaf[leaf] ? [byLeaf[leaf]] : null;
+    }
+    return null;
+  }
+  function webCodeSyntax(layerKey, name) {
+    const parts = name.split("/").map((p) => kebab(p.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())));
+    return `var(--${[layerKey, ...parts].join("-")})`;
+  }
 
   // code.ts
   figma.showUI(__html__, { width: 560, height: 510 });
@@ -337,6 +393,7 @@
   var PLUGIN_COLLECTIONS = ["01 Global", "02 Alias", "03 Component"];
   var PAINT_STYLE_RE = new RegExp(`^[a-z][a-z0-9-]*/(${RAMP_STOPS.join("|")})$`);
   var TEXT_STYLE_GROUPS = ["Display", "Heading", "Body copy"];
+  var EFFECT_STYLE_RE = new RegExp(`^Elevation/(${ELEVATION_LEVELS.map((l) => l.name).join("|")})$`);
   var isPluginPaintStyle = (name) => PAINT_STYLE_RE.test(name);
   var isPluginTextStyle = (name) => {
     const [group, level, ...rest] = name.split("/");
@@ -350,7 +407,8 @@
       variables: (await figma.variables.getLocalVariablesAsync()).filter((v) => ids.has(v.variableCollectionId)),
       // Smart Convert reads the local styles, so they are kept.
       paintStyles: mode === "convert" ? [] : (await figma.getLocalPaintStylesAsync()).filter((s) => isPluginPaintStyle(s.name)),
-      textStyles: mode === "convert" ? [] : (await figma.getLocalTextStylesAsync()).filter((s) => isPluginTextStyle(s.name))
+      textStyles: mode === "convert" ? [] : (await figma.getLocalTextStylesAsync()).filter((s) => isPluginTextStyle(s.name)),
+      effectStyles: mode === "convert" ? [] : (await figma.getLocalEffectStylesAsync()).filter((s) => EFFECT_STYLE_RE.test(s.name))
     };
   }
   function commitStaged(old) {
@@ -382,6 +440,13 @@
         style.remove();
       } catch (_e) {
         warn(`Couldn't remove an old text style`);
+      }
+    }
+    for (const style of old.effectStyles) {
+      try {
+        style.remove();
+      } catch (_e) {
+        warn(`Couldn't remove an old effect style`);
       }
     }
     for (const { collection, finalName } of staged.collections) {
@@ -474,9 +539,12 @@
         variables: old.variables.filter((v) => v.variableCollectionId === c.id).length
       })),
       paintStyles: old.paintStyles.length,
-      textStyles: old.textStyles.length
+      textStyles: old.textStyles.length,
+      effectStyles: old.effectStyles.length
     };
   }
+  var NO_EXTRAS = { elevation: false, opacity: false, zIndex: false };
+  var ALL_EXTRAS = { elevation: true, opacity: true, zIndex: true };
   async function createStarterSystem(tier) {
     return buildFromScratch({
       colors: STARTER_COLORS,
@@ -485,7 +553,8 @@
       widthBase: 1,
       fontBase: 16,
       ratioKey: "major-third",
-      tier
+      tier,
+      extras: ALL_EXTRAS
     });
   }
   async function convertStylesToTokens(tier) {
@@ -752,6 +821,78 @@
       }
     }
   }
+  function shadowRgb(ramps, modeId) {
+    var _a, _b;
+    const value = (_b = (_a = ramps["neutral"]) == null ? void 0 : _a[900]) == null ? void 0 : _b.valuesByMode[modeId];
+    return value && typeof value === "object" && "r" in value ? { r: value.r, g: value.g, b: value.b } : { r: 0, g: 0, b: 0 };
+  }
+  function createExtraTokens(global, extras, ramps) {
+    const modeId = global.modes[0].modeId;
+    if (extras.opacity) for (const n of OPACITY_STEPS) createNumber(global, `opacity/${n}`, n);
+    if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) createNumber(global, `z-index/${name}`, value);
+    const elevation = [];
+    if (extras.elevation) {
+      const rgb = shadowRgb(ramps, modeId);
+      for (const level of ELEVATION_LEVELS) {
+        const rgba = __spreadProps(__spreadValues({}, rgb), { a: level.alpha });
+        const color = figma.variables.createVariable(`elevation/${level.name}/color`, global, "COLOR");
+        color.setValueForMode(modeId, rgba);
+        elevation.push({
+          name: level.name,
+          rgba,
+          color,
+          offsetY: createNumber(global, `elevation/${level.name}/offset-y`, level.offsetY),
+          blur: createNumber(global, `elevation/${level.name}/blur`, level.blur),
+          spread: createNumber(global, `elevation/${level.name}/spread`, level.spread)
+        });
+      }
+    }
+    return elevation;
+  }
+  function createElevationStyles(levels) {
+    for (const v of levels) {
+      const style = stageStyle(figma.createEffectStyle());
+      style.name = `Elevation/${v.name}`;
+      const level = ELEVATION_LEVELS.find((l) => l.name === v.name);
+      let effect = {
+        type: "DROP_SHADOW",
+        color: v.rgba,
+        offset: { x: 0, y: level.offsetY },
+        radius: level.blur,
+        spread: level.spread,
+        visible: true,
+        blendMode: "NORMAL"
+      };
+      try {
+        effect = figma.variables.setBoundVariableForEffect(effect, "color", v.color);
+        effect = figma.variables.setBoundVariableForEffect(effect, "offsetY", v.offsetY);
+        effect = figma.variables.setBoundVariableForEffect(effect, "radius", v.blur);
+        effect = figma.variables.setBoundVariableForEffect(effect, "spread", v.spread);
+      } catch (_e) {
+        warn(`Couldn't link an elevation style to its variables`);
+      }
+      style.effects = [effect];
+    }
+  }
+  async function applyVariableMetadata(options) {
+    if (!options.scopes && !options.codeSyntax) return;
+    const layerByCollection = new Map(staged.collections.map((c) => [c.collection.id, collectionKey(c.finalName)]));
+    let failed = 0;
+    for (const v of await figma.variables.getLocalVariablesAsync()) {
+      const layer = layerByCollection.get(v.variableCollectionId);
+      if (!layer) continue;
+      try {
+        if (options.scopes) {
+          const scopes = scopesFor(layer, v.name, v.resolvedType);
+          if (scopes) v.scopes = scopes;
+        }
+        if (options.codeSyntax) v.setVariableCodeSyntax("WEB", webCodeSyntax(layer, v.name));
+      } catch (_e) {
+        failed++;
+      }
+    }
+    if (failed) warn(`Couldn't set scopes or code syntax on ${failed} variable${failed > 1 ? "s" : ""}`);
+  }
   function createPaintStyles(global, ramps, brandNames) {
     const modeId = global.modes[0].modeId;
     const styleRamp = (key, name) => {
@@ -799,9 +940,11 @@
     const radius = createScaleGlobals(global, "borderRadius", generateRadiusScale(o.radiusBase));
     const width = createScaleGlobals(global, "borderWidth", generateBorderWidthScale(o.widthBase));
     const typo = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || "Inter", o.bodyFontFamily);
+    const elevation = createExtraTokens(global, o.extras, ramps);
     const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
     await createTextStyles(typo);
     createPaintStyles(global, ramps, brandNames);
+    createElevationStyles(elevation);
     if (o.tier === "3tier") createComponentCollection(colorAliases);
   }
   var newNode = () => /* @__PURE__ */ Object.create(null);
@@ -817,7 +960,8 @@
     const toCamelCase = (str) => str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
     const colorToHex = (c) => {
       const h = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
-      return `#${h(c.r)}${h(c.g)}${h(c.b)}`.toUpperCase();
+      const alpha = c.a !== void 0 && c.a < 1 ? h(c.a) : "";
+      return `#${h(c.r)}${h(c.g)}${h(c.b)}${alpha}`.toUpperCase();
     };
     const collectionById = /* @__PURE__ */ new Map();
     const collectionNames = /* @__PURE__ */ new Map();
@@ -845,10 +989,14 @@
         let current = colResult;
         for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
         const isWeight = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name);
-        const isPixelSize = v.resolvedType === "FLOAT" && !isWeight && PLUGIN_COLLECTIONS.includes(col.name);
+        const isOpacity = v.resolvedType === "FLOAT" && /^opacity\//.test(v.name) && PLUGIN_COLLECTIONS.includes(col.name);
+        const isZIndex = v.resolvedType === "FLOAT" && /^z-index\//.test(v.name) && PLUGIN_COLLECTIONS.includes(col.name);
+        const isPixelSize = v.resolvedType === "FLOAT" && !isWeight && !isOpacity && !isZIndex && PLUGIN_COLLECTIONS.includes(col.name);
         const type = isWeight ? "fontWeight" : isPixelSize ? "dimension" : (_a = TOKEN_TYPES[v.resolvedType]) != null ? _a : "unknown";
         let value = val;
-        if (isPixelSize && typeof val === "number") {
+        if (isOpacity && typeof val === "number") {
+          value = val / 100;
+        } else if (isPixelSize && typeof val === "number") {
           value = `${val}px`;
         } else if (v.resolvedType === "COLOR" && val && typeof val === "object" && "r" in val) {
           value = colorToHex(val);
@@ -892,7 +1040,7 @@
       return;
     }
     const existing = await describeExisting(r.mode);
-    if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0) {
+    if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0) {
       figma.ui.postMessage({ type: "confirm-replace", existing });
       return;
     }
@@ -911,7 +1059,8 @@
       ratioKey: r.ratioKey,
       tier: r.approach,
       fontFamily: r.fontFamily,
-      bodyFontFamily: r.bodyFontFamily
+      bodyFontFamily: r.bodyFontFamily,
+      extras: r.extras
     };
   }
   async function generate(r) {
@@ -929,6 +1078,7 @@
       if (r.mode === "scratch") await buildFromScratch(scratchOptions(r));
       else if (r.mode === "starter") await createStarterSystem(tier);
       else if (r.mode === "convert") await convertStylesToTokens(tier);
+      await applyVariableMetadata(r.options);
     } catch (e) {
       const leftover = rollbackStaged();
       const reason = (_a = e == null ? void 0 : e.message) != null ? _a : String(e);
@@ -960,10 +1110,27 @@
     }
     return value;
   }
+  function parseFlags(raw, defaults, label) {
+    if (raw === void 0) return __spreadValues({}, defaults);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`Invalid ${label}.`);
+    const out = __spreadValues({}, defaults);
+    for (const key of Object.keys(defaults)) {
+      const value = raw[key];
+      if (value === void 0) continue;
+      if (typeof value !== "boolean") throw new Error(`Invalid ${label}.${key}.`);
+      out[key] = value;
+    }
+    return out;
+  }
   function parseRequest(msg) {
     if (msg.approach !== "2tier" && msg.approach !== "3tier") throw new Error("Unknown architecture.");
     if (msg.mode !== "scratch" && msg.mode !== "starter" && msg.mode !== "convert") throw new Error("Unknown mode.");
-    const request = { approach: msg.approach, mode: msg.mode };
+    const request = {
+      approach: msg.approach,
+      mode: msg.mode,
+      extras: msg.mode === "starter" ? ALL_EXTRAS : NO_EXTRAS,
+      options: parseFlags(msg.options, { scopes: true, codeSyntax: true }, "options")
+    };
     if (msg.mode !== "scratch") return request;
     const raw = msg.colors;
     if (!raw || typeof raw !== "object") throw new Error("Brand colors are missing.");
@@ -986,6 +1153,7 @@
       throw new Error("Body font is not valid.");
     }
     return __spreadProps(__spreadValues({}, request), {
+      extras: parseFlags(msg.extras, NO_EXTRAS, "extras"),
       bodyFontFamily: body || void 0,
       colors,
       spacingBase: intInRange(msg.spacingBase, "spacingBase"),

@@ -23,7 +23,9 @@ Token System Generator Pro creates Figma Variable collections in a 2-tier (Globa
 - **Spacing** — 10 values from a configurable base unit
 - **Border radius** — 7 values (none, sm, md, lg, xl, 2xl, full)
 - **Border width** — 5 values (none, sm, md, lg, xl)
-- **Local styles** (From Scratch and Starter) — a paint style per color stop and text styles (Display, Heading, Body copy) bound to the variables
+- **Other tokens** (From Scratch and Starter, each optional) — **elevation** (5 shadow levels as variables plus matching `Elevation/*` effect styles), an **opacity** scale (6 steps, 0–100) and **z-index** layers (base to tooltip)
+- **Local styles** (From Scratch and Starter) — a paint style per color stop, text styles (Display, Heading, Body copy) and, with elevation, effect styles, all bound to the variables
+- **Scopes and code syntax** — variable scopes keep Figma's pickers tidy (Global primitives that have an Alias counterpart are hidden), and every variable gets a web code syntax such as `var(--alias-color-primary-500)` for Dev Mode. Both can be switched off
 - **JSON export** — all collections as JSON with alias references preserved, via Copy or Download
 
 ## How it works
@@ -34,10 +36,11 @@ When you open the plugin, a file with no variables goes straight to mode selecti
 1. Enter Primary, Secondary and Accent colors (required). Tertiary and the semantic colors (info, success, error, warning, neutral) are optional; a blank color is skipped.
 2. Set the spacing base (1–32), border radius base (0–64), border width base (1–16), base font size (10–24) and a scale ratio.
 3. Choose a font family (default Inter). Optionally tick **Use a different font for body copy** and choose a body font.
-4. Choose 2-tier or 3-tier and click **Generate Tokens**.
+4. Under **Other tokens**, keep or untick Elevation, Opacity and Z-index (all on by default).
+5. Choose 2-tier or 3-tier, review the **Output options** (variable scopes, code syntax) and click **Generate Tokens**.
 
 ### Starter System
-Choose 2-tier or 3-tier. The plugin scaffolds a system from a curated default palette (9 OKLCH ramps), spacing base 4, radius base 4, border width base 1 and a Major Third type scale in Inter. Edit the values in Figma afterwards.
+Choose 2-tier or 3-tier. The plugin scaffolds a system from a curated default palette (9 OKLCH ramps), spacing base 4, radius base 4, border width base 1 a Major Third type scale in Inter, and the elevation, opacity and z-index scales. Edit the values in Figma afterwards.
 
 ### Smart Convert
 Reads your local paint styles and text styles, keeps them as they are, and builds variables from them. Colors are used as-is (no ramps are generated). See [Smart Convert](#smart-convert-1) below.
@@ -46,7 +49,7 @@ Reads your local paint styles and text styles, keeps them as they are, and build
 
 Generating again **replaces what this plugin made**, and only that. The confirmation dialog lists exactly what will be deleted, with counts. Everything else in your file stays as it is.
 - **Collections:** only the ones named `01 Global`, `02 Alias` and `03 Component`. Your other variable collections are never touched.
-- **Styles (From Scratch and Starter):** paint styles named like a ramp stop (`cobalt/500`) and text styles named like the ones this plugin creates (`Heading/h1`, `Display/display-lg`, `Body copy/body`). Your own styles, such as `Brand/Primary`, are kept.
+- **Styles (From Scratch and Starter):** paint styles named like a ramp stop (`cobalt/500`) and text styles named like the ones this plugin creates (`Heading/h1`, `Display/display-lg`, `Body copy/body`), and effect styles named `Elevation/<level>`. Your own styles, such as `Brand/Primary` or `Shadow/card`, are kept.
 - **Smart Convert** keeps all your styles, since it reads them, and replaces only the three collections above.
 - If the file has none of those, there is nothing to replace and no confirmation is shown.
 
@@ -62,6 +65,9 @@ Smaller problems (a font without a requested weight, an old item that couldn't b
 - `typography/font-family` — or `typography/font-family/heading` and `/body` when a second body font is chosen
 - `typography/font-size/<level>`, `line-height/<level>`, `letter-spacing/<level>`, `paragraph-spacing/<level>` — all in px
 - `typography/font-weight/regular`, `/semibold`, `/bold` — shared by the levels that use them
+- `opacity/0`, `/20`, `/40`, `/60`, `/80`, `/100` — 6 steps, stored 0–100 as Figma reads opacity variables
+- `z-index/base` … `z-index/tooltip` — 8 layers (0, 1000, 1100 … 1600)
+- `elevation/<xs|sm|md|lg|xl>/offset-y`, `/blur`, `/spread` (px) and `/color` — the shadow color is your darkest Neutral stop with a level-specific opacity. These have no Alias layer; the `Elevation/*` effect styles are bound to them
 
 ### Alias — semantic names that point at Global
 - `color/primary|secondary|tertiary|accent/<stop>`
@@ -120,7 +126,7 @@ The export mirrors the collections in your file. The three plugin collections be
 
 - Names are camelCased (`font-size` → `fontSize`) and nested by `/`.
 - Aliases resolve to `{collection.path.to.token}`, for example `{global.color.cobalt.50}`.
-- **Units:** sizes are strings with a unit (`"4px"`, `"1.5px"`, `"-2.28px"`), so tools don't have to guess. Font weights are plain numbers (`700`). Numbers in collections the plugin didn't create stay plain numbers with type `number`.
+- **Units:** sizes are strings with a unit (`"4px"`, `"1.5px"`, `"-2.28px"`), so tools don't have to guess. Font weights are plain numbers (`700`). Opacity is exported as 0–1 (`0.5`) for CSS, and z-index as a plain number. Colors with transparency, such as shadow colors, are 8-digit hex (`#1C1F251A`). Numbers in collections the plugin didn't create stay plain numbers with type `number`.
 - Types: `color`, `dimension`, `fontFamily`, `fontWeight`, `number`.
 - Each typography value is its own token (not combined into one composite object).
 - **Refresh JSON** re-exports the current variables without regenerating, so manual edits in Figma are included.
@@ -189,15 +195,16 @@ In Figma: **Plugins → Development → Import plugin from manifest…** and cho
 - Only one set of values is generated (no light/dark modes yet).
 - Italic text styles are not generated; text styles use upright weights.
 - Smart Convert's alias mapping is a heuristic.
-- No shadow, elevation, opacity or z-index tokens yet.
+- Smart Convert does not add elevation, opacity or z-index tokens.
+- Opacity, z-index and elevation have no Alias layer; they live in Global.
 
 ## Ideas for next
-1. **Accessibility Validator** — WCAG AA/AAA contrast checks for semantic color pairs
+1. **Contrast checker** — WCAG and APCA checks for color ramps and semantic pairs
 2. **Dark Mode Generator** — a dark mode from the light palette
 3. **Import from JSON** — Style Dictionary JSON back into Figma variables
 4. **Token Health Audit** — flag duplicates, off-scale values and missing aliases
-5. **Variable Scope Auto-Assignment** — set Figma scopes per token type
-6. **Elevation/Shadow Scale**
+5. **Live ramp preview** and an optional foundation drawn on the canvas
+6. **More token types** — motion, breakpoints, sizing
 
 ## License
 

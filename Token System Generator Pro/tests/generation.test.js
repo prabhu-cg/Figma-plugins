@@ -613,6 +613,175 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(out.motion.opacity.disabled.value === 0.4 && out.motion.opacity.disabled.type === 'number', JSON.stringify(out.motion));
   });
 
+  // ── Scopes, code syntax and extra token types ──
+  const ALL3 = { elevation: true, opacity: true, zIndex: true };
+  const var1 = (fig, n) => fig.state.variables.find(v => v.name === n);
+  const collOf = (fig, v) => fig.state.collections.find(c => c.id === v.variableCollectionId).name;
+
+  await test('scopes: Global primitives are hidden, Alias and Component are scoped to their fields', async () => {
+    const { fig, run } = request({}, { approach: '3tier', mode: 'scratch', confirmed: false });
+    await run();
+    const scopes = (n, layer) => fig.state.variables.find(v => v.name === n && collOf(fig, v) === layer).scopes;
+    assert(JSON.stringify(scopes('color/cobalt/500', '01 Global')) === '[]', 'global colour should be hidden');
+    assert(JSON.stringify(scopes('spacing/4', '01 Global')) === JSON.stringify(['GAP', 'WIDTH_HEIGHT']), 'spacing');
+    assert(JSON.stringify(scopes('color/primary/500', '02 Alias')) === JSON.stringify(['ALL_FILLS', 'STROKE_COLOR', 'EFFECT_COLOR']), 'alias colour');
+    assert(JSON.stringify(scopes('text/h1/font-size', '02 Alias')) === JSON.stringify(['FONT_SIZE']), 'alias font size');
+    assert(JSON.stringify(scopes('surface/primary', '03 Component')) === JSON.stringify(['FRAME_FILL', 'SHAPE_FILL']), 'component surface');
+  });
+
+  await test('scopes can be turned off: every variable keeps the default scope', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', options: { scopes: false } }));
+    await fig.finished();
+    assert(fig.state.variables.every(v => JSON.stringify(v.scopes) === '["ALL_SCOPES"]'), 'a scope was set');
+  });
+
+  await test('code syntax: every variable gets a WEB var(--…) name, and it can be turned off', async () => {
+    const { fig, run } = request({}, { approach: '3tier', mode: 'scratch', confirmed: false });
+    await run();
+    assert(fig.state.variables.every(v => /^var\(--(global|alias|component)-[a-z0-9-]+\)$/.test(v.codeSyntax.WEB || '')), 'a variable has no valid code syntax');
+    assert(var1(fig, 'color/cobalt/500').codeSyntax.WEB === 'var(--global-color-cobalt-500)', var1(fig, 'color/cobalt/500').codeSyntax.WEB);
+    const off = createFigma({}); off.load(BUNDLE);
+    await off.send(scratchMsg({ type: 'generate', options: { codeSyntax: false } }));
+    await off.finished();
+    assert(off.state.variables.every(v => !v.codeSyntax.WEB), 'code syntax was set although it was turned off');
+  });
+
+  await test('code syntax names are exactly the CSS names the JSON export produces', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', approach: '3tier', extras: ALL3, bodyFontFamily: 'Source Sans 3' }));
+    await fig.finished();
+    const out = await exportJSON(fig);
+    const kebab = (s) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+    const fromExport = new Set();
+    const walk = (node, path) => { for (const [k, v] of Object.entries(node)) {
+      if (v && typeof v === 'object' && 'value' in v) fromExport.add(`var(--${[...path, k].map(kebab).join('-')})`);
+      else if (v && typeof v === 'object') walk(v, [...path, k]);
+    } };
+    walk(out, []);
+    const fromSyntax = new Set(fig.state.variables.map(v => v.codeSyntax.WEB));
+    const onlyExport = [...fromExport].filter(x => !fromSyntax.has(x)), onlySyntax = [...fromSyntax].filter(x => !fromExport.has(x));
+    assert(onlyExport.length === 0 && onlySyntax.length === 0, `export-only: ${onlyExport.slice(0, 3)} | syntax-only: ${onlySyntax.slice(0, 3)}`);
+  });
+
+  await test('extras: elevation, opacity and z-index create the expected variables', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', confirmed: false });
+    const msgFig = createFigma({}); msgFig.load(BUNDLE);
+    await msgFig.send(scratchMsg({ type: 'generate', extras: ALL3 }));
+    const result = await msgFig.finished();
+    assert(result.type === 'generation-complete' && result.warnings.length === 0, JSON.stringify(result));
+    const f = msgFig, val = (n) => Object.values(var1(f, n).valuesByMode)[0];
+    assert([0, 20, 40, 60, 80, 100].every(n => var1(f, `opacity/${n}`) && val(`opacity/${n}`) === n), 'opacity steps');
+    assert(f.state.variables.filter(v => v.name.startsWith('opacity/')).length === 6, 'expected exactly 6 opacity steps');
+    assert(val('z-index/base') === 0 && val('z-index/modal') === 1300 && val('z-index/tooltip') === 1600, 'z-index layers');
+    for (const l of ['xs', 'sm', 'md', 'lg', 'xl']) assert(['offset-y', 'blur', 'spread', 'color'].every(p => var1(f, `elevation/${l}/${p}`)), `elevation/${l} incomplete`);
+    const c = val('elevation/md/color');
+    assert(c.a === 0.10 && c.r === val('color/grey/900').r, `shadow colour: ${JSON.stringify(c)}`);
+    assert(val('elevation/md/offset-y') === 4 && val('elevation/md/blur') === 6 && val('elevation/md/spread') === -1, 'md values');
+    assert(JSON.stringify(var1(f, 'opacity/60').scopes) === '["OPACITY"]' && JSON.stringify(var1(f, 'elevation/md/blur').scopes) === '["EFFECT_FLOAT"]', 'extras scopes');
+  });
+
+  await test('extras: each can be left out, and with none there are no extra variables or effect styles', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', extras: { elevation: false, opacity: true, zIndex: false } }));
+    await fig.finished();
+    assert(fig.state.variables.some(v => v.name === 'opacity/60') && !fig.state.variables.some(v => /^(z-index|elevation)\//.test(v.name)) && fig.state.effectStyles.length === 0, 'only opacity expected');
+    const none = createFigma({}); none.load(BUNDLE);
+    await none.send(scratchMsg({ type: 'generate' }));
+    await none.finished();
+    assert(!none.state.variables.some(v => /^(opacity|z-index|elevation)\//.test(v.name)) && none.state.effectStyles.length === 0, 'extras created without being asked for');
+  });
+
+  await test('elevation effect styles: five shadows, bound to their variables', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', extras: ALL3 }));
+    await fig.finished();
+    assert(JSON.stringify(fig.state.effectStyles.map(s => s.name)) === JSON.stringify(['Elevation/xs', 'Elevation/sm', 'Elevation/md', 'Elevation/lg', 'Elevation/xl']), fig.state.effectStyles.map(s => s.name).join());
+    const md = fig.state.effectStyles.find(s => s.name === 'Elevation/md').effects[0], id = (n) => var1(fig, n).id;
+    assert(md.type === 'DROP_SHADOW' && md.offset.y === 4 && md.radius === 6 && md.spread === -1 && md.color.a === 0.10, JSON.stringify(md));
+    const b = md.boundVariables;
+    assert(b.color.id === id('elevation/md/color') && b.offsetY.id === id('elevation/md/offset-y') && b.radius.id === id('elevation/md/blur') && b.spread.id === id('elevation/md/spread'), JSON.stringify(b));
+  });
+
+  for (const approach of ['2tier', '3tier']) {
+    await test(`${approach} Starter includes the extra tokens and elevation styles by default`, async () => {
+      const { fig, run } = request({}, { approach, mode: 'starter', confirmed: false });
+      const result = await run();
+      assert(result.type === 'generation-complete', result.message);
+      assert(var1(fig, 'opacity/60') && var1(fig, 'z-index/modal') && var1(fig, 'elevation/lg/blur') && fig.state.effectStyles.length === 5, 'starter is missing the extras');
+    });
+  }
+
+  await test('Smart Convert does not add the extra tokens', async () => {
+    const { fig, run } = request({ paintStyles: [['Red 500', .9, .1, .1]], textStyles: [['h1', 32, 'Bold']] }, { approach: '2tier', mode: 'convert' });
+    await run();
+    assert(!fig.state.variables.some(v => /^(opacity|z-index|elevation)\//.test(v.name)) && fig.state.effectStyles.length === 0, 'convert created extras');
+  });
+
+  await test('replace only touches the plugin\'s own effect styles', async () => {
+    const fig = createFigma(EXISTING); fig.load(BUNDLE);
+    const mine = fig.figma.createEffectStyle(); mine.name = 'Elevation/md';
+    const theirs = fig.figma.createEffectStyle(); theirs.name = 'Shadow/card';
+    await fig.send(scratchMsg({ type: 'generate', extras: ALL3 }));
+    const ask = fig.state.messages.find(m => m.type === 'confirm-replace');
+    assert(ask && ask.existing.effectStyles === 1, JSON.stringify(ask && ask.existing));
+    fig.state.messages.length = 0;
+    await fig.send(scratchMsg({ extras: ALL3 }));
+    await fig.finished();
+    const names = fig.state.effectStyles.map(s => s.name);
+    assert(names.includes('Shadow/card') && names.filter(n => n === 'Elevation/md').length === 1 && names.length === 6, names.join());
+  });
+
+  await test('JSON export: opacity is 0–1, z-index a plain number, elevation sizes px, shadow colour has alpha', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate', extras: ALL3 }));
+    await fig.finished();
+    const out = await exportJSON(fig);
+    assert(out.global.opacity['60'].value === 0.6 && out.global.opacity['60'].type === 'number' && out.global.opacity['100'].value === 1 && out.global.opacity['0'].value === 0, JSON.stringify(out.global.opacity['60']));
+    assert(out.global.zIndex.modal.value === 1300 && out.global.zIndex.modal.type === 'number', JSON.stringify(out.global.zIndex.modal));
+    const md = out.global.elevation.md;
+    assert(md.offsetY.value === '4px' && md.blur.value === '6px' && md.spread.value === '-1px' && md.offsetY.type === 'dimension', JSON.stringify(md));
+    assert(/^#[0-9A-F]{6}1A$/.test(md.color.value) && md.color.type === 'color', md.color.value);
+  });
+
+  await test('rejects non-boolean extras and options without touching the document', async () => {
+    for (const over of [{ extras: { elevation: 'yes' } }, { extras: [] }, { extras: null }, { options: { scopes: 1 } }, { options: 'all' }]) {
+      const fig = createFigma(EXISTING); fig.load(BUNDLE);
+      const before = fig.snapshot();
+      fig.send(scratchMsg(over));
+      const result = await fig.finished();
+      assert(result.type === 'generation-failed' && fig.snapshot() === before, `${JSON.stringify(over)} -> ${result.type}`);
+    }
+  });
+
+  await test('with extras on, a failure at any step restores the document exactly', async () => {
+    const opts = { approach: '3tier', mode: 'scratch' };
+    const probe = createFigma(EXISTING); probe.load(BUNDLE);
+    await probe.send(scratchMsg({ extras: ALL3, approach: '3tier' })); await probe.finished();
+    const totals = { ...probe.counts };
+    for (const op of ['createVariable', 'setValue', 'createEffectStyle', 'createCollection', 'createTextStyle']) {
+      const n = totals[op] || 0;
+      assert(n > 0, `${op} never ran`);
+      const points = new Set([1, 2, n, n - 1, Math.ceil(n / 2)]);
+      for (let k = 1; k <= n; k += Math.max(1, Math.floor(n / 20))) points.add(k);
+      for (const k of [...points].filter(k => k >= 1 && k <= n)) {
+        const fig = createFigma({ ...EXISTING, faults: { [op]: k } }); fig.load(BUNDLE);
+        const before = fig.snapshot();
+        fig.send(scratchMsg({ extras: ALL3, approach: '3tier' }));
+        const result = await fig.finished();
+        assert(result.type === 'generation-failed' && result.leftover === 0, `${op} #${k}: ${result.type}`);
+        assert(fig.snapshot() === before, `${op} #${k}: document changed after a failed run`);
+      }
+    }
+  });
+
+  await test('scopes or code syntax refusing a variable is a warning, not a failed run', async () => {
+    const fig = createFigma({ faults: { codeSyntax: [1, 5, 9] } }); fig.load(BUNDLE);
+    await fig.send(scratchMsg({ type: 'generate' }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-complete' && result.warnings.some(w => /scopes or code syntax on 3 variables/.test(w)), JSON.stringify(result.warnings));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

@@ -177,6 +177,22 @@
     .opt-toggle input:focus-visible { outline: 2px solid #EE661D; outline-offset: 2px; }
     .scale-row[hidden] { display: none; }
 
+    /* ── Checkbox rows (extra tokens, output options) ── */
+    .check-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+    .check-row {
+      display: flex; align-items: flex-start; gap: 10px; padding: 9px 11px; cursor: pointer;
+      background: white; border: 1.5px solid #eee; border-radius: 8px;
+      transition: border-color .18s, background .18s;
+    }
+    .check-row:hover { border-color: #EE661D; }
+    .check-row:has(input:checked) { background: #FFF9EB; border-color: #f5c8a0; }
+    .check-row input { width: 14px; height: 14px; margin: 2px 0 0; accent-color: #EE661D; cursor: pointer; flex-shrink: 0; }
+    .check-row input:focus-visible { outline: 2px solid #EE661D; outline-offset: 2px; }
+    .check-row .check-title { display: block; font-size: 12px; font-weight: 500; color: #111; line-height: 1.4; }
+    .check-row .check-desc  { display: block; font-size: 11px; color: #777; line-height: 1.5; margin-top: 1px; }
+    .output-options { margin-top: 16px; }
+    .output-options > strong { display: block; font-size: 12px; font-weight: 600; color: #111; }
+
     /* ── Hint ── */
     .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
 
@@ -593,6 +609,25 @@
         <div class="type-preview" id="type-preview"></div>
       </div>
 
+      <div class="scale-section" style="margin-bottom:20px">
+        <span class="color-section-label">Other tokens</span>
+        <div class="scale-hint" style="margin-top:0">Optional extras for Global. Untick any you don't need.</div>
+        <div class="check-list">
+          <label class="check-row">
+            <input type="checkbox" id="chk-elevation" checked>
+            <span><span class="check-title">Elevation</span><span class="check-desc">5 shadow levels (xs to xl) as variables, with matching effect styles.</span></span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="chk-opacity" checked>
+            <span><span class="check-title">Opacity</span><span class="check-desc">6 steps from 0 to 100, for layer opacity and color alpha.</span></span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="chk-zindex" checked>
+            <span><span class="check-title">Z-index</span><span class="check-desc">8 stacking layers from base to tooltip, for developer handoff.</span></span>
+          </label>
+        </div>
+      </div>
+
     </div>
     <div class="screen-footer">
       <button class="btn-primary" id="btn-next2" disabled onclick="goTo('screen3','left')">Next: Choose Architecture →</button>
@@ -652,10 +687,25 @@
           <span class="starter-info-tag">Border width scale (base 1)</span>
           <span class="starter-info-tag">13-level type scale · Major Third</span>
           <span class="starter-info-tag">Font weights + paragraph spacing</span>
+          <span class="starter-info-tag">Elevation · opacity · z-index</span>
         </div>
       </div>
 
-    </div>
+          <div class="output-options">
+        <strong>Output options</strong>
+        <div class="check-list">
+          <label class="check-row">
+            <input type="checkbox" id="chk-scopes" checked>
+            <span><span class="check-title">Set variable scopes</span><span class="check-desc">Hides Global primitives from Figma's pickers so designers reach for Alias tokens.</span></span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="chk-syntax" checked>
+            <span><span class="check-title">Add code syntax</span><span class="check-desc">Shows names like var(--alias-color-primary-500) on each variable in Dev Mode.</span></span>
+          </label>
+        </div>
+      </div>
+
+</div>
     <div class="screen-footer">
       <button class="btn-primary" id="btn-generate" disabled onclick="doGenerate()">Generate Tokens</button>
       <div class="hint" id="hint-generate">Select an architecture above to generate</div>
@@ -966,6 +1016,11 @@
       widthBase:   parseInt(document.getElementById('inp-width').value)   || 1,
       fontBase:    parseInt(document.getElementById('inp-font-base').value) || 16,
       ratioKey:    document.getElementById('inp-ratio').value,
+      extras: {
+        elevation: document.getElementById('chk-elevation').checked,
+        opacity:   document.getElementById('chk-opacity').checked,
+        zIndex:    document.getElementById('chk-zindex').checked,
+      },
       fontFamily:  document.getElementById('inp-font-family').value || 'Inter',
       // Only sent when the toggle is on; an empty value means one font everywhere.
       bodyFontFamily: document.getElementById('chk-body-font').checked
@@ -974,10 +1029,17 @@
     };
   }
 
+  function outputOptions() {
+    return {
+      scopes:     document.getElementById('chk-scopes').checked,
+      codeSyntax: document.getElementById('chk-syntax').checked,
+    };
+  }
+
   function doGenerate() {
     if (!selectedMode || !selectedArch) return;
     document.getElementById('hint-generate').classList.remove('error');
-    const msg = { type: 'generate', approach: selectedArch, mode: selectedMode };
+    const msg = { type: 'generate', approach: selectedArch, mode: selectedMode, options: outputOptions() };
     if (selectedMode === 'scratch') Object.assign(msg, buildScratchPayload());
     parent.postMessage({ pluginMessage: msg }, '*');
   }
@@ -999,6 +1061,7 @@
     (existing.collections || []).forEach(c => add(c.name, plural(c.variables, 'variable')));
     if (existing.paintStyles) add('Local color styles', plural(existing.paintStyles, 'style'));
     if (existing.textStyles)  add('Local text styles',  plural(existing.textStyles, 'style'));
+    if (existing.effectStyles) add('Local effect styles', plural(existing.effectStyles, 'style'));
     replaceTrigger = document.activeElement;
     const scrim = document.getElementById('replace-scrim');
     scrim.classList.add('open'); scrim.setAttribute('aria-hidden', 'false');
@@ -1012,7 +1075,7 @@
     scrim.classList.remove('open'); scrim.setAttribute('aria-hidden', 'true');
     if (replaceTrigger && replaceTrigger.focus) replaceTrigger.focus();
     if (!confirmed) return;
-    const m = { type: 'confirm-continue', approach: selectedArch, mode: selectedMode };
+    const m = { type: 'confirm-continue', approach: selectedArch, mode: selectedMode, options: outputOptions() };
     if (selectedMode === 'scratch') Object.assign(m, buildScratchPayload());
     parent.postMessage({ pluginMessage: m }, '*');
   }

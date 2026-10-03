@@ -14,7 +14,7 @@ const fs = require('fs');
 
 function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {}, hooks = {}, fonts = DEFAULT_FONTS } = {}) {
   let nextId = 0;
-  const state = { collections: [], variables: [], paintStyles: [], textStyles: [], messages: [], notes: [] };
+  const state = { collections: [], variables: [], paintStyles: [], textStyles: [], effectStyles: [], messages: [], notes: [] };
   const counts = {};
   let armed = false; // faults only apply to the run, not to seeding the document
   const tick = (op) => {
@@ -34,6 +34,8 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     tick('createVariable');
     const v = {
       id: 'v' + nextId++, name, variableCollectionId: collectionId, resolvedType: type, valuesByMode: {},
+      scopes: ['ALL_SCOPES'], codeSyntax: {},
+      setVariableCodeSyntax(platform, value) { tick('codeSyntax'); v.codeSyntax[platform] = value; },
       setValueForMode(mode, value) { tick('setValue'); v.valuesByMode[mode] = value; },
       remove() { tick('removeVariable'); state.variables.splice(state.variables.indexOf(v), 1); },
     };
@@ -60,6 +62,13 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     state.paintStyles.push(s);
     return s;
   };
+  const makeEffectStyle = () => {
+    tick('createEffectStyle');
+    const s = { name: '', effects: [], remove() { tick('removeEffectStyle'); state.effectStyles.splice(state.effectStyles.indexOf(s), 1); } };
+    state.effectStyles.push(s);
+    return s;
+  };
+
   // Like Figma: a new text style starts as Inter Regular, and changing size, line height or letter
   // spacing throws unless the style's *current* font has been loaded. Changing fontName needs the
   // *new* font loaded. (Seeding the document skips these checks.)
@@ -112,6 +121,11 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     variables: {
       createVariableCollection: makeCollection,
       createVariable: makeVariable,
+      setBoundVariableForEffect(effect, field, variable) {
+        tick('bindEffect');
+        if (!variable || typeof variable !== 'object') throw new Error('bind needs a Variable');
+        return { ...effect, boundVariables: { ...(effect.boundVariables || {}), [field]: { type: 'VARIABLE_ALIAS', id: variable.id } } };
+      },
       getLocalVariablesAsync: async () => state.variables.slice(),
       getLocalVariableCollectionsAsync: async () => state.collections.slice(),
       getLocalVariables: syncRemoved('getLocalVariables'),
@@ -122,6 +136,9 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     getLocalPaintStyles: syncRemoved('getLocalPaintStyles'),
     getLocalTextStyles: syncRemoved('getLocalTextStyles'),
     createPaintStyle: makePaintStyle,
+    createEffectStyle: makeEffectStyle,
+    getLocalEffectStylesAsync: async () => state.effectStyles.slice(),
+    getLocalEffectStyles: syncRemoved('getLocalEffectStyles'),
     createTextStyle: makeTextStyle,
     loadFontAsync: async (font) => {
       tick('loadFont');
@@ -152,6 +169,7 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     variables: state.variables.map(v => [v.name, v.variableCollectionId, JSON.stringify(v.valuesByMode)]).sort(),
     paint: state.paintStyles.map(s => [s.name, JSON.stringify(s.paints)]).sort(),
     text: state.textStyles.map(s => [s.name, s.fontSize, s.paragraphSpacing, s.fontName && s.fontName.style]).sort(),
+    effect: state.effectStyles.map(s => [s.name, JSON.stringify(s.effects)]).sort(),
   });
   return { figma, state, counts, load, send, finished, snapshot, evalInPlugin, emit };
 }

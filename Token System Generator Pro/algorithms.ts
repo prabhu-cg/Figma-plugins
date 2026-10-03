@@ -312,3 +312,73 @@ export function collectionKey(name: string): string {
   if (words.length === 0) return 'collection';
   return words[0] + words.slice(1).map(w => w[0].toUpperCase() + w.slice(1)).join('');
 }
+
+// ─── EXTRA TOKEN SCALES ──────────────────────────────────────────
+
+// Drop-shadow elevation levels. Offset, blur and spread are px; alpha is the shadow colour's opacity.
+// Larger levels sit higher, so they get a longer offset, a softer blur, a tighter spread and more opacity.
+export const ELEVATION_LEVELS = [
+  { name: 'xs', offsetY: 1,  blur: 2,  spread: 0,  alpha: 0.06 },
+  { name: 'sm', offsetY: 1,  blur: 3,  spread: 0,  alpha: 0.10 },
+  { name: 'md', offsetY: 4,  blur: 6,  spread: -1, alpha: 0.10 },
+  { name: 'lg', offsetY: 10, blur: 15, spread: -3, alpha: 0.12 },
+  { name: 'xl', offsetY: 20, blur: 25, spread: -5, alpha: 0.15 },
+] as const;
+
+// Figma reads opacity variables as 0–100 (anything above 100 counts as 100%).
+export const OPACITY_STEPS = [0, 20, 40, 60, 80, 100] as const;
+
+// A layer scale for stacking order, spaced so new layers can be slotted in between.
+export const Z_INDEX_LAYERS = [
+  ['base', 0], ['dropdown', 1000], ['sticky', 1100], ['overlay', 1200],
+  ['modal', 1300], ['popover', 1400], ['toast', 1500], ['tooltip', 1600],
+] as const;
+
+// ─── VARIABLE SCOPES + CODE SYNTAX ───────────────────────────────
+
+export type ScopeLayer = 'global' | 'alias' | 'component';
+
+const kebab = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+
+// Which Figma pickers should show a variable. null leaves Figma's default (shown everywhere).
+// Global primitives that have an Alias counterpart are hidden so designers reach for the Alias tokens;
+// spacing, elevation and opacity have no Alias layer, so they stay visible where they apply.
+export function scopesFor(layer: ScopeLayer, name: string, type: string): string[] | null {
+  const parts = name.split('/').map(kebab);
+  const root = parts[0];
+  const leaf = parts[parts.length - 1];
+
+  if (layer === 'global') {
+    if (root === 'spacing') return ['GAP', 'WIDTH_HEIGHT'];
+    if (root === 'opacity') return ['OPACITY'];
+    if (root === 'elevation') return type === 'COLOR' ? ['EFFECT_COLOR'] : ['EFFECT_FLOAT'];
+    return []; // colours, radius, border width, typography, z-index: reached through Alias (or code only)
+  }
+  if (layer === 'component') {
+    if (root === 'text')    return ['TEXT_FILL'];
+    if (root === 'icon')    return ['SHAPE_FILL'];
+    if (root === 'surface') return ['FRAME_FILL', 'SHAPE_FILL'];
+    if (root === 'border')  return ['STROKE_COLOR'];
+    return null;
+  }
+  // alias
+  if (root === 'color' || root === 'colors') return ['ALL_FILLS', 'STROKE_COLOR', 'EFFECT_COLOR'];
+  if (root === 'border-radius') return ['CORNER_RADIUS'];
+  if (root === 'border-width')  return ['STROKE_FLOAT'];
+  if (root === 'typography' && parts[1] === 'font-family') return ['FONT_FAMILY'];
+  if (root === 'text') {
+    const byLeaf: Record<string, string> = {
+      'font-size': 'FONT_SIZE', 'line-height': 'LINE_HEIGHT', 'letter-spacing': 'LETTER_SPACING',
+      'paragraph-spacing': 'PARAGRAPH_SPACING', 'font-weight': 'FONT_WEIGHT',
+    };
+    return byLeaf[leaf] ? [byLeaf[leaf]] : null;
+  }
+  return null;
+}
+
+// The CSS variable a token becomes with Style Dictionary's default css naming (see the JSON export):
+// the layer key and every path part, kebab-cased. Matches `--global-color-cobalt-500`.
+export function webCodeSyntax(layerKey: string, name: string): string {
+  const parts = name.split('/').map(p => kebab(p.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase())));
+  return `var(--${[layerKey, ...parts].join('-')})`;
+}

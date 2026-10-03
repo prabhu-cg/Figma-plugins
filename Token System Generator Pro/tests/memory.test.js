@@ -7,7 +7,8 @@ const BUNDLE = require('path').join(__dirname, '..', '.test-build', 'code.js');
 const COLORS = { primary: '#3D6BE8', secondary: '#7C3AED', tertiary: '#0891B2', accent: '#EA580C',
   info: '#3B82F6', success: '#22C55E', error: '#EF4444', warning: '#F59E0B', neutral: '#6B7280' };
 const msg = (approach, fontFamily = 'Inter') => ({ type: 'confirm-continue', approach, mode: 'scratch', colors: COLORS, spacingBase: 4,
-  radiusBase: 4, widthBase: 1, fontBase: 16, ratioKey: 'major-third', fontFamily });
+  radiusBase: 4, widthBase: 1, fontBase: 16, ratioKey: 'major-third', fontFamily,
+  extras: { elevation: true, opacity: true, zIndex: true } });
 
 const heapMB = () => { global.gc(); return process.memoryUsage().heapUsed / 1048576; };
 
@@ -52,6 +53,7 @@ const heapMB = () => { global.gc(); return process.memoryUsage().heapUsed / 1048
   if (repeatedWarning) problems.push(`warnings accumulated across runs: ${repeatedWarning}`);
   if (generating) problems.push('the plugin stopped accepting runs');
   if (docCols > 3) problems.push(`collections accumulated (${docCols})`);
+  if (fig.state.effectStyles.length > 5) problems.push(`effect styles accumulated (${fig.state.effectStyles.length})`);
   if (fig.state.paintStyles.length > 100) problems.push(`paint styles accumulated (${fig.state.paintStyles.length})`);
   if (problems.length) { console.error('❌ ' + problems.join('; ')); process.exit(1); }
   console.log('✅ no growth');

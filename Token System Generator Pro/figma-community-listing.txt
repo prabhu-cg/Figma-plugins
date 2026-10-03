@@ -54,6 +54,20 @@ Border width
   - 5 semantic stops — none, sm, md, lg, xl
   - Scaled from your chosen base width
 
+Other tokens (optional, From Scratch and Starter)
+  - Elevation: 5 shadow levels (xs to xl) as variables, plus matching effect
+    styles bound to them
+  - Opacity: 6 steps from 0 to 100
+  - Z-index: 8 stacking layers from base to tooltip
+
+Scopes and code syntax
+  - Variable scopes keep Figma's pickers tidy: Alias and Component tokens are
+    scoped to the fields they are for, and Global primitives that have an Alias
+    counterpart are hidden so designers reach for the right layer
+  - A web code syntax on every variable, such as
+    var(--alias-color-primary-500), that matches the Style Dictionary output
+  - Both are on by default and can be turned off
+
 Typography
   - 13-level scale: display-lg, display-md, display-sm, h1–h6, body-lg, body,
     caption, xs
@@ -173,11 +187,12 @@ LIMITATIONS
   example, a font without SemiBold uses Bold) and the plugin tells you when it
   does. Italic styles are not generated.
 
-- Shadow and elevation tokens are not generated in this version.
+- Elevation, opacity and z-index live in the Global layer (no Alias layer), and
+  Smart Convert does not add them.
 
 - From Scratch and Starter also create local paint styles and text styles, and
-  replace the ones this plugin created earlier. Smart Convert does not create
-  or change any styles.
+  replace the ones this plugin created earlier (including Elevation effect
+  styles). Smart Convert does not create or change any styles.
 
 - Smart Convert reads existing paint styles and text styles only. It does not
   read or migrate existing Figma Variables.
@@ -195,9 +210,8 @@ COMING SOON
   collection with multiple modes
 - Accessibility checks — WCAG contrast validation for semantic color pairs
 - Composite typography tokens in the JSON export
-- Shadow and elevation token scale
-- Opacity token scale
-- Z-index / layer token scale
+- Motion (duration and easing) and breakpoint token scales
+- Live color ramp preview and an optional foundation drawn on the canvas
 - One-click publish to Tokens Studio / W3C DTCG format
 
 

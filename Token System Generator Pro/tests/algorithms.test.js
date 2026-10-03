@@ -22,6 +22,7 @@ const {
   generateTypographyScale, generateBorderWidthScale, getColorName,
   rgbToOklch, oklchToRgb, STARTER_COLORS,
   weightFromStyleName, pickFontStyle, collectionKey,
+  scopesFor, webCodeSyntax, ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS,
 } = require('../.test-build/algorithms.js');
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -253,6 +254,49 @@ test('collectionKey always returns a usable identifier', () => {
     const k = collectionKey(name);
     if (!/^[A-Za-z0-9]+$/.test(k) && k !== 'collection') throw new Error(`${JSON.stringify(name)} -> ${JSON.stringify(k)}`);
   }
+});
+
+test('scopesFor: Global primitives with an Alias counterpart are hidden, the rest stay visible where they apply', () => {
+  assertEqual(scopesFor('global', 'color/cobalt/500', 'COLOR'), []);
+  assertEqual(scopesFor('global', 'borderRadius/4', 'FLOAT'), []);
+  assertEqual(scopesFor('global', 'typography/font-size/h1', 'FLOAT'), []);
+  assertEqual(scopesFor('global', 'typography/fontSize/heading/h1', 'FLOAT'), []);
+  assertEqual(scopesFor('global', 'spacing/4', 'FLOAT'), ['GAP', 'WIDTH_HEIGHT']);
+  assertEqual(scopesFor('global', 'opacity/50', 'FLOAT'), ['OPACITY']);
+  assertEqual(scopesFor('global', 'elevation/md/blur', 'FLOAT'), ['EFFECT_FLOAT']);
+  assertEqual(scopesFor('global', 'elevation/md/color', 'COLOR'), ['EFFECT_COLOR']);
+});
+test('scopesFor: Alias and Component tokens are scoped to the fields they are for', () => {
+  assertEqual(scopesFor('alias', 'color/primary/500', 'COLOR'), ['ALL_FILLS', 'STROKE_COLOR', 'EFFECT_COLOR']);
+  assertEqual(scopesFor('alias', 'colors/primary/500', 'COLOR'), ['ALL_FILLS', 'STROKE_COLOR', 'EFFECT_COLOR']);
+  assertEqual(scopesFor('alias', 'borderRadius/sm', 'FLOAT'), ['CORNER_RADIUS']);
+  assertEqual(scopesFor('alias', 'borderWidth/sm', 'FLOAT'), ['STROKE_FLOAT']);
+  assertEqual(scopesFor('alias', 'typography/font-family', 'STRING'), ['FONT_FAMILY']);
+  assertEqual(scopesFor('alias', 'typography/font-family/heading', 'STRING'), ['FONT_FAMILY']);
+  assertEqual(scopesFor('alias', 'text/h1/font-size', 'FLOAT'), ['FONT_SIZE']);
+  assertEqual(scopesFor('alias', 'text/h1/paragraphSpacing', 'FLOAT'), ['PARAGRAPH_SPACING']);
+  assertEqual(scopesFor('alias', 'text/h1/font-weight', 'FLOAT'), ['FONT_WEIGHT']);
+  assertEqual(scopesFor('component', 'text/default', 'COLOR'), ['TEXT_FILL']);
+  assertEqual(scopesFor('component', 'icon/subtle', 'COLOR'), ['SHAPE_FILL']);
+  assertEqual(scopesFor('component', 'surface/primary', 'COLOR'), ['FRAME_FILL', 'SHAPE_FILL']);
+  assertEqual(scopesFor('component', 'border/default', 'COLOR'), ['STROKE_COLOR']);
+});
+test('webCodeSyntax matches Style Dictionary css naming (layer + kebab-cased path)', () => {
+  assertEqual(webCodeSyntax('global', 'color/cobalt/500'), 'var(--global-color-cobalt-500)');
+  assertEqual(webCodeSyntax('alias', 'borderRadius/2xl'), 'var(--alias-border-radius-2xl)');
+  assertEqual(webCodeSyntax('alias', 'text/h1/letter-spacing'), 'var(--alias-text-h1-letter-spacing)');
+  assertEqual(webCodeSyntax('alias', 'text/h1/paragraphSpacing'), 'var(--alias-text-h1-paragraph-spacing)');
+  assertEqual(webCodeSyntax('global', 'z-index/modal'), 'var(--global-z-index-modal)');
+  assertEqual(webCodeSyntax('component', 'surface/primary'), 'var(--component-surface-primary)');
+});
+test('elevation levels never shrink in offset or opacity and always grow in blur; opacity and z-index scales ascend', () => {
+  for (let i = 1; i < ELEVATION_LEVELS.length; i++) {
+    const a = ELEVATION_LEVELS[i - 1], b = ELEVATION_LEVELS[i];
+    if (!(b.offsetY >= a.offsetY && b.blur > a.blur && b.alpha >= a.alpha)) throw new Error(`${a.name} -> ${b.name}`);
+  }
+  for (let i = 1; i < OPACITY_STEPS.length; i++) if (OPACITY_STEPS[i] <= OPACITY_STEPS[i - 1]) throw new Error('opacity not ascending');
+  assertEqual([OPACITY_STEPS[0], OPACITY_STEPS[OPACITY_STEPS.length - 1]], [0, 100]);
+  for (let i = 1; i < Z_INDEX_LAYERS.length; i++) if (Z_INDEX_LAYERS[i][1] <= Z_INDEX_LAYERS[i - 1][1]) throw new Error('z-index not ascending');
 });
 
 // ── Summary ───────────────────────────────────────────────────────

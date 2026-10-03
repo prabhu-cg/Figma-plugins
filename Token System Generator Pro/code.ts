@@ -1,7 +1,8 @@
 import {
   RAMP_STOPS, STARTER_COLORS, TypeLevel, TS_RATIO,
   generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
-  generateBorderWidthScale, getColorName, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey, weightFromStyleName, FONT_WEIGHT_NAMES,
+  generateBorderWidthScale, getColorName, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey,
+  ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS, scopesFor, webCodeSyntax, ScopeLayer, weightFromStyleName, FONT_WEIGHT_NAMES,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -82,15 +83,18 @@ interface ExistingTokens {
   variables: Variable[];
   paintStyles: PaintStyle[];
   textStyles: TextStyle[];
+  effectStyles: EffectStyle[];
 }
 
 // Replacing only touches what this plugin makes. Anything else in the file is left alone:
 //  - collections named exactly like the ones it creates,
 //  - paint styles named "<color>/<stop>" (e.g. cobalt/500),
-//  - text styles named "<Display|Heading|Body copy>/<level>" (e.g. Heading/h1).
+//  - text styles named "<Display|Heading|Body copy>/<level>" (e.g. Heading/h1),
+//  - effect styles named "Elevation/<level>" (e.g. Elevation/md).
 const PLUGIN_COLLECTIONS: readonly string[] = ['01 Global', '02 Alias', '03 Component'];
 const PAINT_STYLE_RE = new RegExp(`^[a-z][a-z0-9-]*/(${RAMP_STOPS.join('|')})$`);
 const TEXT_STYLE_GROUPS: readonly string[] = ['Display', 'Heading', 'Body copy'];
+const EFFECT_STYLE_RE = new RegExp(`^Elevation/(${ELEVATION_LEVELS.map(l => l.name).join('|')})$`);
 
 const isPluginPaintStyle = (name: string): boolean => PAINT_STYLE_RE.test(name);
 const isPluginTextStyle = (name: string): boolean => {
@@ -107,6 +111,7 @@ async function snapshotExisting(mode: string): Promise<ExistingTokens> {
     // Smart Convert reads the local styles, so they are kept.
     paintStyles: mode === 'convert' ? [] : (await figma.getLocalPaintStylesAsync()).filter(s => isPluginPaintStyle(s.name)),
     textStyles:  mode === 'convert' ? [] : (await figma.getLocalTextStylesAsync()).filter(s => isPluginTextStyle(s.name)),
+    effectStyles: mode === 'convert' ? [] : (await figma.getLocalEffectStylesAsync()).filter(s => EFFECT_STYLE_RE.test(s.name)),
   };
 }
 
@@ -126,6 +131,9 @@ function commitStaged(old: ExistingTokens): void {
   }
   for (const style of old.textStyles) {
     try { style.remove(); } catch (_e) { warn(`Couldn't remove an old text style`); }
+  }
+  for (const style of old.effectStyles) {
+    try { style.remove(); } catch (_e) { warn(`Couldn't remove an old effect style`); }
   }
   for (const { collection, finalName } of staged.collections) {
     try { collection.name = finalName; } catch (_e) { warn(`Couldn't rename "${finalName}"`); }
@@ -248,6 +256,7 @@ async function describeExisting(mode: string): Promise<{
   collections: { name: string; variables: number }[];
   paintStyles: number;
   textStyles: number;
+  effectStyles: number;
 }> {
   const old = await snapshotExisting(mode);
   return {
@@ -257,12 +266,28 @@ async function describeExisting(mode: string): Promise<{
     })),
     paintStyles: old.paintStyles.length,
     textStyles: old.textStyles.length,
+    effectStyles: old.effectStyles.length,
   };
 }
 
 // ─── STARTER + SMART CONVERT ─────────────────────────────────────
 
 type Tier = '2tier' | '3tier';
+
+// Extra token scales From Scratch (and Starter) can add on top of colours, type, spacing and so on.
+interface Extras {
+  elevation: boolean; // shadow variables + Elevation/* effect styles
+  opacity: boolean;   // opacity/0 … opacity/100
+  zIndex: boolean;    // z-index/base … z-index/tooltip
+}
+const NO_EXTRAS: Extras = { elevation: false, opacity: false, zIndex: false };
+const ALL_EXTRAS: Extras = { elevation: true, opacity: true, zIndex: true };
+
+// Applies to every mode.
+interface OutputOptions {
+  scopes: boolean;      // set variable scopes and hide Global primitives that have an Alias counterpart
+  codeSyntax: boolean;  // add a WEB code syntax (var(--…)) to every variable
+}
 
 interface ScratchOptions {
   colors: ScratchColors;
@@ -274,12 +299,13 @@ interface ScratchOptions {
   tier: Tier;
   fontFamily?: string;      // displays + headings (and body copy, unless bodyFontFamily is set)
   bodyFontFamily?: string;  // optional: a different font for body copy
+  extras: Extras;
 }
 
 async function createStarterSystem(tier: Tier): Promise<void> {
   return buildFromScratch({
     colors: STARTER_COLORS, spacingBase: 4, radiusBase: 4, widthBase: 1,
-    fontBase: 16, ratioKey: 'major-third', tier,
+    fontBase: 16, ratioKey: 'major-third', tier, extras: ALL_EXTRAS,
   });
 }
 
@@ -639,6 +665,88 @@ async function createTextStyles(typo: TypographyVars): Promise<void> {
 }
 
 // Local paint styles mirroring each color ramp (brand names from the global step, semantic fixed).
+interface ElevationVars {
+  name: string;
+  offsetY: Variable;
+  blur: Variable;
+  spread: Variable;
+  color: Variable;
+  rgba: RGBA;
+}
+
+// Shadow colour: the darkest Neutral stop when there is one, otherwise black.
+function shadowRgb(ramps: Ramps, modeId: string): RGB {
+  const value = ramps['neutral']?.[900]?.valuesByMode[modeId];
+  return value && typeof value === 'object' && 'r' in value ? { r: value.r, g: value.g, b: value.b } : { r: 0, g: 0, b: 0 };
+}
+
+function createExtraTokens(global: VariableCollection, extras: Extras, ramps: Ramps): ElevationVars[] {
+  const modeId = global.modes[0].modeId;
+  if (extras.opacity) for (const n of OPACITY_STEPS) createNumber(global, `opacity/${n}`, n);
+  if (extras.zIndex) for (const [name, value] of Z_INDEX_LAYERS) createNumber(global, `z-index/${name}`, value);
+
+  const elevation: ElevationVars[] = [];
+  if (extras.elevation) {
+    const rgb = shadowRgb(ramps, modeId);
+    for (const level of ELEVATION_LEVELS) {
+      const rgba: RGBA = { ...rgb, a: level.alpha };
+      const color = figma.variables.createVariable(`elevation/${level.name}/color`, global, 'COLOR');
+      color.setValueForMode(modeId, rgba);
+      elevation.push({
+        name: level.name, rgba, color,
+        offsetY: createNumber(global, `elevation/${level.name}/offset-y`, level.offsetY),
+        blur:    createNumber(global, `elevation/${level.name}/blur`,     level.blur),
+        spread:  createNumber(global, `elevation/${level.name}/spread`,   level.spread),
+      });
+    }
+  }
+  return elevation;
+}
+
+// One Elevation/<level> effect style per level, its shadow bound to that level's variables.
+function createElevationStyles(levels: ElevationVars[]): void {
+  for (const v of levels) {
+    const style = stageStyle(figma.createEffectStyle());
+    style.name = `Elevation/${v.name}`;
+    const level = ELEVATION_LEVELS.find(l => l.name === v.name) as typeof ELEVATION_LEVELS[number];
+    let effect: Effect = {
+      type: 'DROP_SHADOW', color: v.rgba, offset: { x: 0, y: level.offsetY },
+      radius: level.blur, spread: level.spread, visible: true, blendMode: 'NORMAL',
+    };
+    try {
+      effect = figma.variables.setBoundVariableForEffect(effect, 'color', v.color);
+      effect = figma.variables.setBoundVariableForEffect(effect, 'offsetY', v.offsetY);
+      effect = figma.variables.setBoundVariableForEffect(effect, 'radius', v.blur);
+      effect = figma.variables.setBoundVariableForEffect(effect, 'spread', v.spread);
+    } catch (_e) {
+      warn(`Couldn't link an elevation style to its variables`);
+    }
+    style.effects = [effect];
+  }
+}
+
+// Scopes decide which Figma pickers list a variable; code syntax is the name shown in Dev Mode.
+// Neither is essential, so a variable that refuses them becomes a warning instead of failing the run.
+async function applyVariableMetadata(options: OutputOptions): Promise<void> {
+  if (!options.scopes && !options.codeSyntax) return;
+  const layerByCollection = new Map(staged.collections.map(c => [c.collection.id, collectionKey(c.finalName)]));
+  let failed = 0;
+  for (const v of await figma.variables.getLocalVariablesAsync()) {
+    const layer = layerByCollection.get(v.variableCollectionId);
+    if (!layer) continue;
+    try {
+      if (options.scopes) {
+        const scopes = scopesFor(layer as ScopeLayer, v.name, v.resolvedType);
+        if (scopes) v.scopes = scopes as VariableScope[];
+      }
+      if (options.codeSyntax) v.setVariableCodeSyntax('WEB', webCodeSyntax(layer, v.name));
+    } catch (_e) {
+      failed++;
+    }
+  }
+  if (failed) warn(`Couldn't set scopes or code syntax on ${failed} variable${failed > 1 ? 's' : ''}`);
+}
+
 function createPaintStyles(global: VariableCollection, ramps: Ramps, brandNames: Record<string, string>): void {
   const modeId = global.modes[0].modeId;
   const styleRamp = (key: string, name: string): void => {
@@ -696,11 +804,13 @@ async function buildFromScratch(o: ScratchOptions): Promise<void> {
   const radius = createScaleGlobals(global, 'borderRadius', generateRadiusScale(o.radiusBase));
   const width  = createScaleGlobals(global, 'borderWidth', generateBorderWidthScale(o.widthBase));
   const typo   = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || 'Inter', o.bodyFontFamily);
+  const elevation = createExtraTokens(global, o.extras, ramps);
 
   // 02 Alias, then the local styles that mirror the tokens
   const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
   await createTextStyles(typo);
   createPaintStyles(global, ramps, brandNames);
+  createElevationStyles(elevation);
 
   // 03 Component
   if (o.tier === '3tier') createComponentCollection(colorAliases);
@@ -725,9 +835,11 @@ async function exportVariablesToJSON(): Promise<string> {
   const allVars = await figma.variables.getLocalVariablesAsync();
   const result = newNode();
   const toCamelCase = (str: string) => str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-  const colorToHex = (c: { r: number; g: number; b: number }) => {
+  // 8 digits (#RRGGBBAA) when the colour is partly transparent, as for shadow colours.
+  const colorToHex = (c: { r: number; g: number; b: number; a?: number }) => {
     const h = (n: number) => Math.round(n * 255).toString(16).padStart(2, '0');
-    return `#${h(c.r)}${h(c.g)}${h(c.b)}`.toUpperCase();
+    const alpha = c.a !== undefined && c.a < 1 ? h(c.a) : '';
+    return `#${h(c.r)}${h(c.g)}${h(c.b)}${alpha}`.toUpperCase();
   };
 
   const collectionById = new Map<string, VariableCollection>();
@@ -764,13 +876,18 @@ async function exportVariablesToJSON(): Promise<string> {
       // as "16px" strings so tools like Style Dictionary know the unit instead of guessing (a bare 16
       // would become 16rem). Numbers in other collections are left as plain numbers.
       const isWeight = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name);
-      const isPixelSize = v.resolvedType === 'FLOAT' && !isWeight && PLUGIN_COLLECTIONS.includes(col.name);
+      // Unitless scales: opacity is stored 0–100 for Figma and exported as 0–1 for CSS; z-index is a plain number.
+      const isOpacity = v.resolvedType === 'FLOAT' && /^opacity\//.test(v.name) && PLUGIN_COLLECTIONS.includes(col.name);
+      const isZIndex = v.resolvedType === 'FLOAT' && /^z-index\//.test(v.name) && PLUGIN_COLLECTIONS.includes(col.name);
+      const isPixelSize = v.resolvedType === 'FLOAT' && !isWeight && !isOpacity && !isZIndex && PLUGIN_COLLECTIONS.includes(col.name);
       const type = isWeight ? 'fontWeight' : isPixelSize ? 'dimension' : (TOKEN_TYPES[v.resolvedType] ?? 'unknown');
       let value: unknown = val;
-      if (isPixelSize && typeof val === 'number') {
+      if (isOpacity && typeof val === 'number') {
+        value = val / 100;
+      } else if (isPixelSize && typeof val === 'number') {
         value = `${val}px`;
       } else if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
-        value = colorToHex(val as { r: number; g: number; b: number });
+        value = colorToHex(val as { r: number; g: number; b: number; a?: number });
       } else if (val && typeof val === 'object' && (val as { type?: string }).type === 'VARIABLE_ALIAS') {
         const token = varTokens.get((val as { id: string }).id);
         if (token) value = `{${token}}`;
@@ -820,7 +937,7 @@ async function runGeneration(r: GenerateRequest): Promise<void> {
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   // Only ask when something this plugin made would actually be replaced.
   const existing = await describeExisting(r.mode);
-  if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0) {
+  if (existing.collections.length > 0 || existing.paintStyles > 0 || existing.textStyles > 0 || existing.effectStyles > 0) {
     figma.ui.postMessage({ type: 'confirm-replace', existing }); return;
   }
   await generate(r);
@@ -835,7 +952,7 @@ function scratchOptions(r: GenerateRequest): ScratchOptions {
   return {
     colors: r.colors, spacingBase: r.spacingBase, radiusBase: r.radiusBase, widthBase: r.widthBase,
     fontBase: r.fontBase, ratioKey: r.ratioKey, tier: r.approach,
-    fontFamily: r.fontFamily, bodyFontFamily: r.bodyFontFamily,
+    fontFamily: r.fontFamily, bodyFontFamily: r.bodyFontFamily, extras: r.extras,
   };
 }
 
@@ -853,6 +970,7 @@ async function generate(r: GenerateRequest): Promise<void> {
     if (r.mode === 'scratch') await buildFromScratch(scratchOptions(r));
     else if (r.mode === 'starter') await createStarterSystem(tier);
     else if (r.mode === 'convert') await convertStylesToTokens(tier);
+    await applyVariableMetadata(r.options);
   } catch (e) {
     const leftover = rollbackStaged();
     const reason = (e as { message?: string } | null)?.message ?? String(e);
@@ -889,10 +1007,15 @@ interface GenerateRequest {
   ratioKey?: string;
   fontFamily?: string;
   bodyFontFamily?: string; // optional second font for body copy
+  extras: Extras;
+  options: OutputOptions;
 }
 
-interface UiMessage extends Partial<GenerateRequest> {
+// What the panel sends; checked field by field in parseRequest.
+interface UiMessage extends Partial<Omit<GenerateRequest, 'extras' | 'options'>> {
   type: string;
+  extras?: unknown;
+  options?: unknown;
 }
 
 // Same limits as the inputs on the From Scratch screen.
@@ -911,11 +1034,29 @@ function intInRange(value: unknown, key: keyof typeof LIMITS): number {
   return value;
 }
 
+// A settings object of true/false flags: missing flags take their default, anything else is rejected.
+function parseFlags<T extends object>(raw: unknown, defaults: T, label: string): T {
+  if (raw === undefined) return { ...defaults };
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Invalid ${label}.`);
+  const out = { ...defaults } as Record<string, boolean>;
+  for (const key of Object.keys(defaults)) {
+    const value = (raw as Record<string, unknown>)[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'boolean') throw new Error(`Invalid ${label}.${key}.`);
+    out[key] = value;
+  }
+  return out as unknown as T;
+}
+
 // The UI is trusted to be ours, but it is the only input to everything that follows, so check it.
 function parseRequest(msg: UiMessage): GenerateRequest {
   if (msg.approach !== '2tier' && msg.approach !== '3tier') throw new Error('Unknown architecture.');
   if (msg.mode !== 'scratch' && msg.mode !== 'starter' && msg.mode !== 'convert') throw new Error('Unknown mode.');
-  const request: GenerateRequest = { approach: msg.approach, mode: msg.mode };
+  const request: GenerateRequest = {
+    approach: msg.approach, mode: msg.mode,
+    extras: msg.mode === 'starter' ? ALL_EXTRAS : NO_EXTRAS,
+    options: parseFlags(msg.options, { scopes: true, codeSyntax: true }, 'options'),
+  };
   if (msg.mode !== 'scratch') return request;
 
   const raw = msg.colors as Record<string, unknown> | undefined;
@@ -941,6 +1082,7 @@ function parseRequest(msg: UiMessage): GenerateRequest {
   }
   return {
     ...request,
+    extras: parseFlags(msg.extras, NO_EXTRAS, 'extras'),
     bodyFontFamily: body || undefined,
     colors: colors as unknown as ScratchColors,
     spacingBase: intInRange(msg.spacingBase, 'spacingBase'),
