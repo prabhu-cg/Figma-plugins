@@ -110,8 +110,11 @@ export async function saveProject(project: Project): Promise<void> {
     instanceIndex: project.instanceIndex,
   };
 
-  await Promise.all([
-    writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT),
-    writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA),
-  ]);
+  // Sequential, heavy first. If the heavy write fails nothing has changed. If the
+  // meta write fails after it, the stored meta (older) still resolves against the
+  // stored heavy data (newer), because heavy holds a superset of the snapshots meta
+  // references — so no baseline ever loads with a missing snapshot. Writing them in
+  // parallel could leave either store ahead of the other with no safe ordering.
+  await writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA);
+  await writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT);
 }

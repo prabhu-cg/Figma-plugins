@@ -21,17 +21,36 @@ the product spec's explicit storage strategy — the right place for
 
 Both `figma.clientStorage` values and plugin-data values are capped in
 size by the platform. `src/plugin/storage/chunking.ts` splits a
-JSON-serialized blob into fixed-size string chunks (`STORAGE_CHUNK_SIZE` =
-800,000 characters, see `shared/constants/storage.ts`) written under keys
-`<prefix>:chunk:0`, `<prefix>:chunk:1`, ... plus a `<prefix>:index` key
-recording the chunk count. Reading walks the index and reassembles the
-chunks; if the index is missing, unparseable, or any chunk is missing, the
-read returns `undefined` rather than throwing — callers treat that as "no
-data" and fall back to an empty project rather than crashing.
+JSON-serialized blob into fixed-size chunks (clientStorage: 800,000
+characters; plugin data: 40,000 bytes, well under its 100 kB per-entry cap —
+see `shared/constants/storage.ts`) written under keys
+`<prefix>:g<gen>:chunk:0`, `<prefix>:g<gen>:chunk:1`, ... plus a
+`<prefix>:index` key recording `{ count, gen }`. Reading walks the index and
+reassembles the chunks; if the index is missing, unparseable, or any chunk is
+missing, the read returns `undefined` rather than throwing — callers treat
+that as "no data" and fall back to an empty project rather than crashing.
+Data written before generations existed (`<prefix>:chunk:<i>`, index without
+`gen`) is still read, and replaced on the next save.
 
-Writing always overwrites the index last (after all chunk writes succeed)
-and deletes any stale trailing chunks left over from a previous, larger
-write, so a shrinking blob doesn't leave orphaned chunks behind.
+### Crash-safe writes
+
+A write never modifies the chunks the current index points at:
+
+1. Write the new chunks under a fresh generation (`gen + 1`).
+2. Write the index with a single `set` — this is the commit point.
+3. Best-effort delete every other chunk key for the prefix (the previous
+   generation, legacy keys, orphans from earlier failures). A failure here
+   does not fail the save; the next write collects the leftovers.
+
+If anything fails before step 2, the half-written generation is deleted and
+the previous data stays fully readable. (Previously chunks were overwritten
+in place before the index, so a failed save could leave a mix of old and new
+chunks that read back as corrupt — i.e. an empty project.)
+
+`saveProject` writes the two blobs sequentially, **heavy before meta**. Heavy
+data holds every baseline's snapshot, so if the meta write fails afterwards,
+the older meta still finds all of its snapshots in the newer heavy data and
+no baseline loads with an empty snapshot.
 
 ## Logical shape
 

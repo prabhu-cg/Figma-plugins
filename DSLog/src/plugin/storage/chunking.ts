@@ -3,6 +3,37 @@ import type { KVStore } from "./kvStore";
 
 interface ChunkIndex {
   count: number;
+  /**
+   * Which generation of chunk keys the index points at. Absent in the original
+   * layout, whose chunks live at `<prefix>:chunk:<i>`; newer writes use
+   * `<prefix>:g<gen>:chunk:<i>`.
+   */
+  gen?: number;
+}
+
+function chunkKey(prefix: string, gen: number | undefined, i: number): string {
+  return gen === undefined ? `${prefix}:chunk:${i}` : `${prefix}:g${gen}:chunk:${i}`;
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Matches chunk keys of every generation (and the original layout) for a prefix. */
+function chunkKeyPattern(prefix: string): RegExp {
+  return new RegExp(`^${escapeRegExp(prefix)}:(g\\d+:)?chunk:\\d+$`);
+}
+
+function parseIndex(raw: string | undefined): ChunkIndex | undefined {
+  if (raw === undefined) return undefined;
+  try {
+    const index = JSON.parse(raw) as ChunkIndex;
+    if (typeof index.count !== "number" || index.count < 0) return undefined;
+    if (index.gen !== undefined && typeof index.gen !== "number") return undefined;
+    return index;
+  } catch {
+    return undefined;
+  }
 }
 
 function isUtf8ContinuationByte(byte: number): boolean {
@@ -45,8 +76,14 @@ function splitUtf8Bytes(bytes: Uint8Array, chunkSizeBytes: number): string[] {
  * Splits JSON-serialized data across multiple keys so any single value stays
  * under platform per-key size limits (clientStorage and plugin data both
  * cap individual values — plugin data caps each entry at 100 kB, measured
- * in UTF-8 bytes). Old chunks are cleared first so a shrinking blob doesn't
- * leave stale trailing chunks behind.
+ * in UTF-8 bytes).
+ *
+ * The write is crash-safe: the new chunks go to fresh keys (a new
+ * generation), the index is switched over with a single set, and only then
+ * are the previous chunks deleted. A failure at any point before the index
+ * set leaves the previous data fully intact, so a failed save can never turn
+ * a good project into one that reads back as empty or corrupt. Leftover
+ * chunks from a failed cleanup are collected by the next successful write.
  */
 export async function writeChunked(
   store: KVStore,
@@ -59,33 +96,39 @@ export async function writeChunked(
   const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
   if (chunks.length === 0) chunks.push("");
 
-  const existingKeys = await store.keys();
-  const staleChunkKeys = existingKeys.filter(
-    (k) => k.startsWith(`${prefix}:chunk:`) && Number(k.slice(`${prefix}:chunk:`.length)) >= chunks.length,
-  );
-  await Promise.all(staleChunkKeys.map((k) => store.delete(k)));
+  const previous = parseIndex(await store.get(`${prefix}:index`));
+  const gen = (previous?.gen ?? 0) + 1;
+  const newKeys = chunks.map((_, i) => chunkKey(prefix, gen, i));
 
-  await Promise.all(chunks.map((chunk, i) => store.set(`${prefix}:chunk:${i}`, chunk)));
-  const index: ChunkIndex = { count: chunks.length };
-  await store.set(`${prefix}:index`, JSON.stringify(index));
+  try {
+    await Promise.all(chunks.map((chunk, i) => store.set(newKeys[i]!, chunk)));
+    const index: ChunkIndex = { count: chunks.length, gen };
+    await store.set(`${prefix}:index`, JSON.stringify(index));
+  } catch (error) {
+    // The index still points at the previous generation; drop the half-written one.
+    await Promise.allSettled(newKeys.map((k) => store.delete(k)));
+    throw error;
+  }
+
+  // Committed. Cleanup is best-effort and must never fail the save.
+  try {
+    const live = new Set(newKeys);
+    const pattern = chunkKeyPattern(prefix);
+    const stale = (await store.keys()).filter((k) => pattern.test(k) && !live.has(k));
+    await Promise.allSettled(stale.map((k) => store.delete(k)));
+  } catch {
+    // Orphans are harmless and get removed by the next write.
+  }
 }
 
 /** Returns undefined when nothing is stored, or when stored data is corrupted/unparseable. */
 export async function readChunked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
-  const indexRaw = await store.get(`${prefix}:index`);
-  if (indexRaw === undefined) return undefined;
-
-  let index: ChunkIndex;
-  try {
-    index = JSON.parse(indexRaw) as ChunkIndex;
-  } catch {
-    return undefined;
-  }
-  if (typeof index.count !== "number" || index.count < 0) return undefined;
+  const index = parseIndex(await store.get(`${prefix}:index`));
+  if (!index) return undefined;
 
   const parts: string[] = [];
   for (let i = 0; i < index.count; i++) {
-    const part = await store.get(`${prefix}:chunk:${i}`);
+    const part = await store.get(chunkKey(prefix, index.gen, i));
     if (part === undefined) return undefined;
     parts.push(part);
   }
@@ -101,7 +144,8 @@ export async function readChunked<T>(store: KVStore, prefix: string): Promise<T 
 }
 
 export async function deleteChunked(store: KVStore, prefix: string): Promise<void> {
+  const pattern = chunkKeyPattern(prefix);
   const keys = await store.keys();
-  const toDelete = keys.filter((k) => k === `${prefix}:index` || k.startsWith(`${prefix}:chunk:`));
+  const toDelete = keys.filter((k) => k === `${prefix}:index` || pattern.test(k));
   await Promise.all(toDelete.map((k) => store.delete(k)));
 }

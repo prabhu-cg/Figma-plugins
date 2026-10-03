@@ -34,7 +34,7 @@ describe("chunking", () => {
     const store = createMemoryStore();
     const payload = { text: "x".repeat(500) };
     await writeChunked(store, "test", payload, 50);
-    const chunkKeys = Array.from(store.data.keys()).filter((k) => k.startsWith("test:chunk:"));
+    const chunkKeys = Array.from(store.data.keys()).filter((k) => /^test:g\d+:chunk:\d+$/.test(k));
     expect(chunkKeys.length).toBeGreaterThan(1);
     const result = await readChunked(store, "test");
     expect(result).toEqual(payload);
@@ -56,7 +56,7 @@ describe("chunking", () => {
   it("returns undefined when a chunk is missing (storage corruption)", async () => {
     const store = createMemoryStore();
     await writeChunked(store, "test", { text: "x".repeat(500) }, 50);
-    await store.delete("test:chunk:1");
+    await store.delete("test:g1:chunk:1");
     expect(await readChunked(store, "test")).toBeUndefined();
   });
 
@@ -76,7 +76,7 @@ describe("chunking", () => {
     const chunkSizeBytes = 37;
     await writeChunked(store, "test", payload, chunkSizeBytes);
 
-    const chunkKeys = Array.from(store.data.keys()).filter((k) => k.startsWith("test:chunk:"));
+    const chunkKeys = Array.from(store.data.keys()).filter((k) => /^test:g\d+:chunk:\d+$/.test(k));
     expect(chunkKeys.length).toBeGreaterThan(1);
     for (const key of chunkKeys) {
       const bytes = encoder.encode(store.data.get(key) ?? "");
@@ -112,7 +112,7 @@ describe("chunking", () => {
     await writeChunked(store, "test", bigPayload, chunkSizeBytes);
 
     for (const [key, value] of store.data) {
-      if (!key.startsWith("test:chunk:")) continue;
+      if (!/^test:g\d+:chunk:\d+$/.test(key)) continue;
       expect(encoder.encode(value).length).toBeLessThan(PLUGIN_DATA_LIMIT_BYTES);
     }
 

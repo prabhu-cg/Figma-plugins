@@ -150,6 +150,26 @@
     }
     return result;
   }
+  function chunkKey(prefix, gen, i) {
+    return gen === void 0 ? `${prefix}:chunk:${i}` : `${prefix}:g${gen}:chunk:${i}`;
+  }
+  function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  }
+  function chunkKeyPattern(prefix) {
+    return new RegExp(`^${escapeRegExp(prefix)}:(g\\d+:)?chunk:\\d+$`);
+  }
+  function parseIndex(raw) {
+    if (raw === void 0) return void 0;
+    try {
+      const index = JSON.parse(raw);
+      if (typeof index.count !== "number" || index.count < 0) return void 0;
+      if (index.gen !== void 0 && typeof index.gen !== "number") return void 0;
+      return index;
+    } catch {
+      return void 0;
+    }
+  }
   function isUtf8ContinuationByte(byte) {
     return (byte & 192) === 128;
   }
@@ -177,28 +197,31 @@
     const bytes = utf8Encode(serialized);
     const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
     if (chunks.length === 0) chunks.push("");
-    const existingKeys = await store.keys();
-    const staleChunkKeys = existingKeys.filter(
-      (k) => k.startsWith(`${prefix}:chunk:`) && Number(k.slice(`${prefix}:chunk:`.length)) >= chunks.length
-    );
-    await Promise.all(staleChunkKeys.map((k) => store.delete(k)));
-    await Promise.all(chunks.map((chunk, i) => store.set(`${prefix}:chunk:${i}`, chunk)));
-    const index = { count: chunks.length };
-    await store.set(`${prefix}:index`, JSON.stringify(index));
+    const previous = parseIndex(await store.get(`${prefix}:index`));
+    const gen = (previous?.gen ?? 0) + 1;
+    const newKeys = chunks.map((_, i) => chunkKey(prefix, gen, i));
+    try {
+      await Promise.all(chunks.map((chunk, i) => store.set(newKeys[i], chunk)));
+      const index = { count: chunks.length, gen };
+      await store.set(`${prefix}:index`, JSON.stringify(index));
+    } catch (error) {
+      await Promise.allSettled(newKeys.map((k) => store.delete(k)));
+      throw error;
+    }
+    try {
+      const live = new Set(newKeys);
+      const pattern = chunkKeyPattern(prefix);
+      const stale = (await store.keys()).filter((k) => pattern.test(k) && !live.has(k));
+      await Promise.allSettled(stale.map((k) => store.delete(k)));
+    } catch {
+    }
   }
   async function readChunked(store, prefix) {
-    const indexRaw = await store.get(`${prefix}:index`);
-    if (indexRaw === void 0) return void 0;
-    let index;
-    try {
-      index = JSON.parse(indexRaw);
-    } catch {
-      return void 0;
-    }
-    if (typeof index.count !== "number" || index.count < 0) return void 0;
+    const index = parseIndex(await store.get(`${prefix}:index`));
+    if (!index) return void 0;
     const parts = [];
     for (let i = 0; i < index.count; i++) {
-      const part = await store.get(`${prefix}:chunk:${i}`);
+      const part = await store.get(chunkKey(prefix, index.gen, i));
       if (part === void 0) return void 0;
       parts.push(part);
     }
@@ -265,10 +288,8 @@
       changeSets: project2.changeSets,
       instanceIndex: project2.instanceIndex
     };
-    await Promise.all([
-      writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT),
-      writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA)
-    ]);
+    await writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA);
+    await writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT);
   }
   function isTrackableRoot(node) {
     if (node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") return false;
