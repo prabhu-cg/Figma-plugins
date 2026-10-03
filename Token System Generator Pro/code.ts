@@ -20,6 +20,15 @@ interface ScratchColors {
   neutral: string;
 }
 
+// Non-fatal problems collected during a run and shown on the done screen.
+const issues = new Map<string, number>();
+function warn(message: string): void {
+  issues.set(message, (issues.get(message) ?? 0) + 1);
+}
+function collectIssues(): string[] {
+  return Array.from(issues.entries()).map(([m, n]) => (n > 1 ? `${m} (×${n})` : m));
+}
+
 function createColor(
   collection: VariableCollection,
   name: string,
@@ -37,7 +46,7 @@ function createLocalPaintStyle(path: string, r: number, g: number, b: number): v
     const paint: SolidPaint = { type: 'SOLID', color: { r, g, b }, opacity: 1 };
     style.paints = [paint];
   } catch (_e) {
-    // Style may already exist or other error
+    warn(`Couldn't create a color style`);
   }
 }
 
@@ -53,6 +62,7 @@ async function createLocalTextStyle(path: string, fontSize: number, lineHeight: 
   } catch (_e) {
     // Font not available, try system fallback
     try {
+      warn(`Font "${fontFamily}" unavailable, used Helvetica for text styles`);
       await figma.loadFontAsync({ family: 'Helvetica', style: 'Regular' });
       const style = figma.createTextStyle();
       style.name = path;
@@ -61,7 +71,7 @@ async function createLocalTextStyle(path: string, fontSize: number, lineHeight: 
       style.lineHeight = { unit: 'PIXELS', value: lineHeight };
       style.letterSpacing = { unit: 'PIXELS', value: letterSpacing };
     } catch (_e2) {
-      // Skip this style if no fonts work
+      warn(`Couldn't create a text style (no usable font)`);
     }
   }
 }
@@ -92,21 +102,43 @@ function deleteAllCollections(): void {
   const vars = figma.variables.getLocalVariables();
   collections.forEach(col => {
     vars.forEach(v => {
-      if (v.variableCollectionId === col.id) { try { v.remove(); } catch (_e) {} }
+      if (v.variableCollectionId === col.id) {
+        try { v.remove(); } catch (_e) { warn(`Couldn't remove an existing variable`); }
+      }
     });
-    try { col.remove(); } catch (_e) {}
+    try { col.remove(); } catch (_e) { warn(`Couldn't remove collection "${col.name}"`); }
   });
 }
 
 function deleteAllLocalStyles(): void {
-  const paintStyles = figma.getLocalPaintStyles();
-  const textStyles = figma.getLocalTextStyles();
-  paintStyles.forEach(style => { try { style.remove(); } catch (_e) {} });
-  textStyles.forEach(style => { try { style.remove(); } catch (_e) {} });
+  figma.getLocalPaintStyles().forEach(style => {
+    try { style.remove(); } catch (_e) { warn(`Couldn't remove an existing color style`); }
+  });
+  figma.getLocalTextStyles().forEach(style => {
+    try { style.remove(); } catch (_e) { warn(`Couldn't remove an existing text style`); }
+  });
 }
 
 function tokensExist(): boolean {
   return figma.variables.getLocalVariableCollections().length > 0;
+}
+
+// What a replace would delete, so the UI can show it before the user confirms.
+function describeExisting(mode: string): {
+  collections: { name: string; variables: number }[];
+  paintStyles: number;
+  textStyles: number;
+} {
+  const vars = figma.variables.getLocalVariables();
+  return {
+    collections: figma.variables.getLocalVariableCollections().map(c => ({
+      name: c.name,
+      variables: vars.filter(v => v.variableCollectionId === c.id).length,
+    })),
+    // Smart Convert reads the local styles, so they are kept.
+    paintStyles: mode === 'convert' ? 0 : figma.getLocalPaintStyles().length,
+    textStyles:  mode === 'convert' ? 0 : figma.getLocalTextStyles().length,
+  };
 }
 
 // ─── EXISTING GENERATION (unchanged) ─────────────────────────────
@@ -119,7 +151,7 @@ function convertStylesToTokens(): void {
   const colorStyles = figma.getLocalPaintStyles();
   const textStyles  = figma.getLocalTextStyles();
   if (colorStyles.length === 0 && textStyles.length === 0) {
-    figma.notify('⚠️ No styles found'); return;
+    warn('No local styles found to convert'); figma.notify('⚠️ No styles found'); return;
   }
 
   const global    = figma.variables.createVariableCollection('01 Global');
@@ -144,7 +176,7 @@ function convertStylesToTokens(): void {
   });
 
   if (globalColors.length === 0) {
-    figma.notify('⚠️ No paint styles found'); return;
+    warn('No solid color styles found to convert'); figma.notify('⚠️ No paint styles found'); return;
   }
 
   globalColors.sort((a, b) => a.brightness - b.brightness);
@@ -236,6 +268,7 @@ function convertStylesToTokens(): void {
       });
     }
   } catch (e) {
+    warn(`Color aliases were not fully created: ${e}`);
     figma.notify(`❌ Color aliases: ${e}`);
     return;
   }
@@ -280,6 +313,7 @@ function convertStylesToTokens(): void {
       const i2 = figma.variables.createVariable('icon/inverse', component.id, 'COLOR'); i2.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: ca.id });
     }
   } catch (e) {
+    warn(`Component variables were not fully created: ${e}`);
     figma.notify(`❌ Component vars: ${e}`);
     return;
   }
@@ -295,7 +329,7 @@ function convertStylesToTokens2Tier(): void {
   const colorStyles = figma.getLocalPaintStyles();
   const textStyles  = figma.getLocalTextStyles();
   if (colorStyles.length === 0 && textStyles.length === 0) {
-    figma.notify('⚠️ No styles found'); return;
+    warn('No local styles found to convert'); figma.notify('⚠️ No styles found'); return;
   }
 
   const global   = figma.variables.createVariableCollection('01 Global');
@@ -318,7 +352,7 @@ function convertStylesToTokens2Tier(): void {
   });
 
   if (globalColors.length === 0) {
-    figma.notify('⚠️ No paint styles found'); return;
+    warn('No solid color styles found to convert'); figma.notify('⚠️ No paint styles found'); return;
   }
 
   globalColors.sort((a, b) => a.brightness - b.brightness);
@@ -410,6 +444,7 @@ function convertStylesToTokens2Tier(): void {
       });
     }
   } catch (e) {
+    warn(`Color aliases were not fully created: ${e}`);
     figma.notify(`❌ Color aliases: ${e}`);
     return;
   }
@@ -596,7 +631,7 @@ async function buildFromScratch(
         style.setBoundVariable('letterSpacing', lsV[levelName]);
         style.setBoundVariable('fontFamily', ffV);
       } catch (_e) {
-        // Binding may fail in some cases
+        warn(`Couldn't link a text style to its variables`);
       }
     }
   }
@@ -816,6 +851,14 @@ function exportVariablesToJSON(): string {
 
 // ─── ORCHESTRATION ────────────────────────────────────────────────
 
+// Smart Convert reads local styles; with none, running it would only delete the old tokens.
+function blockedReason(mode: string): string | null {
+  if (mode === 'convert' && figma.getLocalPaintStyles().length === 0 && figma.getLocalTextStyles().length === 0) {
+    return 'No local color or text styles found. Smart Convert needs styles to convert, so nothing was changed.';
+  }
+  return null;
+}
+
 function runGeneration(
   approach: string,
   mode: string,
@@ -827,8 +870,10 @@ function runGeneration(
   ratioKey?: string,
   fontFamily?: string
 ): void {
+  const blocked = blockedReason(mode);
+  if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   if (tokensExist()) {
-    figma.ui.postMessage({ type: 'confirm-replace' }); return;
+    figma.ui.postMessage({ type: 'confirm-replace', existing: describeExisting(mode) }); return;
   }
   generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
 }
@@ -844,6 +889,9 @@ async function generate(
   ratioKey?: string,
   fontFamily?: string
 ): Promise<void> {
+  const blocked = blockedReason(mode);
+  if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
+  issues.clear();
   deleteAllCollections();
   if (mode !== 'convert') {
     deleteAllLocalStyles();
@@ -865,8 +913,9 @@ async function generate(
   const json  = exportVariablesToJSON();
   const total = figma.variables.getLocalVariables().length;
   const cols  = figma.variables.getLocalVariableCollections().length;
-  figma.notify('✅ Done!');
-  figma.ui.postMessage({ type: 'generation-complete', json, total, cols });
+  const warnings = collectIssues();
+  figma.notify(warnings.length ? `⚠️ Done with ${warnings.length} warning${warnings.length > 1 ? 's' : ''}` : '✅ Done!');
+  figma.ui.postMessage({ type: 'generation-complete', json, total, cols, warnings });
 }
 
 // ─── MESSAGES ────────────────────────────────────────────────────
