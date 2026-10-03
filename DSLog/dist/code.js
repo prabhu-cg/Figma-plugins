@@ -1,16 +1,5 @@
 (function() {
   "use strict";
-  let counter = 0;
-  function generateId(prefix) {
-    counter += 1;
-    const random = Math.random().toString(36).slice(2, 10);
-    return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${random}`;
-  }
-  function getLatestChangeSetForBaseline(project2, baselineId) {
-    const sets = project2.changeSets.filter((cs) => cs.baselineId === baselineId);
-    if (sets.length === 0) return void 0;
-    return sets.reduce((latest, cs) => cs.createdAt > latest.createdAt ? cs : latest);
-  }
   const STORAGE_SCHEMA_VERSION = 2;
   const STORAGE_CHUNK_SIZE_CLIENT = 8e5;
   const STORAGE_CHUNK_SIZE_PLUGIN_DATA = 4e4;
@@ -268,28 +257,64 @@
       settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings }
     });
   }
-  async function saveProject(project2) {
+  async function saveProject(project) {
     const snapshots = {};
-    const baselinesWithoutSnapshot = project2.baselines.map((baseline) => {
+    const baselinesWithoutSnapshot = project.baselines.map((baseline) => {
       snapshots[baseline.id] = baseline.snapshot;
       const { snapshot: _snapshot, ...rest } = baseline;
       return rest;
     });
     const meta = {
-      schemaVersion: project2.schemaVersion,
-      currentBaselineId: project2.currentBaselineId,
+      schemaVersion: project.schemaVersion,
+      currentBaselineId: project.currentBaselineId,
       baselines: baselinesWithoutSnapshot,
-      releases: project2.releases,
-      trackedEntities: project2.trackedEntities,
-      settings: project2.settings
+      releases: project.releases,
+      trackedEntities: project.trackedEntities,
+      settings: project.settings
     };
     const heavy = {
       snapshots,
-      changeSets: project2.changeSets,
-      instanceIndex: project2.instanceIndex
+      changeSets: project.changeSets,
+      instanceIndex: project.instanceIndex
     };
     await writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA);
     await writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT);
+  }
+  const session = {
+    project: void 0,
+    latestScannedSnapshot: void 0,
+    latestScanSummary: void 0
+  };
+  async function ensureProject() {
+    if (!session.project) {
+      session.project = await loadProject();
+    }
+    return session.project;
+  }
+  async function persist() {
+    await saveProject(session.project);
+  }
+  function findCurrentBaseline() {
+    const { project } = session;
+    return project.baselines.find((b) => b.id === project.currentBaselineId);
+  }
+  function postToUi(message) {
+    figma.ui.postMessage(message);
+  }
+  async function handleGetState() {
+    postToUi({ type: "state", project: session.project });
+  }
+  async function handleUpdateSettings(message) {
+    const { project } = session;
+    project.settings = message.settings;
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  let counter = 0;
+  function generateId(prefix) {
+    counter += 1;
+    const random = Math.random().toString(36).slice(2, 10);
+    return `${prefix}_${Date.now().toString(36)}${counter.toString(36)}${random}`;
   }
   function isTrackableRoot(node) {
     if (node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") return false;
@@ -1654,6 +1679,109 @@
       scanSummary
     };
   }
+  async function resolveComponentIds(baseline) {
+    const tracking = baseline.tracking.components;
+    if (tracking.scope === "selection") return tracking.includedIds;
+    const discovered = await discoverComponents(tracking.scope, tracking.pageIds);
+    return discovered.map((d) => d.id);
+  }
+  async function captureSnapshot(componentIds, tokenCollectionIds, tokensEnabled) {
+    const componentResult = await scanComponents(componentIds, (done, total) => {
+      postToUi({
+        type: "scan-progress",
+        progress: { phase: "components", componentsTotal: total, componentsDone: done, tokensTotal: 0, tokensDone: 0 }
+      });
+    });
+    const tokenResult = tokensEnabled ? await scanTokens(tokenCollectionIds, (done, total) => {
+      postToUi({
+        type: "scan-progress",
+        progress: {
+          phase: "tokens",
+          componentsTotal: componentResult.scanned,
+          componentsDone: componentResult.scanned,
+          tokensTotal: total,
+          tokensDone: done
+        }
+      });
+    }) : { tokens: [], collections: [], scanned: 0, skipped: [] };
+    postToUi({
+      type: "scan-progress",
+      progress: {
+        phase: "done",
+        componentsTotal: componentResult.scanned,
+        componentsDone: componentResult.scanned,
+        tokensTotal: tokenResult.scanned,
+        tokensDone: tokenResult.scanned
+      }
+    });
+    return {
+      snapshot: {
+        components: componentResult.components,
+        tokens: tokenResult.tokens,
+        collections: tokenResult.collections
+      },
+      scanSummary: {
+        componentsScanned: componentResult.scanned,
+        componentsSkipped: componentResult.skipped.length,
+        tokensScanned: tokenResult.scanned,
+        tokensSkipped: tokenResult.skipped.length,
+        skippedItems: [...componentResult.skipped, ...tokenResult.skipped]
+      }
+    };
+  }
+  async function handleDiscoverComponents(message) {
+    const components = await discoverComponents(message.scope, message.pageIds);
+    postToUi({ type: "discovered-components", components });
+  }
+  async function handleCreateBaseline(message) {
+    const { project } = session;
+    const { snapshot, scanSummary } = await captureSnapshot(
+      message.tracking.components.includedIds,
+      message.tracking.tokens.includedCollectionIds,
+      message.tracking.tokens.enabled
+    );
+    const baseline = {
+      id: generateId("baseline"),
+      name: message.name,
+      version: message.version,
+      description: message.description,
+      tracking: message.tracking,
+      snapshot,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    project.baselines.push(baseline);
+    project.currentBaselineId = baseline.id;
+    const changeSet = diffSnapshots(
+      baseline.id,
+      { components: [], tokens: [] },
+      snapshot,
+      scanSummary
+    );
+    project.changeSets.push(changeSet);
+    await persist();
+    postToUi({ type: "baseline-created", baseline });
+    postToUi({ type: "state", project });
+  }
+  async function handleScan(message) {
+    const { project } = session;
+    const baseline = findCurrentBaseline();
+    if (!baseline) {
+      postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
+      return;
+    }
+    const { snapshot, scanSummary } = await captureSnapshot(
+      await resolveComponentIds(baseline),
+      baseline.tracking.tokens.includedCollectionIds,
+      baseline.tracking.tokens.enabled
+    );
+    const changeSet = diffSnapshots(baseline.id, baseline.snapshot, snapshot, scanSummary);
+    project.changeSets.push(changeSet);
+    session.latestScannedSnapshot = snapshot;
+    session.latestScanSummary = scanSummary;
+    await persist();
+    postToUi({ type: "scan-complete", changeSet });
+    postToUi({ type: "state", project });
+  }
   function getEffectiveClassification(change) {
     const override = change.manualClassification;
     return {
@@ -1751,33 +1879,197 @@
       migration
     };
   }
-  function postToUi(message) {
-    figma.ui.postMessage(message);
-  }
-  figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
-  let project;
-  let latestScannedSnapshot;
-  let latestScanSummary;
-  async function ensureProject() {
-    if (!project) {
-      project = await loadProject();
+  async function handleCreateRelease(message) {
+    const { project } = session;
+    const baseline = findCurrentBaseline();
+    if (!baseline) {
+      postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
+      return;
     }
-    return project;
+    const snapshot = session.latestScannedSnapshot ?? (await captureSnapshot(
+      await resolveComponentIds(baseline),
+      baseline.tracking.tokens.includedCollectionIds,
+      baseline.tracking.tokens.enabled
+    )).snapshot;
+    const changeSet = diffSnapshots(
+      baseline.id,
+      baseline.snapshot,
+      snapshot,
+      session.latestScanSummary ?? {
+        componentsScanned: snapshot.components.length,
+        componentsSkipped: 0,
+        tokensScanned: snapshot.tokens.length,
+        tokensSkipped: 0,
+        skippedItems: []
+      }
+    );
+    project.changeSets.push(changeSet);
+    const newBaseline = {
+      id: generateId("baseline"),
+      name: baseline.name,
+      version: message.version,
+      description: baseline.description,
+      tracking: baseline.tracking,
+      snapshot,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    project.baselines.push(newBaseline);
+    const changelogInput = {
+      version: message.version,
+      title: message.title,
+      description: message.description,
+      changes: changeSet.changes,
+      include: message.include
+    };
+    const release = {
+      id: generateId("release"),
+      version: message.version,
+      title: message.title,
+      description: message.description,
+      baselineId: newBaseline.id,
+      previousBaselineId: baseline.id,
+      changeSetId: changeSet.id,
+      include: message.include,
+      changelogMarkdown: generateMarkdown(changelogInput),
+      changelogJson: JSON.stringify(generateJson(changelogInput), null, 2),
+      createdAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    project.releases.push(release);
+    project.currentBaselineId = newBaseline.id;
+    session.latestScannedSnapshot = void 0;
+    session.latestScanSummary = void 0;
+    await persist();
+    postToUi({ type: "release-created", release });
+    postToUi({ type: "state", project });
   }
-  async function persist() {
-    await saveProject(project);
+  async function handleExport(message) {
+    const { project } = session;
+    const release = project.releases.find((r) => r.id === message.releaseId);
+    if (!release) {
+      postToUi({ type: "error", message: "Release not found." });
+      return;
+    }
+    const content = message.format === "markdown" ? release.changelogMarkdown : release.changelogJson;
+    postToUi({ type: "export-result", format: message.format, content, releaseId: release.id });
   }
-  function findCurrentBaseline() {
-    return project.baselines.find((b) => b.id === project.currentBaselineId);
+  async function handleCompareReleases(message) {
+    const { project } = session;
+    const releaseA = project.releases.find((r) => r.id === message.releaseIdA);
+    const releaseB = project.releases.find((r) => r.id === message.releaseIdB);
+    const baselineA = releaseA && project.baselines.find((b) => b.id === releaseA.baselineId);
+    const baselineB = releaseB && project.baselines.find((b) => b.id === releaseB.baselineId);
+    if (!baselineA || !baselineB) {
+      postToUi({ type: "error", message: "Could not find both releases to compare." });
+      return;
+    }
+    const changeSet = diffSnapshots(generateId("compare"), baselineA.snapshot, baselineB.snapshot, {
+      componentsScanned: baselineB.snapshot.components.length,
+      componentsSkipped: 0,
+      tokensScanned: baselineB.snapshot.tokens.length,
+      tokensSkipped: 0,
+      skippedItems: []
+    });
+    postToUi({
+      type: "release-comparison-result",
+      releaseIdA: message.releaseIdA,
+      releaseIdB: message.releaseIdB,
+      changeSet
+    });
   }
-  async function resolveComponentIds(baseline) {
-    const tracking = baseline.tracking.components;
-    if (tracking.scope === "selection") return tracking.includedIds;
-    const discovered = await discoverComponents(tracking.scope, tracking.pageIds);
-    return discovered.map((d) => d.id);
+  async function handleUpdateChange(message) {
+    const { project } = session;
+    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+    const change = changeSet?.changes.find((c) => c.id === message.changeId);
+    if (!change) {
+      postToUi({ type: "error", message: "Change not found." });
+      return;
+    }
+    if (message.reviewState !== void 0) change.reviewState = message.reviewState;
+    if (message.reviewNote !== void 0) change.reviewNote = message.reviewNote;
+    if (message.migrationNote !== void 0) change.migrationNote = message.migrationNote;
+    if (message.manualClassification !== void 0) {
+      change.manualClassification = message.manualClassification ?? void 0;
+    }
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  async function handleBulkUpdateReview(message) {
+    const { project } = session;
+    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+    if (!changeSet) {
+      postToUi({ type: "error", message: "Change set not found." });
+      return;
+    }
+    const ids = new Set(message.changeIds);
+    for (const change of changeSet.changes) {
+      if (ids.has(change.id)) change.reviewState = message.reviewState;
+    }
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  async function handleConfirmRename(message) {
+    const { project } = session;
+    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+    const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
+    const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
+    if (!changeSet || !addedChange || !removedChange) {
+      postToUi({ type: "error", message: "Rename suggestion not found." });
+      return;
+    }
+    const kind = addedChange.entityType === "token" ? "token" : "component";
+    const renameEntry = {
+      fromId: removedChange.entityId,
+      fromName: removedChange.entityName,
+      toId: addedChange.entityId,
+      toName: addedChange.entityName,
+      confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const existing = project.trackedEntities.find((e) => e.id === removedChange.entityId);
+    if (existing) {
+      existing.id = addedChange.entityId;
+      existing.displayName = addedChange.entityName;
+      existing.renameHistory.push(renameEntry);
+    } else {
+      const entity = {
+        id: addedChange.entityId,
+        kind,
+        displayName: addedChange.entityName,
+        deprecated: false,
+        renameHistory: [renameEntry]
+      };
+      project.trackedEntities.push(entity);
+    }
+    addedChange.changeType = kind === "token" ? "token-renamed" : "component-renamed";
+    addedChange.category = "modified";
+    addedChange.before = removedChange.entityName;
+    addedChange.after = addedChange.entityName;
+    addedChange.summary = `Renamed from "${removedChange.entityName}" to "${addedChange.entityName}" (id changed)`;
+    addedChange.renameResolution = "confirmed";
+    changeSet.changes = changeSet.changes.filter((c) => c.id !== removedChange.id);
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  async function handleDismissRename(message) {
+    const { project } = session;
+    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+    const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
+    const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
+    if (!changeSet || !addedChange || !removedChange) {
+      postToUi({ type: "error", message: "Rename suggestion not found." });
+      return;
+    }
+    addedChange.renameResolution = "dismissed";
+    removedChange.renameResolution = "dismissed";
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  function getLatestChangeSetForBaseline(project, baselineId) {
+    const sets = project.changeSets.filter((cs) => cs.baselineId === baselineId);
+    if (sets.length === 0) return void 0;
+    return sets.reduce((latest, cs) => cs.createdAt > latest.createdAt ? cs : latest);
   }
   function appendSyntheticChange(baselineId, change) {
-    let changeSet = getLatestChangeSetForBaseline(project, baselineId);
+    let changeSet = getLatestChangeSetForBaseline(session.project, baselineId);
     if (!changeSet) {
       changeSet = {
         id: generateId("changeset"),
@@ -1786,54 +2078,122 @@
         changes: [],
         scanSummary: { componentsScanned: 0, componentsSkipped: 0, tokensScanned: 0, tokensSkipped: 0, skippedItems: [] }
       };
-      project.changeSets.push(changeSet);
+      session.project.changeSets.push(changeSet);
     }
     changeSet.changes.push(change);
   }
-  async function captureSnapshot(componentIds, tokenCollectionIds, tokensEnabled) {
-    const componentResult = await scanComponents(componentIds, (done, total) => {
-      postToUi({
-        type: "scan-progress",
-        progress: { phase: "components", componentsTotal: total, componentsDone: done, tokensTotal: 0, tokensDone: 0 }
+  async function handleMarkDeprecated(message) {
+    const { project } = session;
+    const now = (/* @__PURE__ */ new Date()).toISOString();
+    const existing = project.trackedEntities.find((e) => e.id === message.entityId);
+    if (existing) {
+      existing.deprecated = true;
+      existing.deprecatedAt = existing.deprecatedAt ?? now;
+      existing.displayName = message.displayName;
+      existing.replacement = message.replacement;
+      existing.migrationNote = message.migrationNote;
+    } else {
+      const entity = {
+        id: message.entityId,
+        kind: message.kind,
+        displayName: message.displayName,
+        parentId: message.parentId,
+        deprecated: true,
+        deprecatedAt: now,
+        replacement: message.replacement,
+        migrationNote: message.migrationNote,
+        renameHistory: []
+      };
+      project.trackedEntities.push(entity);
+    }
+    const baseline = findCurrentBaseline();
+    if (baseline) {
+      const suffix = message.replacement ? ` — replaced by ${message.replacement}` : "";
+      appendSyntheticChange(baseline.id, {
+        id: generateId("change"),
+        entityType: message.kind === "token" ? "token" : "component",
+        entityId: message.entityId,
+        entityName: message.displayName,
+        category: "deprecated",
+        severity: "info",
+        changeType: `${message.kind}-deprecated`,
+        summary: `Marked deprecated${suffix}`,
+        breaking: false,
+        potentialBreaking: false,
+        reviewState: "unreviewed",
+        migrationNote: message.migrationNote,
+        createdAt: now
       });
-    });
-    const tokenResult = tokensEnabled ? await scanTokens(tokenCollectionIds, (done, total) => {
-      postToUi({
-        type: "scan-progress",
-        progress: {
-          phase: "tokens",
-          componentsTotal: componentResult.scanned,
-          componentsDone: componentResult.scanned,
-          tokensTotal: total,
-          tokensDone: done
-        }
-      });
-    }) : { tokens: [], collections: [], scanned: 0, skipped: [] };
-    postToUi({
-      type: "scan-progress",
-      progress: {
-        phase: "done",
-        componentsTotal: componentResult.scanned,
-        componentsDone: componentResult.scanned,
-        tokensTotal: tokenResult.scanned,
-        tokensDone: tokenResult.scanned
-      }
-    });
-    return {
-      snapshot: {
-        components: componentResult.components,
-        tokens: tokenResult.tokens,
-        collections: tokenResult.collections
-      },
-      scanSummary: {
-        componentsScanned: componentResult.scanned,
-        componentsSkipped: componentResult.skipped.length,
-        tokensScanned: tokenResult.scanned,
-        tokensSkipped: tokenResult.skipped.length,
-        skippedItems: [...componentResult.skipped, ...tokenResult.skipped]
-      }
-    };
+    }
+    await persist();
+    postToUi({ type: "state", project });
   }
+  async function handleUnmarkDeprecated(message) {
+    const { project } = session;
+    const entity = project.trackedEntities.find((e) => e.id === message.entityId);
+    if (!entity) {
+      postToUi({ type: "error", message: "Tracked entity not found." });
+      return;
+    }
+    entity.deprecated = false;
+    entity.deprecatedAt = void 0;
+    entity.replacement = void 0;
+    entity.migrationNote = void 0;
+    await persist();
+    postToUi({ type: "state", project });
+  }
+  async function handleBuildImpactIndex() {
+    const { project } = session;
+    const index = await scanInstances((progress) => {
+      postToUi({ type: "impact-index-progress", progress });
+    });
+    project.instanceIndex = index;
+    await persist();
+    postToUi({ type: "impact-index-complete", index });
+    postToUi({ type: "state", project });
+  }
+  async function handleFocusNode(message) {
+    try {
+      const node = await figma.getNodeByIdAsync(message.nodeId);
+      if (node && "type" in node && node.type !== "DOCUMENT" && node.type !== "PAGE") {
+        const sceneNode = node;
+        const page = sceneNode.parent ? (function findPage(n) {
+          let current = n;
+          while (current) {
+            if (current.type === "PAGE") return current;
+            current = current.parent;
+          }
+          return void 0;
+        })(sceneNode) : void 0;
+        if (page) {
+          await figma.setCurrentPageAsync(page);
+        }
+        figma.currentPage.selection = [sceneNode];
+        figma.viewport.scrollAndZoomIntoView([sceneNode]);
+      }
+    } catch {
+      postToUi({ type: "error", message: "Could not locate that node — it may have been deleted." });
+    }
+  }
+  const handlers = {
+    "ui-ready": handleGetState,
+    "get-state": handleGetState,
+    "discover-components": handleDiscoverComponents,
+    "create-baseline": handleCreateBaseline,
+    scan: handleScan,
+    "create-release": handleCreateRelease,
+    export: handleExport,
+    "update-change": handleUpdateChange,
+    "bulk-update-review": handleBulkUpdateReview,
+    "mark-deprecated": handleMarkDeprecated,
+    "unmark-deprecated": handleUnmarkDeprecated,
+    "confirm-rename": handleConfirmRename,
+    "dismiss-rename": handleDismissRename,
+    "build-impact-index": handleBuildImpactIndex,
+    "compare-releases": handleCompareReleases,
+    "update-settings": handleUpdateSettings,
+    "focus-node": handleFocusNode
+  };
   const READ_ONLY_MESSAGES = /* @__PURE__ */ new Set([
     "ui-ready",
     "get-state",
@@ -1842,370 +2202,26 @@
     "compare-releases",
     "focus-node"
   ]);
+  async function dispatch(message) {
+    const handler = handlers[message.type];
+    if (handler) await handler(message);
+  }
   async function handleMessage(message) {
     await ensureProject();
-    if (READ_ONLY_MESSAGES.has(message.type)) return applyMessage(message);
-    const backup = JSON.stringify(project);
-    const backupSnapshot = latestScannedSnapshot;
-    const backupSummary = latestScanSummary;
+    if (READ_ONLY_MESSAGES.has(message.type)) return dispatch(message);
+    const backup = JSON.stringify(session.project);
+    const backupSnapshot = session.latestScannedSnapshot;
+    const backupSummary = session.latestScanSummary;
     try {
-      await applyMessage(message);
+      await dispatch(message);
     } catch (error) {
-      project = JSON.parse(backup);
-      latestScannedSnapshot = backupSnapshot;
-      latestScanSummary = backupSummary;
+      session.project = JSON.parse(backup);
+      session.latestScannedSnapshot = backupSnapshot;
+      session.latestScanSummary = backupSummary;
       throw error;
     }
   }
-  async function applyMessage(message) {
-    switch (message.type) {
-      case "ui-ready":
-      case "get-state": {
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "discover-components": {
-        const components = await discoverComponents(message.scope, message.pageIds);
-        postToUi({ type: "discovered-components", components });
-        return;
-      }
-      case "create-baseline": {
-        const { snapshot, scanSummary } = await captureSnapshot(
-          message.tracking.components.includedIds,
-          message.tracking.tokens.includedCollectionIds,
-          message.tracking.tokens.enabled
-        );
-        const baseline = {
-          id: generateId("baseline"),
-          name: message.name,
-          version: message.version,
-          description: message.description,
-          tracking: message.tracking,
-          snapshot,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        project.baselines.push(baseline);
-        project.currentBaselineId = baseline.id;
-        const changeSet = diffSnapshots(
-          baseline.id,
-          { components: [], tokens: [] },
-          snapshot,
-          scanSummary
-        );
-        project.changeSets.push(changeSet);
-        await persist();
-        postToUi({ type: "baseline-created", baseline });
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "scan": {
-        const baseline = findCurrentBaseline();
-        if (!baseline) {
-          postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
-          return;
-        }
-        const { snapshot, scanSummary } = await captureSnapshot(
-          await resolveComponentIds(baseline),
-          baseline.tracking.tokens.includedCollectionIds,
-          baseline.tracking.tokens.enabled
-        );
-        const changeSet = diffSnapshots(baseline.id, baseline.snapshot, snapshot, scanSummary);
-        project.changeSets.push(changeSet);
-        latestScannedSnapshot = snapshot;
-        latestScanSummary = scanSummary;
-        await persist();
-        postToUi({ type: "scan-complete", changeSet });
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "create-release": {
-        const baseline = findCurrentBaseline();
-        if (!baseline) {
-          postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
-          return;
-        }
-        const snapshot = latestScannedSnapshot ?? (await captureSnapshot(
-          await resolveComponentIds(baseline),
-          baseline.tracking.tokens.includedCollectionIds,
-          baseline.tracking.tokens.enabled
-        )).snapshot;
-        const changeSet = diffSnapshots(
-          baseline.id,
-          baseline.snapshot,
-          snapshot,
-          latestScanSummary ?? {
-            componentsScanned: snapshot.components.length,
-            componentsSkipped: 0,
-            tokensScanned: snapshot.tokens.length,
-            tokensSkipped: 0,
-            skippedItems: []
-          }
-        );
-        project.changeSets.push(changeSet);
-        const newBaseline = {
-          id: generateId("baseline"),
-          name: baseline.name,
-          version: message.version,
-          description: baseline.description,
-          tracking: baseline.tracking,
-          snapshot,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        project.baselines.push(newBaseline);
-        const changelogInput = {
-          version: message.version,
-          title: message.title,
-          description: message.description,
-          changes: changeSet.changes,
-          include: message.include
-        };
-        const release = {
-          id: generateId("release"),
-          version: message.version,
-          title: message.title,
-          description: message.description,
-          baselineId: newBaseline.id,
-          previousBaselineId: baseline.id,
-          changeSetId: changeSet.id,
-          include: message.include,
-          changelogMarkdown: generateMarkdown(changelogInput),
-          changelogJson: JSON.stringify(generateJson(changelogInput), null, 2),
-          createdAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        project.releases.push(release);
-        project.currentBaselineId = newBaseline.id;
-        latestScannedSnapshot = void 0;
-        latestScanSummary = void 0;
-        await persist();
-        postToUi({ type: "release-created", release });
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "export": {
-        const release = project.releases.find((r) => r.id === message.releaseId);
-        if (!release) {
-          postToUi({ type: "error", message: "Release not found." });
-          return;
-        }
-        const content = message.format === "markdown" ? release.changelogMarkdown : release.changelogJson;
-        postToUi({ type: "export-result", format: message.format, content, releaseId: release.id });
-        return;
-      }
-      case "update-change": {
-        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-        const change = changeSet?.changes.find((c) => c.id === message.changeId);
-        if (!change) {
-          postToUi({ type: "error", message: "Change not found." });
-          return;
-        }
-        if (message.reviewState !== void 0) change.reviewState = message.reviewState;
-        if (message.reviewNote !== void 0) change.reviewNote = message.reviewNote;
-        if (message.migrationNote !== void 0) change.migrationNote = message.migrationNote;
-        if (message.manualClassification !== void 0) {
-          change.manualClassification = message.manualClassification ?? void 0;
-        }
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "bulk-update-review": {
-        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-        if (!changeSet) {
-          postToUi({ type: "error", message: "Change set not found." });
-          return;
-        }
-        const ids = new Set(message.changeIds);
-        for (const change of changeSet.changes) {
-          if (ids.has(change.id)) change.reviewState = message.reviewState;
-        }
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "confirm-rename": {
-        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-        const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
-        const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
-        if (!changeSet || !addedChange || !removedChange) {
-          postToUi({ type: "error", message: "Rename suggestion not found." });
-          return;
-        }
-        const kind = addedChange.entityType === "token" ? "token" : "component";
-        const renameEntry = {
-          fromId: removedChange.entityId,
-          fromName: removedChange.entityName,
-          toId: addedChange.entityId,
-          toName: addedChange.entityName,
-          confirmedAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        const existing = project.trackedEntities.find((e) => e.id === removedChange.entityId);
-        if (existing) {
-          existing.id = addedChange.entityId;
-          existing.displayName = addedChange.entityName;
-          existing.renameHistory.push(renameEntry);
-        } else {
-          const entity = {
-            id: addedChange.entityId,
-            kind,
-            displayName: addedChange.entityName,
-            deprecated: false,
-            renameHistory: [renameEntry]
-          };
-          project.trackedEntities.push(entity);
-        }
-        addedChange.changeType = kind === "token" ? "token-renamed" : "component-renamed";
-        addedChange.category = "modified";
-        addedChange.before = removedChange.entityName;
-        addedChange.after = addedChange.entityName;
-        addedChange.summary = `Renamed from "${removedChange.entityName}" to "${addedChange.entityName}" (id changed)`;
-        addedChange.renameResolution = "confirmed";
-        changeSet.changes = changeSet.changes.filter((c) => c.id !== removedChange.id);
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "dismiss-rename": {
-        const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-        const addedChange = changeSet?.changes.find((c) => c.id === message.addedChangeId);
-        const removedChange = changeSet?.changes.find((c) => c.id === message.removedChangeId);
-        if (!changeSet || !addedChange || !removedChange) {
-          postToUi({ type: "error", message: "Rename suggestion not found." });
-          return;
-        }
-        addedChange.renameResolution = "dismissed";
-        removedChange.renameResolution = "dismissed";
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "mark-deprecated": {
-        const now = (/* @__PURE__ */ new Date()).toISOString();
-        const existing = project.trackedEntities.find((e) => e.id === message.entityId);
-        if (existing) {
-          existing.deprecated = true;
-          existing.deprecatedAt = existing.deprecatedAt ?? now;
-          existing.displayName = message.displayName;
-          existing.replacement = message.replacement;
-          existing.migrationNote = message.migrationNote;
-        } else {
-          const entity = {
-            id: message.entityId,
-            kind: message.kind,
-            displayName: message.displayName,
-            parentId: message.parentId,
-            deprecated: true,
-            deprecatedAt: now,
-            replacement: message.replacement,
-            migrationNote: message.migrationNote,
-            renameHistory: []
-          };
-          project.trackedEntities.push(entity);
-        }
-        const baseline = findCurrentBaseline();
-        if (baseline) {
-          const suffix = message.replacement ? ` — replaced by ${message.replacement}` : "";
-          appendSyntheticChange(baseline.id, {
-            id: generateId("change"),
-            entityType: message.kind === "token" ? "token" : "component",
-            entityId: message.entityId,
-            entityName: message.displayName,
-            category: "deprecated",
-            severity: "info",
-            changeType: `${message.kind}-deprecated`,
-            summary: `Marked deprecated${suffix}`,
-            breaking: false,
-            potentialBreaking: false,
-            reviewState: "unreviewed",
-            migrationNote: message.migrationNote,
-            createdAt: now
-          });
-        }
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "unmark-deprecated": {
-        const entity = project.trackedEntities.find((e) => e.id === message.entityId);
-        if (!entity) {
-          postToUi({ type: "error", message: "Tracked entity not found." });
-          return;
-        }
-        entity.deprecated = false;
-        entity.deprecatedAt = void 0;
-        entity.replacement = void 0;
-        entity.migrationNote = void 0;
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "build-impact-index": {
-        const index = await scanInstances((progress) => {
-          postToUi({ type: "impact-index-progress", progress });
-        });
-        project.instanceIndex = index;
-        await persist();
-        postToUi({ type: "impact-index-complete", index });
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "compare-releases": {
-        const releaseA = project.releases.find((r) => r.id === message.releaseIdA);
-        const releaseB = project.releases.find((r) => r.id === message.releaseIdB);
-        const baselineA = releaseA && project.baselines.find((b) => b.id === releaseA.baselineId);
-        const baselineB = releaseB && project.baselines.find((b) => b.id === releaseB.baselineId);
-        if (!baselineA || !baselineB) {
-          postToUi({ type: "error", message: "Could not find both releases to compare." });
-          return;
-        }
-        const changeSet = diffSnapshots(generateId("compare"), baselineA.snapshot, baselineB.snapshot, {
-          componentsScanned: baselineB.snapshot.components.length,
-          componentsSkipped: 0,
-          tokensScanned: baselineB.snapshot.tokens.length,
-          tokensSkipped: 0,
-          skippedItems: []
-        });
-        postToUi({
-          type: "release-comparison-result",
-          releaseIdA: message.releaseIdA,
-          releaseIdB: message.releaseIdB,
-          changeSet
-        });
-        return;
-      }
-      case "update-settings": {
-        project.settings = message.settings;
-        await persist();
-        postToUi({ type: "state", project });
-        return;
-      }
-      case "focus-node": {
-        try {
-          const node = await figma.getNodeByIdAsync(message.nodeId);
-          if (node && "type" in node && node.type !== "DOCUMENT" && node.type !== "PAGE") {
-            const sceneNode = node;
-            const page = sceneNode.parent ? (function findPage(n) {
-              let current = n;
-              while (current) {
-                if (current.type === "PAGE") return current;
-                current = current.parent;
-              }
-              return void 0;
-            })(sceneNode) : void 0;
-            if (page) {
-              await figma.setCurrentPageAsync(page);
-            }
-            figma.currentPage.selection = [sceneNode];
-            figma.viewport.scrollAndZoomIntoView([sceneNode]);
-          }
-        } catch {
-          postToUi({ type: "error", message: "Could not locate that node — it may have been deleted." });
-        }
-        return;
-      }
-      default:
-        return;
-    }
-  }
+  figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
   figma.ui.onmessage = (message) => {
     handleMessage(message).catch((error) => {
       postToUi({

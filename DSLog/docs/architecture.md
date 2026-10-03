@@ -53,10 +53,18 @@ layer that touches `figma.*` and a layer that doesn't:
   `docs/storage-schema.md`.
 - **`export/`** turns a change set + release metadata into Markdown and
   JSON changelogs.
-- **`main.ts`** is the only file that wires these together against real
-  `figma.*` calls and the UI message protocol. It intentionally contains
-  little logic of its own — scanning, diffing, and classifying all happen
-  in the layers above.
+- **`handlers/`** is the only code that wires these together against real
+  `figma.*` calls and the UI message protocol, with one module per kind of
+  message: `scan.ts` (discover / baseline / scan), `release.ts` (create /
+  export / compare), `review.ts` (review state, rename confirmation),
+  `deprecation.ts`, `impact.ts`, `focusNode.ts` and `state.ts`. Shared state
+  (the loaded project and the last scan) lives in `session.ts`. The router in
+  `handlers/index.ts` has a typed handler table, so a new UI message without a
+  handler is a compile error, and it backs up the project before every
+  mutating message and restores it if the handler throws (so a failed save
+  never leaves unsaved changes in memory). `main.ts` just shows the UI and
+  forwards messages. They intentionally contain little logic of their own —
+  scanning, diffing, and classifying all happen in the layers above.
 
 ## Scan → diff → release flow
 
@@ -64,7 +72,7 @@ layer that touches `figma.*` and a layer that doesn't:
    (scope: selection / current page / document) to enumerate candidate
    `COMPONENT`/`COMPONENT_SET` nodes, then `create-baseline` with the
    user's final checked list plus token-tracking config.
-2. `main.ts` scans the tracked components (`scanner/scanComponents.ts`,
+2. `handlers/scan.ts` scans the tracked components (`scanner/scanComponents.ts`,
    batched via `SCAN_BATCH_SIZE` with progress callbacks) and tracked
    variable collections (`scanner/scanTokens.ts`), builds a
    `DesignSystemSnapshot`, wraps it in a `Baseline`, and diffs it against
@@ -109,7 +117,7 @@ above without changing how scanning/diffing/classifying work at their core.
   structure shape for components; type/scopes/mode-shape for tokens), and
   links them via `Change.possibleRenameOf` for the UI to offer "Confirm
   rename" / "Treat as remove + add" (never auto-merged). This is also why
-  `main.ts`'s `resolveComponentIds` re-runs `discoverComponents` against the
+  `handlers/scanSupport.ts`'s `resolveComponentIds` re-runs `discoverComponents` against the
   baseline's stored scope on every scan (for scopes other than
   `"selection"`) instead of re-scanning the frozen id list captured at
   baseline time — a node with a genuinely new id (delete + recreate) would
@@ -128,7 +136,7 @@ above without changing how scanning/diffing/classifying work at their core.
   "informational"`) is the only vocabulary ever shown to the user — never a
   confidence score.
 - **Deprecation** (`shared/types/entity.ts`'s `TrackedEntity`,
-  `mark-deprecated`/`unmark-deprecated` in `main.ts`): deprecation is
+  `mark-deprecated`/`unmark-deprecated` in `handlers/deprecation.ts`): deprecation is
   manual, user-applied metadata decoupled from any one snapshot, so it's
   stored as a `TrackedEntity` record (keyed by component/token id, or a
   synthetic `id::variant::name` / `id::prop::name` key for variants and
@@ -189,7 +197,7 @@ component/token scan pipeline:
   (`projectStore.ts`'s `HeavyData.instanceIndex`) since it can be large,
   as a single project-wide field (not per-baseline — instance usage is
   inherently a "right now" question, not a historical one). Built only by
-  the explicit `build-impact-index` message (`main.ts`), never
+  the explicit `build-impact-index` message (`handlers/impact.ts`), never
   automatically.
 - **`shared/utils/dependencyGraph.ts`**: the internal dependency graph
   (spec §8), expressed as a flat edge list (`{from, fromType, to, toType,

@@ -80,7 +80,8 @@ src/
 │   ├── classifier/      # assigns category / severity / breaking confidence
 │   ├── storage/         # clientStorage + document plugin-data persistence
 │   ├── export/          # Markdown / JSON changelog generation
-│   └── main.ts          # message router wiring the UI to everything above
+│   ├── handlers/        # one module per kind of UI message (scan, release, review, ...)
+│   └── main.ts          # shows the UI and routes messages to handlers/
 ├── ui/                # runs in the plugin iframe (React)
 │   ├── pages/            # Overview, Track, Changes, Releases, History, Settings
 │   ├── components/
@@ -142,12 +143,12 @@ Figma (Figma does not hot-reload plugin code).
   exercise normalization and diffing at the scales called out in the
   product spec's performance requirements
 - rename detection (component/token key and structural-signature matching)
-  and its confirm/dismiss flow through `main.ts`
-- deprecation and bulk review-state updates through `main.ts`
+  and its confirm/dismiss flow through `handlers/review.ts`
+- deprecation and bulk review-state updates through `handlers/`
 - entity history reconstruction across releases and rename chains, token
   alias dependency-chain resolution, and the global search index
 - end-to-end integration tests (`tests/helpers/fakeFigma.ts`) that load the
-  real `main.ts` message handler against a simulated `figma` global for the
+  real plugin message handlers (`main.ts` → `handlers/`) against a simulated `figma` global for the
   baseline → scan → release flow, deprecation, rename confirmation,
   review-state updates, and the document-wide impact-index build
 - the instance scanner (per-component counts, "potentially affected"
