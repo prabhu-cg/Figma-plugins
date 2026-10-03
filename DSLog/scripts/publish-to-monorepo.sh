@@ -11,7 +11,14 @@
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MONOREPO_DIR="/Users/prc/Documents/Personal/.designlens-monorepo"
+# Override with MONOREPO_DIR=/path/to/clone. Pass --dry-run to preview the sync without
+# committing or pushing:  npm run publish:monorepo -- --dry-run
+MONOREPO_DIR="${MONOREPO_DIR:-/Users/prc/Documents/Personal/.designlens-monorepo}"
+DRY_RUN=0
+if [ "${1:-}" = "--dry-run" ]; then
+  DRY_RUN=1
+  shift
+fi
 COMMIT_MESSAGE="${1:-Update DSLog}"
 
 if [ ! -d "$MONOREPO_DIR/.git" ]; then
@@ -27,13 +34,23 @@ cd "$MONOREPO_DIR"
 git checkout main
 git pull --ff-only origin main
 
-rsync -a --delete \
+RSYNC_FLAGS=(-a --delete)
+if [ "$DRY_RUN" = 1 ]; then
+  RSYNC_FLAGS+=(--dry-run --itemize-changes)
+fi
+
+rsync "${RSYNC_FLAGS[@]}" \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude '.claude' \
   --exclude '.DS_Store' \
   --exclude '*.log' \
   "$SOURCE_DIR/" "$MONOREPO_DIR/DSLog/"
+
+if [ "$DRY_RUN" = 1 ]; then
+  echo "Dry run — nothing committed or pushed."
+  exit 0
+fi
 
 git add DSLog
 
