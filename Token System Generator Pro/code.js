@@ -683,6 +683,16 @@
     }
     return null;
   }
+  async function runSafely(run) {
+    var _a;
+    try {
+      await run();
+    } catch (e) {
+      const message = (_a = e == null ? void 0 : e.message) != null ? _a : String(e);
+      figma.notify(`\u274C Generation failed: ${message}`, { error: true });
+      figma.ui.postMessage({ type: "generation-failed", message });
+    }
+  }
   function runGeneration(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily) {
     const blocked = blockedReason(mode);
     if (blocked) {
@@ -732,10 +742,10 @@
   }
   figma.ui.onmessage = async (msg) => {
     if (msg.type === "generate") {
-      runGeneration(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily);
+      runSafely(() => runGeneration(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
     }
     if (msg.type === "confirm-continue") {
-      generate(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily);
+      runSafely(() => generate(msg.approach, msg.mode, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
     }
     if (msg.type === "export-json") {
       if (!tokensExist()) {

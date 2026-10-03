@@ -1035,6 +1035,12 @@
 
     if (msg.type === 'confirm-replace') openReplace(msg.existing || {});
 
+    if (msg.type === 'generation-failed') {
+      const hint = document.getElementById('hint-generate');
+      hint.textContent = `Generation failed: ${msg.message}. Some tokens may have been created; check Figma's Variables panel before retrying.`;
+      hint.classList.add('error');
+    }
+
     if (msg.type === 'generation-blocked') {
       const hint = document.getElementById('hint-generate');
       hint.textContent = msg.reason; hint.classList.add('error');

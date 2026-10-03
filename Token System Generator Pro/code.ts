@@ -686,6 +686,18 @@ function blockedReason(mode: string): string | null {
   return null;
 }
 
+// generate() runs past several awaits and is not awaited by the message handler,
+// so a throw would otherwise vanish. Report it to the UI instead.
+async function runSafely(run: () => void | Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (e) {
+    const message = (e as { message?: string } | null)?.message ?? String(e);
+    figma.notify(`❌ Generation failed: ${message}`, { error: true });
+    figma.ui.postMessage({ type: 'generation-failed', message });
+  }
+}
+
 function runGeneration(
   approach: string,
   mode: string,
@@ -759,10 +771,10 @@ figma.ui.onmessage = async (msg: {
   fontFamily?: string;
 }) => {
   if (msg.type === 'generate') {
-    runGeneration(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily);
+    runSafely(() => runGeneration(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
   }
   if (msg.type === 'confirm-continue') {
-    generate(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily);
+    runSafely(() => generate(msg.approach!, msg.mode!, msg.colors, msg.spacingBase, msg.radiusBase, msg.widthBase, msg.fontBase, msg.ratioKey, msg.fontFamily));
   }
   if (msg.type === 'export-json') {
     if (!tokensExist()) { figma.notify('⚠️ No variables found — generate tokens first'); return; }
