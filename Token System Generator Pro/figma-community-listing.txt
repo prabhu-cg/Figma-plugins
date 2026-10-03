@@ -68,6 +68,12 @@ Other tokens (optional, From Scratch and Starter)
   - Opacity: 6 steps from 0 to 100
   - Z-index: 8 stacking layers from base to tooltip
 
+Foundation on the canvas (optional)
+  - Draws a labeled frame beside your work: color ramps (fills bound to the
+    variables), the type scale in your real text styles, spacing, radius,
+    border width, elevation, opacity and z-index
+  - Off by default. Regenerating with it on replaces the previous frame
+
 Scopes and code syntax
   - Variable scopes keep Figma's pickers tidy: Alias and Component tokens are
     scoped to the fields they are for, and Global primitives that have an Alias
@@ -152,7 +158,8 @@ HOW TO USE
 3. Choose your approach — From Scratch, Starter System, or Smart Convert.
 
 4. If you chose From Scratch, configure your colors and scale inputs on the
-   next screen. Color swatches update live as you type hex values. The Next
+   next screen. Type a hex value or click a swatch to use the color picker;
+   swatches and ramps update live. The Next
    button unlocks once your primary, secondary, and accent colors are valid.
 
 5. Choose your architecture: 2-tier or 3-tier.
@@ -173,7 +180,8 @@ TIP: To replace an existing token system, open the plugin and choose
 Regenerate Tokens from the Smart Landing screen. A confirmation lists exactly
 what will be deleted before anything is removed.
 
-IMPORTANT: Replacing only removes what this plugin made: the collections named
+IMPORTANT: Replacing only removes what this plugin made (and, if you ask for a
+new foundation, the foundation frame it drew earlier): the collections named
 01 Global, 02 Alias and 03 Component, and (for From Scratch and Starter) paint
 styles named like ramp stops (cobalt/500) and the Display / Heading / Body copy
 text styles it creates. Your own collections and styles are never touched, and
@@ -219,7 +227,6 @@ COMING SOON
 - Contrast fixes — suggest or apply the nearest passing stop
 - Composite typography tokens in the JSON export
 - Motion (duration and easing) and breakpoint token scales
-- An optional foundation (ramps, type scale, spacing) drawn on the canvas
 - One-click publish to Tokens Studio / W3C DTCG format
 
 

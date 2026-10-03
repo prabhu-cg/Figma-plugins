@@ -27,6 +27,7 @@ Token System Generator Pro creates Figma Variable collections in a 2-tier (Globa
 - **Contrast checker** — shows each color ramp (from the preview, or from the Alias collection of a file that already has tokens) with WCAG 2 ratios and levels (AAA, AA, AA large) for white and black text on every stop, the APCA Lc, and a summary such as "text on white: AA from 500". It only reads your variables
 - **Other tokens** (From Scratch and Starter, each optional) — **elevation** (5 shadow levels as variables plus matching `Elevation/*` effect styles), an **opacity** scale (6 steps, 0–100) and **z-index** layers (base to tooltip)
 - **Local styles** (From Scratch and Starter) — a paint style per color stop, text styles (Display, Heading, Body copy) and, with elevation, effect styles, all bound to the variables
+- **Foundation on the canvas** (optional, off by default) — draws a labeled frame beside your existing work with the color ramps (fills bound to the variables), the type scale in your real text styles, spacing, radius, border width, elevation, opacity and z-index. Regenerating with the option on replaces the previous frame in place. Smart Convert draws the color families it found. If drawing fails, the tokens are still created and a warning says so
 - **Scopes and code syntax** — variable scopes keep Figma's pickers tidy (Global primitives that have an Alias counterpart are hidden), and every variable gets a web code syntax such as `var(--alias-color-primary-500)` for Dev Mode. Both can be switched off
 - **JSON export** — all collections as JSON with alias references preserved, via Copy or Download
 
@@ -35,11 +36,11 @@ Token System Generator Pro creates Figma Variable collections in a 2-tier (Globa
 When you open the plugin, a file with no variables goes straight to mode selection. If variables already exist you can export them to JSON or regenerate.
 
 ### From Scratch
-1. Enter Primary, Secondary and Accent colors (required). Tertiary and the semantic colors (info, success, error, warning, neutral) are optional; a blank color is skipped.
+1. Enter Primary, Secondary and Accent colors (required). Type a hex value, or click the swatch beside it to pick a color; the two stay in sync. Tertiary and the semantic colors (info, success, error, warning, neutral) are optional; a blank color is skipped.
 2. Set the spacing base (1–32), border radius base (0–64), border width base (1–16), base font size (10–24) and a scale ratio.
 3. Choose a font family (default Inter). Optionally tick **Use a different font for body copy** and choose a body font.
 4. Under **Other tokens**, keep or untick Elevation, Opacity and Z-index (all on by default).
-5. Choose 2-tier or 3-tier, review the **Output options** (variable scopes, code syntax) and click **Generate Tokens**.
+5. Choose 2-tier or 3-tier, review the **Output options** (variable scopes, code syntax, and whether to draw the foundation on the canvas) and click **Generate Tokens**.
 
 ### Starter System
 Choose 2-tier or 3-tier. The plugin scaffolds a system from a curated default palette (9 OKLCH ramps), spacing base 4, radius base 4, border width base 1 a Major Third type scale in Inter, and the elevation, opacity and z-index scales. Edit the values in Figma afterwards.
@@ -53,6 +54,7 @@ Generating again **replaces what this plugin made**, and only that. The confirma
 - **Collections:** only the ones named `01 Global`, `02 Alias` and `03 Component`. Your other variable collections are never touched.
 - **Styles (From Scratch and Starter):** paint styles named like a ramp stop (`cobalt/500`) and text styles named like the ones this plugin creates (`Heading/h1`, `Display/display-lg`, `Body copy/body`), and effect styles named `Elevation/<level>`. Your own styles, such as `Brand/Primary` or `Shadow/card`, are kept.
 - **Smart Convert** keeps all your styles, since it reads them, and replaces only the three collections above.
+- **Foundation frame:** only when you ask for a new one, the frame this plugin drew earlier on the current page (it is marked, so your own frames are never touched).
 - If the file has none of those, there is nothing to replace and no confirmation is shown.
 
 Generation is **all or nothing**. The new tokens are built under temporary names first, and your existing tokens are only removed once the whole build has succeeded. If anything fails, everything the run created is removed and your file is left exactly as it was; the panel says so. If the plugin is closed mid-generation, the half-built items are removed too.
@@ -199,14 +201,14 @@ In Figma: **Plugins → Development → Import plugin from manifest…** and cho
 - Smart Convert's alias mapping is a heuristic.
 - Smart Convert does not add elevation, opacity or z-index tokens.
 - Opacity, z-index and elevation have no Alias layer; they live in Global.
+- The canvas foundation is a static picture: it is not updated when you edit variables later (bound fills follow their variables, but labels do not). Regenerate to redraw it.
 
 ## Ideas for next
 1. **Contrast fixes** — suggest or apply the nearest passing stop for failing pairs
 2. **Dark Mode Generator** — a dark mode from the light palette
 3. **Import from JSON** — Style Dictionary JSON back into Figma variables
 4. **Token Health Audit** — flag duplicates, off-scale values and missing aliases
-5. **Foundation on the canvas** — optionally draw the ramps, type scale and spacing as a labeled frame
-6. **More token types** — motion, breakpoints, sizing
+5. **More token types** — motion, breakpoints, sizing
 
 ## License
 
