@@ -278,8 +278,8 @@ existing `changeSet`).
 
 ## Fonts
 
-The UI has no network access, so Manrope is bundled rather than linked: the latin and
-latin-ext variable-weight woff2 files live in `src/ui/assets/fonts/` (SIL OFL 1.1, licence
-alongside) and are declared with `@font-face` at the top of `global.css`. The UI build inlines
-them into `dist/ui.html` as data URIs (about 55 KB). Scripts outside those subsets (CJK,
-Cyrillic, ...) fall through to the system fonts in the `--font-family` stack.
+The UI has no network access, so Manrope is bundled rather than linked: the latin
+variable-weight woff2 file lives in `src/ui/assets/fonts/` (SIL OFL 1.1, licence
+alongside) and is declared with `@font-face` at the top of `global.css`. The UI build inlines
+it into `dist/ui.html` as a data URI (about 33 KB). Characters outside it (accents beyond Western
+European, CJK, Cyrillic, ...) fall through to the system fonts in the `--font-family` stack.
