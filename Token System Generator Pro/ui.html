@@ -161,6 +161,15 @@
     }
     .warn-list[hidden] { display: none; }
 
+    /* ── Optional second font ── */
+    .scale-row label.opt-toggle {
+      display: flex; align-items: center; gap: 8px; margin-top: 10px;
+      font-size: 12px; color: #555; cursor: pointer; width: fit-content; padding-top: 0;
+    }
+    .opt-toggle input { width: 14px; height: 14px; margin: 0; accent-color: #EE661D; cursor: pointer; }
+    .opt-toggle input:focus-visible { outline: 2px solid #EE661D; outline-offset: 2px; }
+    .scale-row[hidden] { display: none; }
+
     /* ── Hint ── */
     .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
 
@@ -552,12 +561,25 @@
           </div>
         </div>
         <div class="scale-row">
-          <label>Font family</label>
+          <label id="lbl-font-family" for="inp-font-family">Font family</label>
           <div class="scale-input-wrap">
             <select class="scale-select" id="inp-font-family">
               <option value="Inter" selected>Inter</option>
             </select>
-            <div class="scale-hint">Choose the font for your typography system. Defaults to Inter.</div>
+            <div class="scale-hint" id="hint-font-family">Choose the font for your typography system. Defaults to Inter.</div>
+            <label class="opt-toggle">
+              <input type="checkbox" id="chk-body-font" onchange="onBodyFontToggle()">
+              Use a different font for body copy
+            </label>
+          </div>
+        </div>
+        <div class="scale-row" id="row-body-font" hidden>
+          <label for="inp-font-body">Body font</label>
+          <div class="scale-input-wrap">
+            <select class="scale-select" id="inp-font-body">
+              <option value="Inter" selected>Inter</option>
+            </select>
+            <div class="scale-hint">Used for body-lg, body, caption and xs. Displays and headings keep the font above.</div>
           </div>
         </div>
         <div class="type-preview" id="type-preview"></div>
@@ -857,6 +879,21 @@
     validateScreen2();
   }
 
+  function onBodyFontToggle() {
+    const on = document.getElementById('chk-body-font').checked;
+    document.getElementById('row-body-font').hidden = !on;
+    document.getElementById('lbl-font-family').textContent = on ? 'Heading font' : 'Font family';
+    document.getElementById('hint-font-family').textContent = on
+      ? 'Used for display and heading levels (display-lg to h6).'
+      : 'Choose the font for your typography system. Defaults to Inter.';
+    if (on) {
+      // Start from the heading font so the choice is a deliberate change, not a blank.
+      const heading = document.getElementById('inp-font-family').value;
+      const body = document.getElementById('inp-font-body');
+      if ([...body.options].some(o => o.value === heading)) body.value = heading;
+    }
+  }
+
   function validateScreen2() {
     const allBrandValid = REQUIRED_COLORS.every(f => isValidHex(normalizeHex(document.getElementById('inp-' + f).value)));
     const inRange = (id, min, max) => {
@@ -921,6 +958,10 @@
       fontBase:    parseInt(document.getElementById('inp-font-base').value) || 16,
       ratioKey:    document.getElementById('inp-ratio').value,
       fontFamily:  document.getElementById('inp-font-family').value || 'Inter',
+      // Only sent when the toggle is on; an empty value means one font everywhere.
+      bodyFontFamily: document.getElementById('chk-body-font').checked
+        ? (document.getElementById('inp-font-body').value || 'Inter')
+        : '',
     };
   }
 
@@ -1095,14 +1136,16 @@
 
     if (msg.type === 'fonts-list') {
       availableFonts = msg.fonts || [];
-      const select = document.getElementById('inp-font-family');
-      select.innerHTML = '';
-      availableFonts.forEach(font => {
-        const option = document.createElement('option');
-        option.value = font;
-        option.textContent = font;
-        if (font === 'Inter') option.selected = true;
-        select.appendChild(option);
+      ['inp-font-family', 'inp-font-body'].forEach(id => {
+        const select = document.getElementById(id);
+        select.innerHTML = '';
+        availableFonts.forEach(font => {
+          const option = document.createElement('option');
+          option.value = font;
+          option.textContent = font;
+          if (font === 'Inter') option.selected = true;
+          select.appendChild(option);
+        });
       });
     }
   };

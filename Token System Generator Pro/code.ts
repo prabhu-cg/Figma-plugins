@@ -191,8 +191,23 @@ async function describeExisting(mode: string): Promise<{
 
 type Tier = '2tier' | '3tier';
 
+interface ScratchOptions {
+  colors: ScratchColors;
+  spacingBase: number;
+  radiusBase: number;
+  widthBase: number;
+  fontBase: number;
+  ratioKey: string;
+  tier: Tier;
+  fontFamily?: string;      // displays + headings (and body copy, unless bodyFontFamily is set)
+  bodyFontFamily?: string;  // optional: a different font for body copy
+}
+
 async function createStarterSystem(tier: Tier): Promise<void> {
-  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', tier);
+  return buildFromScratch({
+    colors: STARTER_COLORS, spacingBase: 4, radiusBase: 4, widthBase: 1,
+    fontBase: 16, ratioKey: 'major-third', tier,
+  });
 }
 
 // Smart Convert reads the local paint/text styles and rebuilds them as variables.
@@ -346,7 +361,9 @@ interface TypographyVars {
   fontSize: Record<string, Variable>;
   lineHeight: Record<string, Variable>;
   letterSpacing: Record<string, Variable>;
-  fontFamily: Variable;
+  // One variable when a single font is used (both roles point at it), two when body copy differs.
+  fontFamily: { heading: Variable; body: Variable };
+  fonts: { heading: string; body: string };
 }
 
 function lineHeightPx(t: TypeLevel): number {
@@ -415,11 +432,23 @@ function createTypographyVariables(
   global: VariableCollection,
   fontBase: number,
   ratioKey: string,
-  font: string
+  font: string,
+  bodyFont?: string
 ): TypographyVars {
   const levels = generateTypographyScale(fontBase, ratioKey);
-  const fontFamily = figma.variables.createVariable('typography/font-family', global, 'STRING');
-  fontFamily.setValueForMode(global.modes[0].modeId, font);
+  const modeId = global.modes[0].modeId;
+
+  // Choosing the same font twice is the same as choosing one.
+  const split = !!bodyFont && bodyFont !== font;
+  const makeFont = (name: string, value: string): Variable => {
+    const v = figma.variables.createVariable(name, global, 'STRING');
+    v.setValueForMode(modeId, value);
+    return v;
+  };
+  const fontFamily = split
+    ? { heading: makeFont('typography/font-family/heading', font), body: makeFont('typography/font-family/body', bodyFont as string) }
+    : (() => { const v = makeFont('typography/font-family', font); return { heading: v, body: v }; })();
+  const fonts = { heading: font, body: split ? (bodyFont as string) : font };
 
   const fontSize: Record<string, Variable> = {};
   const lineHeight: Record<string, Variable> = {};
@@ -429,7 +458,7 @@ function createTypographyVariables(
     lineHeight[t.name]    = createNumber(global, `typography/line-height/${t.name}`,    lineHeightPx(t));
     letterSpacing[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, t.letterSpacing);
   }
-  return { levels, fontSize, lineHeight, letterSpacing, fontFamily };
+  return { levels, fontSize, lineHeight, letterSpacing, fontFamily, fonts };
 }
 
 function aliasScale(aliasCol: VariableCollection, prefix: string, scale: ScaleVars): void {
@@ -461,7 +490,12 @@ function createAliasCollection(
   aliasScale(aliasCol, 'borderRadius', radius);
   aliasScale(aliasCol, 'borderWidth', width);
 
-  alias(aliasCol, 'typography/font-family', typo.fontFamily);
+  if (typo.fontFamily.heading === typo.fontFamily.body) {
+    alias(aliasCol, 'typography/font-family', typo.fontFamily.heading);
+  } else {
+    alias(aliasCol, 'typography/font-family/heading', typo.fontFamily.heading);
+    alias(aliasCol, 'typography/font-family/body', typo.fontFamily.body);
+  }
   for (const t of typo.levels) {
     alias(aliasCol, `text/${t.name}/font-size`,      typo.fontSize[t.name]);
     alias(aliasCol, `text/${t.name}/line-height`,    typo.lineHeight[t.name]);
@@ -478,21 +512,25 @@ function textStyleGroup(levelName: string): string {
 }
 
 // Local text styles for each level, then bound to the typography variables.
-async function createTextStyles(typo: TypographyVars, font: string): Promise<void> {
-  const created: { style: TextStyle; level: string }[] = [];
+// Body copy uses the body font; displays and headings use the heading font.
+async function createTextStyles(typo: TypographyVars): Promise<void> {
+  const created: { style: TextStyle; level: string; role: 'heading' | 'body' }[] = [];
   for (const t of typo.levels) {
     const group = textStyleGroup(t.name);
     if (!group) continue;
-    const style = await createLocalTextStyle(`${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, font);
-    created.push({ style, level: t.name });
+    const role = group === 'Body copy' ? 'body' : 'heading';
+    const style = await createLocalTextStyle(
+      `${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, typo.fonts[role]
+    );
+    created.push({ style, level: t.name, role });
   }
 
-  for (const { style, level } of created) {
+  for (const { style, level, role } of created) {
     try {
       style.setBoundVariable('fontSize', typo.fontSize[level]);
       style.setBoundVariable('lineHeight', typo.lineHeight[level]);
       style.setBoundVariable('letterSpacing', typo.letterSpacing[level]);
-      style.setBoundVariable('fontFamily', typo.fontFamily);
+      style.setBoundVariable('fontFamily', typo.fontFamily[role]);
     } catch (_e) {
       warn(`Couldn't link a text style to its variables`);
     }
@@ -551,33 +589,22 @@ function createComponentCollection(colorAliases: AliasRamps): void {
   }
 }
 
-async function buildFromScratch(
-  colors: ScratchColors,
-  spacingBase: number,
-  radiusBase: number,
-  widthBase: number,
-  fontBase: number,
-  ratioKey: string,
-  tier: Tier,
-  fontFamily?: string
-): Promise<void> {
-  const font = fontFamily || 'Inter';
-
+async function buildFromScratch(o: ScratchOptions): Promise<void> {
   // 01 Global
   const global = stageCollection('01 Global');
-  const { ramps, brandNames } = createGlobalColors(global, colors);
-  createSpacingVariables(global, spacingBase);
-  const radius = createScaleGlobals(global, 'borderRadius', generateRadiusScale(radiusBase));
-  const width  = createScaleGlobals(global, 'borderWidth', generateBorderWidthScale(widthBase));
-  const typo   = createTypographyVariables(global, fontBase, ratioKey, font);
+  const { ramps, brandNames } = createGlobalColors(global, o.colors);
+  createSpacingVariables(global, o.spacingBase);
+  const radius = createScaleGlobals(global, 'borderRadius', generateRadiusScale(o.radiusBase));
+  const width  = createScaleGlobals(global, 'borderWidth', generateBorderWidthScale(o.widthBase));
+  const typo   = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || 'Inter', o.bodyFontFamily);
 
   // 02 Alias, then the local styles that mirror the tokens
   const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
-  await createTextStyles(typo, font);
+  await createTextStyles(typo);
   createPaintStyles(global, ramps, brandNames);
 
   // 03 Component
-  if (tier === '3tier') createComponentCollection(colorAliases);
+  if (o.tier === '3tier') createComponentCollection(colorAliases);
 }
 
 // ─── JSON EXPORT ─────────────────────────────────────────────────
@@ -590,6 +617,9 @@ const childNode = (parent: TokenNode, key: string): TokenNode => {
   if (!Object.prototype.hasOwnProperty.call(parent, key)) parent[key] = newNode();
   return parent[key] as TokenNode;
 };
+
+// Token type follows the variable's own type, so an alias to a font or number isn't mislabelled as a color.
+const TOKEN_TYPES: Record<string, string> = { COLOR: 'color', FLOAT: 'dimension', STRING: 'fontFamily', BOOLEAN: 'boolean' };
 
 async function exportVariablesToJSON(): Promise<string> {
   const collections = await figma.variables.getLocalVariableCollectionsAsync();
@@ -647,16 +677,13 @@ async function exportVariablesToJSON(): Promise<string> {
       let current = colResult;
       for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
 
-      let type = 'unknown';
+      const type = TOKEN_TYPES[v.resolvedType] ?? 'unknown';
       let value: unknown = val;
       if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
         value = colorToHex(val as { r: number; g: number; b: number });
-        type = 'color';
       } else if (val && typeof val === 'object' && (val as { type?: string }).type === 'VARIABLE_ALIAS') {
         const token = varTokens.get((val as { id: string }).id);
-        if (token) { value = `{${token}}`; type = 'color'; }
-      } else if (v.resolvedType === 'FLOAT') {
-        type = 'dimension';
+        if (token) value = `{${token}}`;
       }
       current[toCamelCase(parts[parts.length - 1])] = { value, type };
     });
@@ -710,57 +737,41 @@ async function runSafely(run: () => Promise<void>): Promise<void> {
   }
 }
 
-async function runGeneration(
-  approach: string,
-  mode: string,
-  colors?: ScratchColors,
-  spacingBase?: number,
-  radiusBase?: number,
-  widthBase?: number,
-  fontBase?: number,
-  ratioKey?: string,
-  fontFamily?: string
-): Promise<void> {
-  const blocked = await blockedReason(mode);
+async function runGeneration(r: GenerateRequest): Promise<void> {
+  const blocked = await blockedReason(r.mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   if (await tokensExist()) {
-    figma.ui.postMessage({ type: 'confirm-replace', existing: await describeExisting(mode) }); return;
+    figma.ui.postMessage({ type: 'confirm-replace', existing: await describeExisting(r.mode) }); return;
   }
-  await generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
+  await generate(r);
+}
+
+// parseRequest guarantees these for From Scratch; the check keeps the types honest.
+function scratchOptions(r: GenerateRequest): ScratchOptions {
+  if (!r.colors || r.spacingBase === undefined || r.radiusBase === undefined || r.widthBase === undefined
+      || r.fontBase === undefined || !r.ratioKey) {
+    throw new Error('From Scratch settings are incomplete.');
+  }
+  return {
+    colors: r.colors, spacingBase: r.spacingBase, radiusBase: r.radiusBase, widthBase: r.widthBase,
+    fontBase: r.fontBase, ratioKey: r.ratioKey, tier: r.approach,
+    fontFamily: r.fontFamily, bodyFontFamily: r.bodyFontFamily,
+  };
 }
 
 // Build everything under staging names first; replace the old tokens only if the whole build worked.
 // If it throws, everything staged is removed and the file is left exactly as it was.
-async function generate(
-  approach: string,
-  mode: string,
-  colors?: ScratchColors,
-  spacingBase?: number,
-  radiusBase?: number,
-  widthBase?: number,
-  fontBase?: number,
-  ratioKey?: string,
-  fontFamily?: string
-): Promise<void> {
-  const blocked = await blockedReason(mode);
+async function generate(r: GenerateRequest): Promise<void> {
+  const blocked = await blockedReason(r.mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   issues.clear();
-  const old = await snapshotExisting(mode);
-  const tier: Tier = approach === '3tier' ? '3tier' : '2tier';
+  const old = await snapshotExisting(r.mode);
+  const tier = r.approach;
 
   try {
-    if (mode === 'scratch') {
-      await buildFromScratch(
-        colors!, spacingBase!, radiusBase!, widthBase ?? 1,
-        fontBase ?? 16, ratioKey ?? 'major-third',
-        tier,
-        fontFamily
-      );
-    } else if (mode === 'starter') {
-      await createStarterSystem(tier);
-    } else if (mode === 'convert') {
-      await convertStylesToTokens(tier);
-    }
+    if (r.mode === 'scratch') await buildFromScratch(scratchOptions(r));
+    else if (r.mode === 'starter') await createStarterSystem(tier);
+    else if (r.mode === 'convert') await convertStylesToTokens(tier);
   } catch (e) {
     const leftover = rollbackStaged();
     const reason = (e as { message?: string } | null)?.message ?? String(e);
@@ -796,6 +807,7 @@ interface GenerateRequest {
   fontBase?: number;
   ratioKey?: string;
   fontFamily?: string;
+  bodyFontFamily?: string; // optional second font for body copy
 }
 
 interface UiMessage extends Partial<GenerateRequest> {
@@ -841,8 +853,14 @@ function parseRequest(msg: UiMessage): GenerateRequest {
   if (typeof msg.fontFamily !== 'string' || !msg.fontFamily || msg.fontFamily.length > 200) {
     throw new Error('Choose a font family.');
   }
+  // Optional: blank or missing means one font for everything.
+  const body = msg.bodyFontFamily;
+  if (body !== undefined && body !== '' && (typeof body !== 'string' || body.length > 200)) {
+    throw new Error('Body font is not valid.');
+  }
   return {
     ...request,
+    bodyFontFamily: body || undefined,
     colors: colors as unknown as ScratchColors,
     spacingBase: intInRange(msg.spacingBase, 'spacingBase'),
     radiusBase:  intInRange(msg.radiusBase, 'radiusBase'),
@@ -877,9 +895,8 @@ figma.ui.onmessage = async (msg: UiMessage) => {
   if (msg.type === 'generate' || msg.type === 'confirm-continue') {
     await exclusive(() => runSafely(async () => {
       const r = parseRequest(msg);
-      const args = [r.approach, r.mode, r.colors, r.spacingBase, r.radiusBase, r.widthBase, r.fontBase, r.ratioKey, r.fontFamily] as const;
-      if (msg.type === 'generate') await runGeneration(...args);
-      else await generate(...args);
+      if (msg.type === 'generate') await runGeneration(r);
+      else await generate(r);
     }));
   }
   if (msg.type === 'export-json') {

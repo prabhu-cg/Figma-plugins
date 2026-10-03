@@ -19,7 +19,7 @@ Token System Generator Pro creates production-ready Figma Variable collections f
 
 🎨 **What gets generated**
 - **Color ramps** — 10-stop (50–900) per brand color with semantic aliases (Primary, Secondary, Tertiary, Accent, Feedback). Ramps are generated in [OKLCH](https://oklch.fyi/): stop 500 is exactly your color, every other stop keeps its hue and moves in perceptually even lightness steps, and chroma eases off toward the light and dark ends (gamut-mapped to sRGB)
-- **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios with font family binding
+- **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios with font family binding. Use one font throughout, or optionally a second font for body copy (headings and displays keep the first)
 - **Spacing scale** — 10-level scale from configurable base unit
 - **Border radius** — 7 semantic values (none → full circle)
 - **Border width** — 5 semantic values (hairline → xl)
@@ -54,7 +54,7 @@ Export includes proper token path references, composite typography objects, and 
 1. Input brand colors (hex)
 2. Set spacing base, border radius base, typography base size
 3. Choose type scale ratio (5 options: Major Second, Minor Third, Major Third, Perfect Fourth, √2)
-4. Optional: select font family (defaults to Inter with fallback to Helvetica)
+4. Optional: select font family (defaults to Inter with fallback to Helvetica), and optionally a different font for body copy
 5. Choose 2-tier or 3-tier architecture
 6. Plugin generates all token collections + local text styles with font bindings
 
@@ -78,6 +78,7 @@ Export includes proper token path references, composite typography objects, and 
 - **Global** — raw primitives, not for direct use
   - `color/primary/50` ... `color/primary/900`
   - `color/secondary/50` ... (all primary colors with stops)
+  - `typography/font-family` (or `typography/font-family/heading` + `/body` when a second body font is chosen)
   - `typography/font-size/*`, `typography/line-height/*`, `typography/letter-spacing/*`
   - `spacing/*`, `radius/*`, `border-width/*`
 

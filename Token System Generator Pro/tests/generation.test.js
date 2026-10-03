@@ -24,11 +24,11 @@ async function test(name, fn) {
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg); }
 
-function request(doc, { approach, mode, fontFamily = 'Inter', confirmed = true }) {
+function request(doc, { approach, mode, fontFamily = 'Inter', bodyFontFamily, confirmed = true }) {
   const fig = createFigma(doc);
   fig.load(BUNDLE);
   const msg = { type: confirmed ? 'confirm-continue' : 'generate', approach, mode, fontFamily };
-  if (mode === 'scratch') Object.assign(msg, { colors: COLORS, spacingBase: 4, radiusBase: 4, widthBase: 1, fontBase: 16, ratioKey: 'major-third' });
+  if (mode === 'scratch') Object.assign(msg, { colors: COLORS, spacingBase: 4, radiusBase: 4, widthBase: 1, fontBase: 16, ratioKey: 'major-third', bodyFontFamily });
   return { fig, run: async () => { const p = fig.send(msg); const result = await fig.finished(); await p; return result; } };
 }
 
@@ -226,6 +226,108 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     const refs = JSON.stringify(out).match(/\{[^{}"]+\}/g) || [];
     assert(refs.length > 50, `only ${refs.length} alias references`);
     assert(refs.every(r => /^\{[^.]+\.[^{}]+\}$/.test(r)), 'malformed alias reference');
+  });
+
+  // ── Optional second font (body copy) ──
+  const textStyle = (fig, name) => fig.state.textStyles.find(s => s.name === name);
+  const varNamed = (fig, name) => fig.state.variables.find(v => v.name === name);
+  const HEADING_STYLES = ['Display/display-lg', 'Display/display-sm', 'Heading/h1', 'Heading/h6'];
+  const BODY_STYLES = ['Body copy/body-lg', 'Body copy/body', 'Body copy/caption', 'Body copy/xs'];
+
+  await test('one font (default): a single font-family variable, every text style uses it', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Georgia', confirmed: false });
+    const result = await run();
+    assert(result.type === 'generation-complete', result.message);
+    assert(varNamed(fig, 'typography/font-family'), 'missing typography/font-family');
+    assert(!fig.state.variables.some(v => /font-family\/(heading|body)/.test(v.name)), 'role variables created for a single font');
+    [...HEADING_STYLES, ...BODY_STYLES].forEach(n => {
+      assert(textStyle(fig, n).fontName.family === 'Georgia', `${n} uses ${textStyle(fig, n).fontName.family}`);
+      assert(textStyle(fig, n).bound.fontFamily === 'typography/font-family', `${n} bound to ${textStyle(fig, n).bound.fontFamily}`);
+    });
+  });
+
+  for (const approach of ['2tier', '3tier']) {
+    await test(`${approach}: two fonts split headings and body copy, with a variable and alias for each`, async () => {
+      const { fig, run } = request({}, { approach, mode: 'scratch', fontFamily: 'Playfair Display', bodyFontFamily: 'Source Sans 3', confirmed: false });
+      const result = await run();
+      assert(result.type === 'generation-complete' && result.warnings.length === 0, JSON.stringify(result));
+      const heading = varNamed(fig, 'typography/font-family/heading'), body = varNamed(fig, 'typography/font-family/body');
+      assert(heading && body, 'missing role variables');
+      assert(Object.values(heading.valuesByMode)[0] === 'Playfair Display' && Object.values(body.valuesByMode)[0] === 'Source Sans 3', 'wrong font values');
+      assert(!varNamed(fig, 'typography/font-family'), 'plain font-family variable should not exist when two fonts are used');
+      const aliases = fig.state.variables.filter(v => /^typography\/font-family\/(heading|body)$/.test(v.name) && Object.values(v.valuesByMode)[0].type === 'VARIABLE_ALIAS');
+      assert(aliases.length === 2, `expected 2 alias variables, got ${aliases.length}`);
+      HEADING_STYLES.forEach(n => {
+        assert(textStyle(fig, n).fontName.family === 'Playfair Display', `${n} uses ${textStyle(fig, n).fontName.family}`);
+        assert(textStyle(fig, n).bound.fontFamily === 'typography/font-family/heading', `${n} bound to ${textStyle(fig, n).bound.fontFamily}`);
+      });
+      BODY_STYLES.forEach(n => {
+        assert(textStyle(fig, n).fontName.family === 'Source Sans 3', `${n} uses ${textStyle(fig, n).fontName.family}`);
+        assert(textStyle(fig, n).bound.fontFamily === 'typography/font-family/body', `${n} bound to ${textStyle(fig, n).bound.fontFamily}`);
+      });
+    });
+  }
+
+  await test('choosing the same font twice behaves like one font', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Inter', bodyFontFamily: 'Inter', confirmed: false });
+    const result = await run();
+    assert(result.type === 'generation-complete' && varNamed(fig, 'typography/font-family') && !varNamed(fig, 'typography/font-family/body'), 'not treated as a single font');
+  });
+
+  await test('a blank body font means one font', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', bodyFontFamily: '', confirmed: false });
+    await run();
+    assert(varNamed(fig, 'typography/font-family') && !varNamed(fig, 'typography/font-family/heading'), 'blank body font created two variables');
+  });
+
+  await test('an unavailable body font falls back to Helvetica for body copy only, with a warning', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Inter', bodyFontFamily: 'Missing Font', confirmed: false });
+    const result = await run();
+    assert(result.type === 'generation-complete' && result.warnings.some(w => /Missing Font/.test(w) && /Helvetica/.test(w)), JSON.stringify(result));
+    assert(textStyle(fig, 'Heading/h1').fontName.family === 'Inter', 'heading font changed');
+    assert(textStyle(fig, 'Body copy/body').fontName.family === 'Helvetica', 'body font did not fall back');
+  });
+
+  for (const [label, body] of [['a number', 42], ['an over-long name', 'x'.repeat(300)], ['an object', { a: 1 }]]) {
+    await test(`rejects ${label} as the body font without touching the document`, async () => {
+      const fig = createFigma(EXISTING); fig.load(BUNDLE);
+      const before = fig.snapshot();
+      fig.send(scratchMsg({ bodyFontFamily: body }));
+      const result = await fig.finished();
+      assert(result.type === 'generation-failed' && fig.snapshot() === before, `got ${result.type}`);
+    });
+  }
+
+  await test('two-font generation: a failure at any step restores the document exactly', async () => {
+    const opts = { approach: '3tier', mode: 'scratch', fontFamily: 'Playfair Display', bodyFontFamily: 'Source Sans 3' };
+    const probe = request(EXISTING, opts);
+    await probe.run();
+    for (const op of ['createVariable', 'setValue', 'createTextStyle', 'createPaintStyle', 'loadFont']) {
+      const n = probe.fig.counts[op] || 0;
+      const points = new Set([1, 2, n, n - 1, Math.ceil(n / 2)]);
+      for (let k = 1; k <= n; k += Math.max(1, Math.floor(n / 20))) points.add(k);
+      for (const k of [...points].filter(k => k >= 1 && k <= n)) {
+        // A single loadFont failure is survivable (falls back to Helvetica); fail the fallback too.
+        const faults = op === 'loadFont' ? { loadFont: [k, k + 1] } : { [op]: k };
+        const { fig, run } = request({ ...EXISTING, faults }, opts);
+        const before = fig.snapshot();
+        const result = await run();
+        if (result.type === 'generation-complete') continue;   // font fallback absorbed it
+        assert(result.type === 'generation-failed' && result.leftover === 0, `${op} #${k}: ${result.type}`);
+        assert(fig.snapshot() === before, `${op} #${k}: document changed after a failed run`);
+      }
+    }
+  });
+
+  await test('JSON export types font tokens as fontFamily, including aliases to them', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Playfair Display', bodyFontFamily: 'Source Sans 3', confirmed: false });
+    await run();
+    fig.state.messages.length = 0;
+    await fig.send({ type: 'export-json' });
+    const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
+    const g = out['01 Global'].typography.fontFamily, a = out['02 Alias'].typography.fontFamily;
+    assert(g.heading.type === 'fontFamily' && g.heading.value === 'Playfair Display' && g.body.value === 'Source Sans 3', JSON.stringify(g));
+    assert(a.heading.type === 'fontFamily' && /^\{01 Global\.typography\.fontFamily\.heading\}$/.test(a.heading.value), JSON.stringify(a));
   });
 
   console.log(`\n${passed} passed, ${failed} failed`);

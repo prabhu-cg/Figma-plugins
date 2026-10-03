@@ -371,7 +371,15 @@
     };
   }
   async function createStarterSystem(tier) {
-    return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, "major-third", tier);
+    return buildFromScratch({
+      colors: STARTER_COLORS,
+      spacingBase: 4,
+      radiusBase: 4,
+      widthBase: 1,
+      fontBase: 16,
+      ratioKey: "major-third",
+      tier
+    });
   }
   async function convertStylesToTokens(tier) {
     const colorStyles = await figma.getLocalPaintStylesAsync();
@@ -527,10 +535,20 @@
     }
     return { entries, byValue };
   }
-  function createTypographyVariables(global, fontBase, ratioKey, font) {
+  function createTypographyVariables(global, fontBase, ratioKey, font, bodyFont) {
     const levels = generateTypographyScale(fontBase, ratioKey);
-    const fontFamily = figma.variables.createVariable("typography/font-family", global, "STRING");
-    fontFamily.setValueForMode(global.modes[0].modeId, font);
+    const modeId = global.modes[0].modeId;
+    const split = !!bodyFont && bodyFont !== font;
+    const makeFont = (name, value) => {
+      const v = figma.variables.createVariable(name, global, "STRING");
+      v.setValueForMode(modeId, value);
+      return v;
+    };
+    const fontFamily = split ? { heading: makeFont("typography/font-family/heading", font), body: makeFont("typography/font-family/body", bodyFont) } : (() => {
+      const v = makeFont("typography/font-family", font);
+      return { heading: v, body: v };
+    })();
+    const fonts = { heading: font, body: split ? bodyFont : font };
     const fontSize = {};
     const lineHeight = {};
     const letterSpacing = {};
@@ -539,7 +557,7 @@
       lineHeight[t.name] = createNumber(global, `typography/line-height/${t.name}`, lineHeightPx(t));
       letterSpacing[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, t.letterSpacing);
     }
-    return { levels, fontSize, lineHeight, letterSpacing, fontFamily };
+    return { levels, fontSize, lineHeight, letterSpacing, fontFamily, fonts };
   }
   function aliasScale(aliasCol, prefix, scale) {
     for (const [k, v] of scale.entries) {
@@ -560,7 +578,12 @@
     for (const key of SEMANTIC_KEYS) aliasRamp(key, `color/feedback/${key}`);
     aliasScale(aliasCol, "borderRadius", radius);
     aliasScale(aliasCol, "borderWidth", width);
-    alias(aliasCol, "typography/font-family", typo.fontFamily);
+    if (typo.fontFamily.heading === typo.fontFamily.body) {
+      alias(aliasCol, "typography/font-family", typo.fontFamily.heading);
+    } else {
+      alias(aliasCol, "typography/font-family/heading", typo.fontFamily.heading);
+      alias(aliasCol, "typography/font-family/body", typo.fontFamily.body);
+    }
     for (const t of typo.levels) {
       alias(aliasCol, `text/${t.name}/font-size`, typo.fontSize[t.name]);
       alias(aliasCol, `text/${t.name}/line-height`, typo.lineHeight[t.name]);
@@ -574,20 +597,27 @@
     if (["body-lg", "body", "caption", "xs"].includes(levelName)) return "Body copy";
     return "";
   }
-  async function createTextStyles(typo, font) {
+  async function createTextStyles(typo) {
     const created = [];
     for (const t of typo.levels) {
       const group = textStyleGroup(t.name);
       if (!group) continue;
-      const style = await createLocalTextStyle(`${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, font);
-      created.push({ style, level: t.name });
+      const role = group === "Body copy" ? "body" : "heading";
+      const style = await createLocalTextStyle(
+        `${group}/${t.name}`,
+        t.fontSize,
+        lineHeightPx(t),
+        t.fontSize * t.letterSpacing,
+        typo.fonts[role]
+      );
+      created.push({ style, level: t.name, role });
     }
-    for (const { style, level } of created) {
+    for (const { style, level, role } of created) {
       try {
         style.setBoundVariable("fontSize", typo.fontSize[level]);
         style.setBoundVariable("lineHeight", typo.lineHeight[level]);
         style.setBoundVariable("letterSpacing", typo.letterSpacing[level]);
-        style.setBoundVariable("fontFamily", typo.fontFamily);
+        style.setBoundVariable("fontFamily", typo.fontFamily[role]);
       } catch (_e) {
         warn(`Couldn't link a text style to its variables`);
       }
@@ -636,24 +666,24 @@
       alias(comp, "border/inverse", primary[900]);
     }
   }
-  async function buildFromScratch(colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, tier, fontFamily) {
-    const font = fontFamily || "Inter";
+  async function buildFromScratch(o) {
     const global = stageCollection("01 Global");
-    const { ramps, brandNames } = createGlobalColors(global, colors);
-    createSpacingVariables(global, spacingBase);
-    const radius = createScaleGlobals(global, "borderRadius", generateRadiusScale(radiusBase));
-    const width = createScaleGlobals(global, "borderWidth", generateBorderWidthScale(widthBase));
-    const typo = createTypographyVariables(global, fontBase, ratioKey, font);
+    const { ramps, brandNames } = createGlobalColors(global, o.colors);
+    createSpacingVariables(global, o.spacingBase);
+    const radius = createScaleGlobals(global, "borderRadius", generateRadiusScale(o.radiusBase));
+    const width = createScaleGlobals(global, "borderWidth", generateBorderWidthScale(o.widthBase));
+    const typo = createTypographyVariables(global, o.fontBase, o.ratioKey, o.fontFamily || "Inter", o.bodyFontFamily);
     const { colorAliases } = createAliasCollection(ramps, radius, width, typo);
-    await createTextStyles(typo, font);
+    await createTextStyles(typo);
     createPaintStyles(global, ramps, brandNames);
-    if (tier === "3tier") createComponentCollection(colorAliases);
+    if (o.tier === "3tier") createComponentCollection(colorAliases);
   }
   var newNode = () => /* @__PURE__ */ Object.create(null);
   var childNode = (parent, key) => {
     if (!Object.prototype.hasOwnProperty.call(parent, key)) parent[key] = newNode();
     return parent[key];
   };
+  var TOKEN_TYPES = { COLOR: "color", FLOAT: "dimension", STRING: "fontFamily", BOOLEAN: "boolean" };
   async function exportVariablesToJSON() {
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const allVars = await figma.variables.getLocalVariablesAsync();
@@ -694,24 +724,19 @@
       const colResult = childNode(result, colName);
       const mode = col.modes[0];
       allVars.filter((v) => v.variableCollectionId === col.id).forEach((v) => {
+        var _a2;
         if (isTypographyPart(v.name)) return;
         const val = v.valuesByMode[mode.modeId];
         const parts = v.name.split("/");
         let current = colResult;
         for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
-        let type = "unknown";
+        const type = (_a2 = TOKEN_TYPES[v.resolvedType]) != null ? _a2 : "unknown";
         let value = val;
         if (v.resolvedType === "COLOR" && val && typeof val === "object" && "r" in val) {
           value = colorToHex(val);
-          type = "color";
         } else if (val && typeof val === "object" && val.type === "VARIABLE_ALIAS") {
           const token = varTokens.get(val.id);
-          if (token) {
-            value = `{${token}}`;
-            type = "color";
-          }
-        } else if (v.resolvedType === "FLOAT") {
-          type = "dimension";
+          if (token) value = `{${token}}`;
         }
         current[toCamelCase(parts[parts.length - 1])] = { value, type };
       });
@@ -754,45 +779,48 @@
       figma.ui.postMessage({ type: "generation-failed", message, leftover });
     }
   }
-  async function runGeneration(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily) {
-    const blocked = await blockedReason(mode);
+  async function runGeneration(r) {
+    const blocked = await blockedReason(r.mode);
     if (blocked) {
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
     if (await tokensExist()) {
-      figma.ui.postMessage({ type: "confirm-replace", existing: await describeExisting(mode) });
+      figma.ui.postMessage({ type: "confirm-replace", existing: await describeExisting(r.mode) });
       return;
     }
-    await generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
+    await generate(r);
   }
-  async function generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily) {
+  function scratchOptions(r) {
+    if (!r.colors || r.spacingBase === void 0 || r.radiusBase === void 0 || r.widthBase === void 0 || r.fontBase === void 0 || !r.ratioKey) {
+      throw new Error("From Scratch settings are incomplete.");
+    }
+    return {
+      colors: r.colors,
+      spacingBase: r.spacingBase,
+      radiusBase: r.radiusBase,
+      widthBase: r.widthBase,
+      fontBase: r.fontBase,
+      ratioKey: r.ratioKey,
+      tier: r.approach,
+      fontFamily: r.fontFamily,
+      bodyFontFamily: r.bodyFontFamily
+    };
+  }
+  async function generate(r) {
     var _a;
-    const blocked = await blockedReason(mode);
+    const blocked = await blockedReason(r.mode);
     if (blocked) {
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
       return;
     }
     issues.clear();
-    const old = await snapshotExisting(mode);
-    const tier = approach === "3tier" ? "3tier" : "2tier";
+    const old = await snapshotExisting(r.mode);
+    const tier = r.approach;
     try {
-      if (mode === "scratch") {
-        await buildFromScratch(
-          colors,
-          spacingBase,
-          radiusBase,
-          widthBase != null ? widthBase : 1,
-          fontBase != null ? fontBase : 16,
-          ratioKey != null ? ratioKey : "major-third",
-          tier,
-          fontFamily
-        );
-      } else if (mode === "starter") {
-        await createStarterSystem(tier);
-      } else if (mode === "convert") {
-        await convertStylesToTokens(tier);
-      }
+      if (r.mode === "scratch") await buildFromScratch(scratchOptions(r));
+      else if (r.mode === "starter") await createStarterSystem(tier);
+      else if (r.mode === "convert") await convertStylesToTokens(tier);
     } catch (e) {
       const leftover = rollbackStaged();
       const reason = (_a = e == null ? void 0 : e.message) != null ? _a : String(e);
@@ -845,7 +873,12 @@
     if (typeof msg.fontFamily !== "string" || !msg.fontFamily || msg.fontFamily.length > 200) {
       throw new Error("Choose a font family.");
     }
+    const body = msg.bodyFontFamily;
+    if (body !== void 0 && body !== "" && (typeof body !== "string" || body.length > 200)) {
+      throw new Error("Body font is not valid.");
+    }
     return __spreadProps(__spreadValues({}, request), {
+      bodyFontFamily: body || void 0,
       colors,
       spacingBase: intInRange(msg.spacingBase, "spacingBase"),
       radiusBase: intInRange(msg.radiusBase, "radiusBase"),
@@ -877,9 +910,8 @@
     if (msg.type === "generate" || msg.type === "confirm-continue") {
       await exclusive(() => runSafely(async () => {
         const r = parseRequest(msg);
-        const args = [r.approach, r.mode, r.colors, r.spacingBase, r.radiusBase, r.widthBase, r.fontBase, r.ratioKey, r.fontFamily];
-        if (msg.type === "generate") await runGeneration(...args);
-        else await generate(...args);
+        if (msg.type === "generate") await runGeneration(r);
+        else await generate(r);
       }));
     }
     if (msg.type === "export-json") {
