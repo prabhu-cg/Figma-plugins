@@ -15,6 +15,9 @@ function stateOf(messages: PluginToUiMessage[]) {
   return m.project;
 }
 
+// The fake UI receives the live project object, so deep-copy when comparing before/after.
+const frozen = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
 async function createBaseline(send: Harness["send"], version = "1.0.0") {
   const discovered = await send({ type: "discover-components", scope: "document", pageIds: [] });
   const d = discovered.find((m) => m.type === "discovered-components");
@@ -259,6 +262,60 @@ describe("main.ts message handling", () => {
       };
       const msgs = await send({ type: "update-settings", settings: stateOf(await send({ type: "get-state" })).settings });
       expect(errorOf(msgs)).toMatch(/storage full|save|persist/i);
+    });
+
+    it("rolls back in-memory changes when persisting fails", async () => {
+      const { send } = await loadMainWithFakeFigma();
+      const baseline = await createBaseline(send);
+      const before = frozen(stateOf(await send({ type: "get-state" })));
+      const changeSet = before.changeSets.find((cs) => cs.baselineId === baseline.id)!;
+      const change = changeSet.changes[0]!;
+      const fig = (globalThis as never as { figma: { root: { setPluginData: () => void } } }).figma;
+      const originalSet = fig.root.setPluginData;
+      fig.root.setPluginData = () => {
+        throw new Error("storage full");
+      };
+
+      // Each of these mutates `project` before persist() throws.
+      expect(
+        errorOf(
+          await send({
+            type: "update-change",
+            changeSetId: changeSet.id,
+            changeId: change.id,
+            reviewNote: "should not stick",
+          }),
+        ),
+      ).toBeDefined();
+      expect(
+        errorOf(await send({ type: "mark-deprecated", entityId: change.entityId, kind: "component", displayName: "X" })),
+      ).toBeDefined();
+      expect(
+        errorOf(
+          await send({
+            type: "update-settings",
+            settings: { ...before.settings, tracking: { ...before.settings.tracking, tokens: !before.settings.tracking.tokens } },
+          }),
+        ),
+      ).toBeDefined();
+
+      fig.root.setPluginData = originalSet;
+      expect(frozen(stateOf(await send({ type: "get-state" })))).toEqual(before);
+    });
+
+    it("a failed scan does not leave a half-applied change set or stale scan cache", async () => {
+      const { send } = await loadMainWithFakeFigma();
+      await createBaseline(send);
+      const before = frozen(stateOf(await send({ type: "get-state" })));
+      const fig = (globalThis as never as { figma: { root: { setPluginData: () => void } } }).figma;
+      const originalSet = fig.root.setPluginData;
+      fig.root.setPluginData = () => {
+        throw new Error("storage full");
+      };
+      expect(errorOf(await send({ type: "scan" }))).toBeDefined();
+      fig.root.setPluginData = originalSet;
+
+      expect(stateOf(await send({ type: "get-state" })).changeSets).toHaveLength(before.changeSets.length);
     });
   });
 });

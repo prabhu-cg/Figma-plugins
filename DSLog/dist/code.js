@@ -1813,8 +1813,30 @@
       }
     };
   }
+  const READ_ONLY_MESSAGES = /* @__PURE__ */ new Set([
+    "ui-ready",
+    "get-state",
+    "discover-components",
+    "export",
+    "compare-releases",
+    "focus-node"
+  ]);
   async function handleMessage(message) {
     await ensureProject();
+    if (READ_ONLY_MESSAGES.has(message.type)) return applyMessage(message);
+    const backup = JSON.stringify(project);
+    const backupSnapshot = latestScannedSnapshot;
+    const backupSummary = latestScanSummary;
+    try {
+      await applyMessage(message);
+    } catch (error) {
+      project = JSON.parse(backup);
+      latestScannedSnapshot = backupSnapshot;
+      latestScanSummary = backupSummary;
+      throw error;
+    }
+  }
+  async function applyMessage(message) {
     switch (message.type) {
       case "ui-ready":
       case "get-state": {

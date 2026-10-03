@@ -140,9 +140,42 @@ async function captureSnapshot(
   };
 }
 
+// Messages that never change `project`, so they skip the rollback backup below.
+const READ_ONLY_MESSAGES: ReadonlySet<UiToPluginMessage["type"]> = new Set([
+  "ui-ready",
+  "get-state",
+  "discover-components",
+  "export",
+  "compare-releases",
+  "focus-node",
+]);
+
+/**
+ * Handlers mutate `project` in memory and only then call persist(). If anything
+ * throws (storage full, a scan error mid-way), the in-memory project would keep
+ * changes that never reached storage and the UI would show state that vanishes on
+ * reload. So back up before every mutating message and restore on failure.
+ * JSON round-trip rather than structuredClone: the latter isn't available in
+ * Figma's plugin sandbox, and Project is plain JSON (it's persisted as such).
+ */
 async function handleMessage(message: UiToPluginMessage): Promise<void> {
   await ensureProject();
+  if (READ_ONLY_MESSAGES.has(message.type)) return applyMessage(message);
 
+  const backup = JSON.stringify(project);
+  const backupSnapshot = latestScannedSnapshot;
+  const backupSummary = latestScanSummary;
+  try {
+    await applyMessage(message);
+  } catch (error) {
+    project = JSON.parse(backup) as Project;
+    latestScannedSnapshot = backupSnapshot;
+    latestScanSummary = backupSummary;
+    throw error;
+  }
+}
+
+async function applyMessage(message: UiToPluginMessage): Promise<void> {
   switch (message.type) {
     case "ui-ready":
     case "get-state": {
