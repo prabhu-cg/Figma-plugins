@@ -89,6 +89,10 @@
     const clamp = (v) => Math.min(1, Math.max(0, linearToSrgb(Math.min(1, Math.max(0, v)))));
     return { r: clamp(lin[0]), g: clamp(lin[1]), b: clamp(lin[2]) };
   }
+  function rgbToHex(r, g, b) {
+    const h = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
+    return `#${h(r)}${h(g)}${h(b)}`;
+  }
   var RAMP_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900];
   var STARTER_COLORS = {
     primary: "#3D6BE8",
@@ -339,6 +343,83 @@
   function webCodeSyntax(layerKey, name) {
     const parts = name.split("/").map((p) => kebab(p.replace(/-([a-z])/g, (_m, c) => c.toUpperCase())));
     return `var(--${[layerKey, ...parts].join("-")})`;
+  }
+  function relativeLuminance(c) {
+    const lin = (v) => v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+  }
+  function wcagRatio(a, b) {
+    const la = relativeLuminance(a), lb = relativeLuminance(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  function wcagLevel(ratio) {
+    if (ratio >= 7) return "AAA";
+    if (ratio >= 4.5) return "AA";
+    if (ratio >= 3) return "AA large";
+    return "Fail";
+  }
+  function apcaLc(text, background) {
+    const toY = (c) => 0.2126729 * Math.pow(c.r, 2.4) + 0.7151522 * Math.pow(c.g, 2.4) + 0.072175 * Math.pow(c.b, 2.4);
+    const soft = (y) => y < 0.022 ? y + Math.pow(0.022 - y, 1.414) : y;
+    const yt = soft(toY(text)), yb = soft(toY(background));
+    if (Math.abs(yb - yt) < 5e-4) return 0;
+    if (yb > yt) {
+      const sapc2 = (Math.pow(yb, 0.56) - Math.pow(yt, 0.57)) * 1.14;
+      return sapc2 < 0.1 ? 0 : (sapc2 - 0.027) * 100;
+    }
+    const sapc = (Math.pow(yb, 0.65) - Math.pow(yt, 0.62)) * 1.14;
+    return sapc > -0.1 ? 0 : (sapc + 0.027) * 100;
+  }
+  var WHITE = { r: 1, g: 1, b: 1 };
+  var BLACK = { r: 0, g: 0, b: 0 };
+  function analyzeRamp(ramp) {
+    const order = Object.keys(ramp).map(Number).sort((a, b) => a - b);
+    const stops = order.map((stop) => {
+      const c = ramp[stop];
+      const white = wcagRatio(c, WHITE), black = wcagRatio(c, BLACK);
+      const bestText = white >= black ? "white" : "black";
+      const bestRatio = Math.max(white, black);
+      return {
+        stop,
+        hex: rgbToHex(c.r, c.g, c.b),
+        white,
+        whiteLevel: wcagLevel(white),
+        black,
+        blackLevel: wcagLevel(black),
+        bestText,
+        bestRatio,
+        bestLevel: wcagLevel(bestRatio),
+        apca: apcaLc(bestText === "white" ? WHITE : BLACK, c)
+      };
+    });
+    const lightest = ramp[order[0]];
+    const passes = (s, against, min) => wcagRatio(ramp[s.stop], against) >= min;
+    const firstWhite = stops.find((s) => passes(s, WHITE, 4.5));
+    const lastBlack = [...stops].reverse().find((s) => passes(s, BLACK, 4.5));
+    const firstTint = stops.find((s) => s.stop !== order[0] && passes(s, lightest, 4.5));
+    return {
+      stops,
+      aaOnWhiteFrom: firstWhite ? firstWhite.stop : null,
+      aaOnBlackUpTo: lastBlack ? lastBlack.stop : null,
+      aaOnLightTintFrom: firstTint ? firstTint.stop : null
+    };
+  }
+  function brandColorNames(colors, keys) {
+    const names = {};
+    const used = /* @__PURE__ */ new Set();
+    for (const key of keys) {
+      const hex = colors[key];
+      if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+      let name = getColorName(hex);
+      if (used.has(name)) {
+        let i = 2;
+        while (used.has(`${name}-${i}`)) i++;
+        name = `${name}-${i}`;
+      }
+      used.add(name);
+      names[key] = name;
+    }
+    return names;
   }
 
   // code.ts
@@ -682,20 +763,9 @@
   }
   function createGlobalColors(global, colors) {
     const ramps = {};
-    const brandNames = {};
-    const used = /* @__PURE__ */ new Set();
+    const brandNames = brandColorNames(colors, BRAND_KEYS);
     for (const key of BRAND_KEYS) {
-      const hex = colors[key];
-      if (!hex || !HEX_RE.test(hex)) continue;
-      let name = getColorName(hex);
-      if (used.has(name)) {
-        let i = 2;
-        while (used.has(`${name}-${i}`)) i++;
-        name = `${name}-${i}`;
-      }
-      used.add(name);
-      brandNames[key] = name;
-      ramps[key] = createRampVariables(global, hex, name);
+      if (brandNames[key]) ramps[key] = createRampVariables(global, colors[key], brandNames[key]);
     }
     for (const key of SEMANTIC_KEYS) {
       const hex = colors[key];
@@ -1097,6 +1167,60 @@
     figma.notify(warnings.length ? `\u26A0\uFE0F Done with ${warnings.length} warning${warnings.length > 1 ? "s" : ""}` : "\u2705 Done!");
     figma.ui.postMessage({ type: "generation-complete", json, total, cols, warnings });
   }
+  var titleCase = (s) => s[0].toUpperCase() + s.slice(1);
+  function previewRamps(raw) {
+    if (!raw || typeof raw !== "object") return [];
+    const input = raw;
+    const colors = {};
+    for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+      const hex = input[key];
+      if (typeof hex === "string" && HEX_RE.test(hex)) colors[key] = hex;
+    }
+    const brandNames = brandColorNames(colors, BRAND_KEYS);
+    const reports = [];
+    for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+      if (!colors[key]) continue;
+      const name = BRAND_KEYS.includes(key) ? brandNames[key] : SEMANTIC_GLOBAL[key];
+      reports.push({ key, label: titleCase(key), name, contrast: analyzeRamp(generateColorRamp(colors[key])) });
+    }
+    return reports;
+  }
+  var ALIAS_COLOR_RE = /^colors?\/(?:(primary|secondary|tertiary|accent)|feedback\/(info|success|error|warning|neutral))\/(\d+)$/;
+  async function readFileRamps() {
+    var _a, _b;
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const alias2 = collections.find((c) => c.name === "02 Alias");
+    if (!alias2) return [];
+    const variables = await figma.variables.getLocalVariablesAsync();
+    const byId = new Map(variables.map((v) => [v.id, v]));
+    const resolve = (v) => {
+      let current = v;
+      for (let hops = 0; current && hops < 6; hops++) {
+        const collection = collections.find((c) => c.id === current.variableCollectionId);
+        const value = collection ? current.valuesByMode[collection.modes[0].modeId] : void 0;
+        if (value && typeof value === "object" && "r" in value) return { rgb: { r: value.r, g: value.g, b: value.b }, source: current.name };
+        if (value && typeof value === "object" && "id" in value) {
+          current = byId.get(value.id);
+          continue;
+        }
+        break;
+      }
+      return null;
+    };
+    const groups = /* @__PURE__ */ new Map();
+    for (const v of variables) {
+      if (v.variableCollectionId !== alias2.id) continue;
+      const m = ALIAS_COLOR_RE.exec(v.name);
+      if (!m) continue;
+      const resolved = resolve(v);
+      if (!resolved) continue;
+      const key = (_a = m[1]) != null ? _a : m[2];
+      if (!groups.has(key)) groups.set(key, { label: titleCase(key), ramp: {}, name: (_b = resolved.source.split("/")[1]) != null ? _b : key });
+      groups.get(key).ramp[Number(m[3])] = resolved.rgb;
+    }
+    const order = [...BRAND_KEYS, ...SEMANTIC_KEYS];
+    return Array.from(groups.entries()).filter(([, g]) => Object.keys(g.ramp).length >= 2).sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0])).map(([key, g]) => ({ key, label: g.label, name: g.name, contrast: analyzeRamp(g.ramp) }));
+  }
   var LIMITS = {
     spacingBase: { min: 1, max: 32, label: "Spacing base unit" },
     radiusBase: { min: 0, max: 64, label: "Border radius base" },
@@ -1182,7 +1306,7 @@
     if (generating) rollbackStaged();
   });
   figma.ui.onmessage = async (msg) => {
-    var _a, _b;
+    var _a, _b, _c;
     if (msg.type === "generate" || msg.type === "confirm-continue") {
       await exclusive(() => runSafely(async () => {
         const r = parseRequest(msg);
@@ -1217,6 +1341,16 @@
         figma.notify(`\u26A0\uFE0F Couldn't read existing variables: ${(_b = e == null ? void 0 : e.message) != null ? _b : String(e)}`);
       }
       figma.ui.postMessage(__spreadValues({ type: "tokens-status" }, status));
+    }
+    if (msg.type === "preview-ramps") {
+      figma.ui.postMessage({ type: "ramp-preview", ramps: previewRamps(msg.colors) });
+    }
+    if (msg.type === "check-contrast") {
+      try {
+        figma.ui.postMessage({ type: "contrast-data", ramps: await readFileRamps() });
+      } catch (e) {
+        figma.ui.postMessage({ type: "contrast-data", ramps: [], error: (_c = e == null ? void 0 : e.message) != null ? _c : String(e) });
+      }
     }
     if (msg.type === "get-fonts") {
       try {

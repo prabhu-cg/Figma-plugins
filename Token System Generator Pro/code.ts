@@ -1,8 +1,9 @@
 import {
   RAMP_STOPS, STARTER_COLORS, TypeLevel, TS_RATIO,
   generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
-  generateBorderWidthScale, getColorName, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey,
-  ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS, scopesFor, webCodeSyntax, ScopeLayer, weightFromStyleName, FONT_WEIGHT_NAMES,
+  generateBorderWidthScale, pickFontStyle, TYPE_LEVEL_NAMES, collectionKey,
+  ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS, scopesFor, webCodeSyntax, ScopeLayer,
+  analyzeRamp, brandColorNames, RampContrast, weightFromStyleName, FONT_WEIGHT_NAMES,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -494,21 +495,9 @@ function createGlobalColors(
   colors: ScratchColors
 ): { ramps: Ramps; brandNames: Record<string, string> } {
   const ramps: Ramps = {};
-  const brandNames: Record<string, string> = {};
-  const used = new Set<string>();
-
+  const brandNames = brandColorNames(colors as unknown as Record<string, string>, BRAND_KEYS);
   for (const key of BRAND_KEYS) {
-    const hex = colors[key];
-    if (!hex || !HEX_RE.test(hex)) continue;
-    let name = getColorName(hex);
-    if (used.has(name)) {
-      let i = 2;
-      while (used.has(`${name}-${i}`)) i++;
-      name = `${name}-${i}`;
-    }
-    used.add(name);
-    brandNames[key] = name;
-    ramps[key] = createRampVariables(global, hex, name);
+    if (brandNames[key]) ramps[key] = createRampVariables(global, colors[key], brandNames[key]);
   }
 
   for (const key of SEMANTIC_KEYS) {
@@ -992,6 +981,79 @@ async function generate(r: GenerateRequest): Promise<void> {
   figma.ui.postMessage({ type: 'generation-complete', json, total, cols, warnings });
 }
 
+// ─── CONTRAST + PREVIEW ──────────────────────────────────────────
+
+interface RampReport {
+  key: string;        // primary, secondary, … info, success, …
+  label: string;      // "Primary", "Info"
+  name: string;       // the colour's name ("cobalt")
+  contrast: RampContrast;
+}
+
+const titleCase = (s: string): string => s[0].toUpperCase() + s.slice(1);
+
+// The ramps From Scratch would generate for the colours typed so far, with their contrast.
+// Anything that isn't a valid hex yet is skipped, so this is safe to call on every keystroke.
+function previewRamps(raw: unknown): RampReport[] {
+  if (!raw || typeof raw !== 'object') return [];
+  const input = raw as Record<string, unknown>;
+  const colors: Record<string, string> = {};
+  for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+    const hex = input[key];
+    if (typeof hex === 'string' && HEX_RE.test(hex)) colors[key] = hex;
+  }
+  const brandNames = brandColorNames(colors, BRAND_KEYS);
+  const reports: RampReport[] = [];
+  for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
+    if (!colors[key]) continue;
+    const name = (BRAND_KEYS as readonly string[]).includes(key) ? brandNames[key] : SEMANTIC_GLOBAL[key as typeof SEMANTIC_KEYS[number]];
+    reports.push({ key, label: titleCase(key), name, contrast: analyzeRamp(generateColorRamp(colors[key])) });
+  }
+  return reports;
+}
+
+const ALIAS_COLOR_RE = /^colors?\/(?:(primary|secondary|tertiary|accent)|feedback\/(info|success|error|warning|neutral))\/(\d+)$/;
+
+// The colour ramps in this file's Alias collection, with their contrast. Each Alias colour is
+// followed to the Global colour it points at.
+async function readFileRamps(): Promise<RampReport[]> {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+  const alias = collections.find(c => c.name === '02 Alias');
+  if (!alias) return [];
+  const variables = await figma.variables.getLocalVariablesAsync();
+  const byId = new Map(variables.map(v => [v.id, v]));
+
+  const resolve = (v: Variable | undefined): { rgb: RGB; source: string } | null => {
+    let current = v;
+    for (let hops = 0; current && hops < 6; hops++) {
+      const collection = collections.find(c => c.id === current!.variableCollectionId);
+      const value = collection ? current.valuesByMode[collection.modes[0].modeId] : undefined;
+      if (value && typeof value === 'object' && 'r' in value) return { rgb: { r: value.r, g: value.g, b: value.b }, source: current.name };
+      if (value && typeof value === 'object' && 'id' in value) { current = byId.get(value.id); continue; }
+      break;
+    }
+    return null;
+  };
+
+  const groups = new Map<string, { label: string; ramp: Record<number, RGB>; name: string }>();
+  for (const v of variables) {
+    if (v.variableCollectionId !== alias.id) continue;
+    const m = ALIAS_COLOR_RE.exec(v.name);
+    if (!m) continue;
+    const resolved = resolve(v);
+    if (!resolved) continue;
+    const key = m[1] ?? m[2];
+    if (!groups.has(key)) groups.set(key, { label: titleCase(key), ramp: {}, name: resolved.source.split('/')[1] ?? key });
+    groups.get(key)!.ramp[Number(m[3])] = resolved.rgb;
+  }
+
+  const order = [...BRAND_KEYS, ...SEMANTIC_KEYS] as readonly string[];
+  return Array.from(groups.entries())
+    .filter(([, g]) => Object.keys(g.ramp).length >= 2)
+    .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+    .map(([key, g]) => ({ key, label: g.label, name: g.name, contrast: analyzeRamp(g.ramp) }));
+}
+
 // ─── MESSAGES ────────────────────────────────────────────────────
 
 type Mode = 'scratch' | 'starter' | 'convert';
@@ -1147,6 +1209,16 @@ figma.ui.onmessage = async (msg: UiMessage) => {
       figma.notify(`⚠️ Couldn't read existing variables: ${(e as { message?: string } | null)?.message ?? String(e)}`);
     }
     figma.ui.postMessage({ type: 'tokens-status', ...status });
+  }
+  if (msg.type === 'preview-ramps') {
+    figma.ui.postMessage({ type: 'ramp-preview', ramps: previewRamps(msg.colors as unknown) });
+  }
+  if (msg.type === 'check-contrast') {
+    try {
+      figma.ui.postMessage({ type: 'contrast-data', ramps: await readFileRamps() });
+    } catch (e) {
+      figma.ui.postMessage({ type: 'contrast-data', ramps: [], error: (e as { message?: string } | null)?.message ?? String(e) });
+    }
   }
   if (msg.type === 'get-fonts') {
     try {

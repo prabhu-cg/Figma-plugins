@@ -193,6 +193,47 @@
     .output-options { margin-top: 16px; }
     .output-options > strong { display: block; font-size: 12px; font-weight: 600; color: #111; }
 
+    /* ── Color ramps: live preview + contrast screen ── */
+    .ramp-empty { font-size: 11.5px; color: #888; line-height: 1.5; padding: 14px 12px; background: white; border: 1.5px dashed #e3e3e3; border-radius: 8px; text-align: center; }
+    .ramp-empty.error { color: #8a1c1c; background: #fdecec; border-color: #f3b7b7; border-style: solid; }
+    .ramp-axis, .ramp-row { display: grid; grid-template-columns: 78px repeat(10, minmax(0, 1fr)); column-gap: 3px; align-items: center; }
+    .ramp-axis { margin-top: 10px; }
+    .ramp-axis span { font: 11px 'Menlo','Consolas',monospace; color: #888; text-align: center; }
+    .ramp-block { margin-top: 8px; }
+    .ramp-name { grid-column: 1; min-width: 0; }
+    .ramp-name strong { display: block; font-size: 12px; font-weight: 600; color: #111; line-height: 1.3; }
+    .ramp-name span { display: block; font-size: 11px; color: #888; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ramp-swatch { height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; line-height: 1; box-shadow: inset 0 0 0 1px rgba(0,0,0,.06); }
+    .ramp-note { margin: 4px 0 0 81px; font-size: 11px; color: #777; line-height: 1.5; }
+
+    .contrast-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 4px; }
+    .contrast-legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: #555; }
+    .lvl { display: inline-block; min-width: 0; padding: 1px 3px; border-radius: 3px; font-size: 11px; font-weight: 700; line-height: 1.35; letter-spacing: 0; color: white; font-style: normal; }
+    .lvl-aaa  { background: #15803d; }
+    .lvl-aa   { background: #4d7c0f; }
+    .lvl-lg   { background: #b45309; }
+    .lvl-fail { background: #b91c1c; }
+    .contrast-help { font-size: 11px; color: #777; line-height: 1.55; margin: 8px 0 2px; }
+    .contrast-ramp { margin-top: 18px; padding-top: 14px; border-top: 1px solid #eee; }
+    .contrast-ramp:first-of-type { border-top: none; padding-top: 0; margin-top: 12px; }
+    .contrast-ramp h3 { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 8px; }
+    .contrast-ramp h3 span { font-size: 11px; font-weight: 400; color: #888; margin-left: 6px; }
+    .contrast-cols { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); column-gap: 3px; }
+    .contrast-col { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+    .contrast-col .ramp-swatch { width: 100%; height: 36px; }
+    .contrast-col .stop  { font: 11px 'Menlo','Consolas',monospace; color: #888; }
+    .contrast-pair { display: grid; grid-template-columns: auto 8px; grid-template-rows: auto auto; column-gap: 3px; row-gap: 2px; align-items: center; justify-items: center; }
+    .contrast-pair .ratio { font: 600 11px 'Menlo','Consolas',monospace; color: #111; font-variant-numeric: tabular-nums; }
+    .contrast-pair .lvl { grid-column: 1 / -1; }
+    .tone { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.35); }
+    .tone-white { background: #fff; }
+    .tone-black { background: #000; }
+    .contrast-col { gap: 5px; }
+    .contrast-col .lc    { font: 11px 'Menlo','Consolas',monospace; letter-spacing: -.02em; color: #777; font-variant-numeric: tabular-nums; margin-top: 1px; }
+    .contrast-summary { list-style: none; margin-top: 8px; display: flex; flex-direction: column; gap: 2px; }
+    .contrast-summary li { font-size: 11px; color: #555; line-height: 1.5; }
+    .contrast-summary li b { color: #111; font-weight: 600; }
+
     /* ── Hint ── */
     .hint { font-size: 11px; color: #c0c0c0; text-align: center; margin-top: 10px; }
 
@@ -365,6 +406,20 @@
           <div class="card-desc">Start fresh — replace existing variables with a new token system.</div>
         </div>
       </div>
+      <div class="cards" style="flex-direction:column; gap:8px; margin-top:12px;">
+        <div class="card" id="card-contrast" onclick="openContrast('screen-landing')" style="flex-direction:row; align-items:center; gap:12px; padding:12px 14px;">
+          <div class="card-icon-wrap" style="flex-shrink:0">
+            <svg class="card-icon" width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+              <circle cx="11" cy="11" r="8.5" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M11 2.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/>
+            </svg>
+          </div>
+          <div style="flex:1; min-width:0;">
+            <div class="card-title">Check contrast</div>
+            <div class="card-desc">See how each color ramp performs as text and background, with WCAG and APCA scores.</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -516,6 +571,12 @@
           <input class="color-input" id="inp-neutral" type="text" value="#6B7280" oninput="onColorInput('neutral')">
           <p class="color-desc">Grey scale for backgrounds, borders, dividers, and disabled states. Pick a mid-grey.</p>
         </div>
+      </div>
+
+      <div class="scale-section" id="ramp-preview-section">
+        <span class="color-section-label">Color ramps</span>
+        <div class="scale-hint" style="margin-top:0">Updates as you type. Stop 500 is your exact color. Each "Aa" is in the better text color for that swatch, white or black.</div>
+        <div id="ramp-preview" aria-live="polite"></div>
       </div>
 
       <div class="scale-section">
@@ -713,6 +774,30 @@
   </div>
 
   <!-- ══════════════════════════════════════
+       CONTRAST CHECK
+  ══════════════════════════════════════ -->
+  <div class="screen slide-out-right" id="screen-contrast">
+    <div class="top-nav">
+      <button class="back-btn" onclick="closeContrast()">← Back</button>
+      <span class="approach-badge">WCAG + APCA</span>
+    </div>
+    <div class="screen-body" style="padding-top:14px">
+      <div class="section-heading">
+        <strong>Check contrast</strong>
+        <p>How each color ramp works as text and as a background.</p>
+      </div>
+      <div class="contrast-legend" aria-label="Legend">
+        <span><i class="lvl lvl-aaa">AAA</i> 7 or more</span>
+        <span><i class="lvl lvl-aa">AA</i> 4.5 or more</span>
+        <span><i class="lvl lvl-lg">Large</i> 3 or more, large text only</span>
+        <span><i class="lvl lvl-fail">Fail</i> below 3</span>
+      </div>
+      <p class="contrast-help">Under each swatch: the WCAG ratio and level with white text (white dot) and with black text (black dot). The Lc is APCA for the better of the two; negative means light text on a dark color. APCA is a draft standard, so treat it as a second opinion.</p>
+      <div id="contrast-body" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
        SCREEN 4 — Done + Export
   ══════════════════════════════════════ -->
   <div class="screen slide-out-right" id="screen4">
@@ -742,6 +827,7 @@
         <button class="btn-secondary" onclick="downloadJSON()">Download tokens.json</button>
       </div>
       <div class="export-footer">
+        <button class="btn-ghost" onclick="openContrast('screen4')">Check contrast</button>
         <button class="btn-ghost" onclick="refreshJSON()">↺ Refresh JSON</button>
         <button class="btn-ghost" onclick="startOver()">← Start over</button>
       </div>
@@ -811,7 +897,7 @@
     document.getElementById('badge3').textContent = labels[value];
 
     setTimeout(() => {
-      if (value === 'scratch') goTo('screen2', 'left');
+      if (value === 'scratch') { goTo('screen2', 'left'); requestPreview(); }
       else goTo('screen3', 'left');
     }, 200);
   }
@@ -873,6 +959,135 @@
     return val.startsWith('#') ? val : '#' + val;
   }
 
+  // ── Color ramps: live preview + contrast screen ────────────────
+  // The plugin does the color math (so the preview and the generated tokens can't disagree);
+  // the panel only draws what it is sent.
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const LEVELS = {
+    'AAA':      { cls: 'lvl-aaa',  text: 'AAA'   },
+    'AA':       { cls: 'lvl-aa',   text: 'AA'    },
+    'AA large': { cls: 'lvl-lg',   text: 'Large' },
+    'Fail':     { cls: 'lvl-fail', text: 'Fail'  },
+  };
+  const ratioText = (r) => (Math.floor(r * 10) / 10).toFixed(1);   // never round a 4.49 up to a passing 4.5
+  const lcText = (lc) => String(Math.round(lc));
+
+  function swatch(s, label) {
+    const node = el('div', 'ramp-swatch', 'Aa');
+    node.style.background = s.hex;
+    node.style.color = s.bestText === 'white' ? '#ffffff' : '#000000';
+    node.setAttribute('role', 'img');
+    node.setAttribute('aria-label',
+      `${label} ${s.stop}, ${s.hex}. ${s.bestText} text: ${ratioText(s.bestRatio)} to 1, ${s.bestLevel}, APCA Lc ${lcText(s.apca)}`);
+    node.title = `${s.stop} · ${s.hex}\nBest text: ${s.bestText}, ${ratioText(s.bestRatio)}:1 (${s.bestLevel}), Lc ${lcText(s.apca)}\nvs white ${ratioText(s.white)}:1 · vs black ${ratioText(s.black)}:1`;
+    return node;
+  }
+
+  function summaryParts(c) {
+    const first = c.stops[0].stop;
+    return [
+      c.aaOnWhiteFrom     !== null ? ['Text on white', `AA from ${c.aaOnWhiteFrom}`]     : ['Text on white', 'no stop reaches AA'],
+      c.aaOnBlackUpTo     !== null ? ['Text on black', `AA up to ${c.aaOnBlackUpTo}`]    : ['Text on black', 'no stop reaches AA'],
+      c.aaOnLightTintFrom !== null ? [`Text on the ${first} tint`, `AA from ${c.aaOnLightTintFrom}`] : [`Text on the ${first} tint`, 'no stop reaches AA'],
+    ];
+  }
+
+  function renderRamps(container, ramps, detailed) {
+    container.textContent = '';
+    ramps.forEach((r) => {
+      const c = r.contrast;
+      if (!detailed) {
+        if (!container.querySelector('.ramp-axis')) {
+          const axis = el('div', 'ramp-axis'); axis.appendChild(el('span'));
+          c.stops.forEach((s) => axis.appendChild(el('span', '', String(s.stop))));
+          container.appendChild(axis);
+        }
+        const block = el('div', 'ramp-block');
+        const row = el('div', 'ramp-row');
+        const name = el('div', 'ramp-name'); name.append(el('strong', '', r.label), el('span', '', r.name));
+        row.appendChild(name);
+        c.stops.forEach((s) => row.appendChild(swatch(s, r.label)));
+        block.appendChild(row);
+        const [w, b] = summaryParts(c);
+        block.appendChild(el('p', 'ramp-note', `${w[0]}: ${w[1]} · on black: ${b[1]}`));
+        container.appendChild(block);
+        return;
+      }
+      const sec = el('section', 'contrast-ramp');
+      const h = el('h3', '', r.label); h.appendChild(el('span', '', r.name));
+      sec.appendChild(h);
+      const cols = el('div', 'contrast-cols');
+      c.stops.forEach((s) => {
+        const col = el('div', 'contrast-col');
+        col.append(swatch(s, r.label), el('span', 'stop', String(s.stop)));
+        [['white', s.white, s.whiteLevel], ['black', s.black, s.blackLevel]].forEach(([tone, ratio, level]) => {
+          const pair = el('div', 'contrast-pair');
+          const mark = el('i', `tone tone-${tone}`);
+          mark.title = `${tone} text`;
+          const lvl = LEVELS[level];
+          pair.append(el('span', 'ratio', ratioText(ratio)), mark, el('i', `lvl ${lvl.cls}`, lvl.text));
+          pair.setAttribute('aria-label', `${tone} text: ${ratioText(ratio)} to 1, ${level}`);
+          col.appendChild(pair);
+        });
+        col.append(el('span', 'lc', `Lc ${lcText(s.apca)}`));
+        cols.appendChild(col);
+      });
+      sec.appendChild(cols);
+      const list = el('ul', 'contrast-summary');
+      summaryParts(c).forEach(([k, v]) => { const li = el('li'); li.append(el('b', '', `${k}: `), document.createTextNode(v)); list.appendChild(li); });
+      sec.appendChild(list);
+      container.appendChild(sec);
+    });
+  }
+
+  function showRampPreview(ramps) {
+    const box = document.getElementById('ramp-preview');
+    if (!ramps.length) {
+      box.textContent = '';
+      box.appendChild(el('div', 'ramp-empty', 'Enter a valid hex color above to see its ramp here.'));
+      return;
+    }
+    renderRamps(box, ramps, false);
+  }
+
+  let previewTimer = null;
+  function requestPreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      const colors = {};
+      ALL_COLOR_FIELDS.forEach((f) => { colors[f] = normalizeHex(document.getElementById('inp-' + f).value); });
+      parent.postMessage({ pluginMessage: { type: 'preview-ramps', colors } }, '*');
+    }, 120);
+  }
+
+  let contrastFrom = 'screen-landing';
+  function openContrast(from) {
+    contrastFrom = from;
+    const body = document.getElementById('contrast-body');
+    body.textContent = '';
+    body.appendChild(el('div', 'ramp-empty', 'Reading your color variables…'));
+    goTo('screen-contrast', 'left');
+    parent.postMessage({ pluginMessage: { type: 'check-contrast' } }, '*');
+  }
+  function closeContrast() { goTo(contrastFrom, 'right'); }
+
+  function showContrast(msg) {
+    const body = document.getElementById('contrast-body');
+    body.textContent = '';
+    if (msg.error) {
+      body.appendChild(el('div', 'ramp-empty error', `Couldn't read your variables: ${msg.error}`));
+    } else if (!msg.ramps.length) {
+      body.appendChild(el('div', 'ramp-empty', 'No color ramps found. Generate a token system first, or open a file whose Alias collection has color/primary/50 … 900 style variables.'));
+    } else {
+      renderRamps(body, msg.ramps, true);
+    }
+  }
+
   function onColorInput(field) {
     const input  = document.getElementById('inp-' + field);
     const swatch = document.getElementById('sw-' + field);
@@ -882,6 +1097,7 @@
     swatch.classList.toggle('invalid', !valid);
     input.classList.toggle('invalid', input.value !== '' && !valid);
     validateScreen2();
+    requestPreview();
   }
 
   function onSpacingInput() {
@@ -1205,6 +1421,9 @@
       showExport(msg.json, msg.total, msg.cols, msg.warnings);
     }
 
+    if (msg.type === 'ramp-preview') showRampPreview(msg.ramps || []);
+    if (msg.type === 'contrast-data') showContrast(msg);
+
     if (msg.type === 'fonts-list') {
       availableFonts = msg.fonts || [];
       ['inp-font-family', 'inp-font-body'].forEach(id => {
@@ -1227,6 +1446,7 @@
   onWidthInput();
   onTypoInput();
   parent.postMessage({ pluginMessage: { type: 'check-tokens' } }, '*');
+  requestPreview();
 
   // Every screen starts hidden and one is revealed by the plugin's first reply. If that reply
   // never arrives, show the first screen anyway rather than leaving the panel blank.

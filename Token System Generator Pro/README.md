@@ -23,6 +23,8 @@ Token System Generator Pro creates Figma Variable collections in a 2-tier (Globa
 - **Spacing** — 10 values from a configurable base unit
 - **Border radius** — 7 values (none, sm, md, lg, xl, 2xl, full)
 - **Border width** — 5 values (none, sm, md, lg, xl)
+- **Live ramp preview** — on the From Scratch screen, every color you enter shows its ramp as you type, using exactly the colors that will be generated
+- **Contrast checker** — shows each color ramp (from the preview, or from the Alias collection of a file that already has tokens) with WCAG 2 ratios and levels (AAA, AA, AA large) for white and black text on every stop, the APCA Lc, and a summary such as "text on white: AA from 500". It only reads your variables
 - **Other tokens** (From Scratch and Starter, each optional) — **elevation** (5 shadow levels as variables plus matching `Elevation/*` effect styles), an **opacity** scale (6 steps, 0–100) and **z-index** layers (base to tooltip)
 - **Local styles** (From Scratch and Starter) — a paint style per color stop, text styles (Display, Heading, Body copy) and, with elevation, effect styles, all bound to the variables
 - **Scopes and code syntax** — variable scopes keep Figma's pickers tidy (Global primitives that have an Alias counterpart are hidden), and every variable gets a web code syntax such as `var(--alias-color-primary-500)` for Dev Mode. Both can be switched off
@@ -184,7 +186,7 @@ In Figma: **Plugins → Development → Import plugin from manifest…** and cho
 
 ### Project structure
 - `code.ts` — plugin logic: generation, staging and rollback, messages, JSON export
-- `algorithms.ts` — pure functions with no Figma API: OKLCH conversion and ramps, type scale, spacing, radius, font-weight matching
+- `algorithms.ts` — pure functions with no Figma API: OKLCH conversion and ramps, WCAG and APCA contrast, type scale, spacing, radius, font-weight matching
 - `ui.html` — the panel: wizard screens, inputs, confirmation dialog, JSON view
 - `tests/algorithms.test.js` — OKLCH conversions, ramps, type scale, font weights
 - `tests/generation.test.js` + `tests/figma-mock.js` — run the real plugin against an in-memory Figma mock; include failure injection (a failed run must leave the file unchanged)
@@ -199,11 +201,11 @@ In Figma: **Plugins → Development → Import plugin from manifest…** and cho
 - Opacity, z-index and elevation have no Alias layer; they live in Global.
 
 ## Ideas for next
-1. **Contrast checker** — WCAG and APCA checks for color ramps and semantic pairs
+1. **Contrast fixes** — suggest or apply the nearest passing stop for failing pairs
 2. **Dark Mode Generator** — a dark mode from the light palette
 3. **Import from JSON** — Style Dictionary JSON back into Figma variables
 4. **Token Health Audit** — flag duplicates, off-scale values and missing aliases
-5. **Live ramp preview** and an optional foundation drawn on the canvas
+5. **Foundation on the canvas** — optionally draw the ramps, type scale and spacing as a labeled frame
 6. **More token types** — motion, breakpoints, sizing
 
 ## License

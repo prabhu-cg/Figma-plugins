@@ -23,6 +23,7 @@ const {
   rgbToOklch, oklchToRgb, STARTER_COLORS,
   weightFromStyleName, pickFontStyle, collectionKey,
   scopesFor, webCodeSyntax, ELEVATION_LEVELS, OPACITY_STEPS, Z_INDEX_LAYERS,
+  relativeLuminance, wcagRatio, wcagLevel, apcaLc, apcaUse, analyzeRamp, brandColorNames,
 } = require('../.test-build/algorithms.js');
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -297,6 +298,79 @@ test('elevation levels never shrink in offset or opacity and always grow in blur
   for (let i = 1; i < OPACITY_STEPS.length; i++) if (OPACITY_STEPS[i] <= OPACITY_STEPS[i - 1]) throw new Error('opacity not ascending');
   assertEqual([OPACITY_STEPS[0], OPACITY_STEPS[OPACITY_STEPS.length - 1]], [0, 100]);
   for (let i = 1; i < Z_INDEX_LAYERS.length; i++) if (Z_INDEX_LAYERS[i][1] <= Z_INDEX_LAYERS[i - 1][1]) throw new Error('z-index not ascending');
+});
+
+const WHITE = hexToRgb('#ffffff'), BLACK = hexToRgb('#000000');
+
+test('wcagRatio matches reference values', () => {
+  assertApprox(wcagRatio(BLACK, WHITE), 21, 0.001);
+  assertApprox(wcagRatio(WHITE, WHITE), 1, 0.001);
+  assertApprox(wcagRatio(hexToRgb('#767676'), WHITE), 4.54, 0.01);   // the lightest grey that passes AA on white
+  assertApprox(wcagRatio(hexToRgb('#777777'), WHITE), 4.48, 0.01);   // just fails
+  assertApprox(wcagRatio(BLACK, WHITE), wcagRatio(WHITE, BLACK), 1e-9);
+});
+test('wcagLevel thresholds: 7 AAA, 4.5 AA, 3 AA large', () => {
+  assertEqual([7, 6.99, 4.5, 4.49, 3, 2.99, 1].map(wcagLevel), ['AAA', 'AA', 'AA', 'AA large', 'AA large', 'Fail', 'Fail']);
+});
+test('relativeLuminance: white is 1, black is 0, green outweighs blue', () => {
+  assertApprox(relativeLuminance(WHITE), 1, 1e-9); assertApprox(relativeLuminance(BLACK), 0, 1e-9);
+  if (!(relativeLuminance(hexToRgb('#00ff00')) > relativeLuminance(hexToRgb('#0000ff')))) throw new Error('weights wrong');
+});
+test('apcaLc matches reference values and is polarity dependent', () => {
+  assertApprox(apcaLc(BLACK, WHITE), 106.04, 0.05);
+  assertApprox(apcaLc(WHITE, BLACK), -107.88, 0.05);
+  assertApprox(apcaLc(hexToRgb('#888888'), WHITE), 63.06, 0.05);
+  assertEqual(apcaLc(WHITE, WHITE), 0);
+  if (!(apcaLc(WHITE, hexToRgb('#888888')) < 0)) throw new Error('light text on mid grey should be negative');
+});
+test('apcaUse maps Lc magnitude to a use', () => {
+  assertEqual([95, 80, 65, 50, 35, 10, -108].map(apcaUse), ['Any text', 'Body text', 'Content text', 'Large text', 'Spot use', 'Not for text', 'Any text']);
+});
+test('analyzeRamp: ratios rise toward white-dark stops and fall toward black', () => {
+  for (const hex of Object.values(STARTER_COLORS)) {
+    const r = analyzeRamp(generateColorRamp(hex));
+    for (let i = 1; i < r.stops.length; i++) {
+      if (!(r.stops[i].white >= r.stops[i - 1].white - 1e-9)) throw new Error(`${hex}: white ratio falls at ${r.stops[i].stop}`);
+      if (!(r.stops[i].black <= r.stops[i - 1].black + 1e-9)) throw new Error(`${hex}: black ratio rises at ${r.stops[i].stop}`);
+    }
+  }
+});
+test('analyzeRamp: bestText is the higher-contrast of white and black, and its APCA sign agrees', () => {
+  const r = analyzeRamp(generateColorRamp('#3D6BE8'));
+  for (const s of r.stops) {
+    assertEqual(s.bestText, s.white >= s.black ? 'white' : 'black', `stop ${s.stop}`);
+    assertApprox(s.bestRatio, Math.max(s.white, s.black), 1e-9);
+    if ((s.bestText === 'white') !== (s.apca < 0)) throw new Error(`stop ${s.stop}: apca sign ${s.apca}`);
+  }
+});
+test('analyzeRamp summary: lowest AA stop on white, highest AA stop on black, and on the lightest tint', () => {
+  const ramp = generateColorRamp('#3D6BE8'), r = analyzeRamp(ramp);
+  assertEqual(r.aaOnWhiteFrom, 500); assertEqual(r.aaOnBlackUpTo, 400); assertEqual(r.aaOnLightTintFrom, 600);
+  const at = (s) => r.stops.find(x => x.stop === s);
+  if (!(at(r.aaOnWhiteFrom).white >= 4.5 && at(r.aaOnWhiteFrom - 100).white < 4.5)) throw new Error('white boundary off');
+  if (!(at(r.aaOnBlackUpTo).black >= 4.5 && at(r.aaOnBlackUpTo + 100).black < 4.5)) throw new Error('black boundary off');
+});
+test('analyzeRamp: a very light colour never reaches AA on white, so the summary says null', () => {
+  assertEqual(analyzeRamp(generateColorRamp('#fafafa')).aaOnWhiteFrom !== null, true);   // its 900 stop is dark
+  const flat = analyzeRamp({ 50: hexToRgb('#ffffff'), 500: hexToRgb('#eeeeee') });
+  assertEqual([flat.aaOnWhiteFrom, flat.aaOnLightTintFrom], [null, null]);
+});
+test('brandColorNames de-duplicates and skips invalid or blank colours', () => {
+  assertEqual(brandColorNames({ primary: '#3D6BE8', secondary: '#3D6BE9', tertiary: '', accent: 'nope' }, ['primary', 'secondary', 'tertiary', 'accent']), { primary: 'cobalt', secondary: 'cobalt-2' });
+});
+
+test('analyzeRamp: every stop reaches AA with white or black text (the better of the two is at least 4.58:1)', () => {
+  for (let i = 0; i < 40; i++) {
+    const hex = '#' + [i * 37 % 256, i * 91 % 256, i * 53 % 256].map(v => v.toString(16).padStart(2, '0')).join('');
+    for (const s of analyzeRamp(generateColorRamp(hex)).stops) if (s.bestRatio < 4.5) throw new Error(`${hex} stop ${s.stop}: ${s.bestRatio}`);
+  }
+});
+test('analyzeRamp: per-stop levels match the ratios against white and black', () => {
+  for (const s of analyzeRamp(generateColorRamp('#3D6BE8')).stops) {
+    assertEqual(s.whiteLevel, wcagLevel(s.white), `white ${s.stop}`); assertEqual(s.blackLevel, wcagLevel(s.black), `black ${s.stop}`);
+  }
+  const s400 = analyzeRamp(generateColorRamp('#3D6BE8')).stops.find(s => s.stop === 400);
+  assertEqual([s400.whiteLevel, s400.blackLevel], ['AA large', 'AA']);   // white text on 400 is only OK for large text; black passes AA (6.8:1)
 });
 
 // ── Summary ───────────────────────────────────────────────────────

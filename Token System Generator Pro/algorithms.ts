@@ -382,3 +382,120 @@ export function webCodeSyntax(layerKey: string, name: string): string {
   const parts = name.split('/').map(p => kebab(p.replace(/-([a-z])/g, (_m, c: string) => c.toUpperCase())));
   return `var(--${[layerKey, ...parts].join('-')})`;
 }
+
+// ─── CONTRAST ────────────────────────────────────────────────────
+
+// WCAG 2 relative luminance (linear-light, sRGB weights).
+export function relativeLuminance(c: RGB): number {
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+  return 0.2126 * lin(c.r) + 0.7152 * lin(c.g) + 0.0722 * lin(c.b);
+}
+
+// WCAG 2 contrast ratio, 1 to 21. Symmetric: which colour is the text doesn't matter.
+export function wcagRatio(a: RGB, b: RGB): number {
+  const la = relativeLuminance(a), lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+export type WcagLevel = 'AAA' | 'AA' | 'AA large' | 'Fail';
+
+export function wcagLevel(ratio: number): WcagLevel {
+  if (ratio >= 7) return 'AAA';
+  if (ratio >= 4.5) return 'AA';
+  if (ratio >= 3) return 'AA large';
+  return 'Fail';
+}
+
+// APCA (SAPC 0.0.98G-4g) lightness contrast, Lc. Positive for dark text on a light background,
+// negative for light text on a dark one. Unlike WCAG it depends on which colour is the text.
+export function apcaLc(text: RGB, background: RGB): number {
+  const toY = (c: RGB) => 0.2126729 * Math.pow(c.r, 2.4) + 0.7151522 * Math.pow(c.g, 2.4) + 0.0721750 * Math.pow(c.b, 2.4);
+  const soft = (y: number) => (y < 0.022 ? y + Math.pow(0.022 - y, 1.414) : y);
+  const yt = soft(toY(text)), yb = soft(toY(background));
+  if (Math.abs(yb - yt) < 0.0005) return 0;
+  if (yb > yt) {
+    const sapc = (Math.pow(yb, 0.56) - Math.pow(yt, 0.57)) * 1.14;
+    return sapc < 0.1 ? 0 : (sapc - 0.027) * 100;
+  }
+  const sapc = (Math.pow(yb, 0.65) - Math.pow(yt, 0.62)) * 1.14;
+  return sapc > -0.1 ? 0 : (sapc + 0.027) * 100;
+}
+
+// What an APCA Lc magnitude is good for (the usual guideline steps; APCA is still a draft standard).
+export function apcaUse(lc: number): string {
+  const a = Math.abs(lc);
+  if (a >= 90) return 'Any text';
+  if (a >= 75) return 'Body text';
+  if (a >= 60) return 'Content text';
+  if (a >= 45) return 'Large text';
+  if (a >= 30) return 'Spot use';
+  return 'Not for text';
+}
+
+export interface StopContrast {
+  stop: number;
+  hex: string;
+  white: number;                     // WCAG ratio against white
+  whiteLevel: WcagLevel;
+  black: number;                     // WCAG ratio against black
+  blackLevel: WcagLevel;
+  bestText: 'white' | 'black';       // the better text colour when this stop is the background
+  bestRatio: number;
+  bestLevel: WcagLevel;
+  apca: number;                      // Lc of bestText on this stop
+}
+
+export interface RampContrast {
+  stops: StopContrast[];
+  aaOnWhiteFrom: number | null;      // lowest stop that is AA as text on white (and takes white text)
+  aaOnBlackUpTo: number | null;      // highest stop that is AA as text on black
+  aaOnLightTintFrom: number | null;  // lowest stop that is AA as text on the lightest tint
+}
+
+const WHITE: RGB = { r: 1, g: 1, b: 1 };
+const BLACK: RGB = { r: 0, g: 0, b: 0 };
+
+export function analyzeRamp(ramp: Record<number, RGB>): RampContrast {
+  const order = Object.keys(ramp).map(Number).sort((a, b) => a - b);
+  const stops: StopContrast[] = order.map(stop => {
+    const c = ramp[stop];
+    const white = wcagRatio(c, WHITE), black = wcagRatio(c, BLACK);
+    const bestText = white >= black ? 'white' : 'black';
+    const bestRatio = Math.max(white, black);
+    return {
+      stop, hex: rgbToHex(c.r, c.g, c.b), white, whiteLevel: wcagLevel(white), black, blackLevel: wcagLevel(black), bestText, bestRatio,
+      bestLevel: wcagLevel(bestRatio), apca: apcaLc(bestText === 'white' ? WHITE : BLACK, c),
+    };
+  });
+  const lightest = ramp[order[0]];
+  const passes = (s: StopContrast, against: RGB, min: number) => wcagRatio(ramp[s.stop], against) >= min;
+  const firstWhite = stops.find(s => passes(s, WHITE, 4.5));
+  const lastBlack = [...stops].reverse().find(s => passes(s, BLACK, 4.5));
+  const firstTint = stops.find(s => s.stop !== order[0] && passes(s, lightest, 4.5));
+  return {
+    stops,
+    aaOnWhiteFrom: firstWhite ? firstWhite.stop : null,
+    aaOnBlackUpTo: lastBlack ? lastBlack.stop : null,
+    aaOnLightTintFrom: firstTint ? firstTint.stop : null,
+  };
+}
+
+// Brand colour names as used for Global primitives: a hue-derived name per colour, with -2, -3 …
+// added when two colours would share one.
+export function brandColorNames(colors: Record<string, string | undefined>, keys: readonly string[]): Record<string, string> {
+  const names: Record<string, string> = {};
+  const used = new Set<string>();
+  for (const key of keys) {
+    const hex = colors[key];
+    if (!hex || !/^#[0-9A-Fa-f]{6}$/.test(hex)) continue;
+    let name = getColorName(hex);
+    if (used.has(name)) {
+      let i = 2;
+      while (used.has(`${name}-${i}`)) i++;
+      name = `${name}-${i}`;
+    }
+    used.add(name);
+    names[key] = name;
+  }
+  return names;
+}

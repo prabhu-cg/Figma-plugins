@@ -54,6 +54,14 @@ Border width
   - 5 semantic stops — none, sm, md, lg, xl
   - Scaled from your chosen base width
 
+Live preview and contrast checker
+  - See every color ramp as you type, using exactly the colors that will be
+    generated
+  - Check contrast: WCAG 2 ratios and levels (AAA, AA, AA large) with white and
+    black text on every stop, plus APCA Lc, and a summary like "text on white:
+    AA from 500". Works on a generated system or any file with the same
+    Alias color ramps. It only reads your variables
+
 Other tokens (optional, From Scratch and Starter)
   - Elevation: 5 shadow levels (xs to xl) as variables, plus matching effect
     styles bound to them
@@ -208,10 +216,10 @@ COMING SOON
 -----------
 - Dark mode support — generate light and dark mode values in a single Variable
   collection with multiple modes
-- Accessibility checks — WCAG contrast validation for semantic color pairs
+- Contrast fixes — suggest or apply the nearest passing stop
 - Composite typography tokens in the JSON export
 - Motion (duration and easing) and breakpoint token scales
-- Live color ramp preview and an optional foundation drawn on the canvas
+- An optional foundation (ramps, type scale, spacing) drawn on the canvas
 - One-click publish to Tokens Studio / W3C DTCG format
 
 

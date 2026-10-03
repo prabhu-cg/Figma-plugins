@@ -782,6 +782,99 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(result.type === 'generation-complete' && result.warnings.some(w => /scopes or code syntax on 3 variables/.test(w)), JSON.stringify(result.warnings));
   });
 
+  // ── Live preview + contrast checker ──
+  const ask = async (fig, msg, replyType) => { fig.state.messages.length = 0; await fig.send(msg); return fig.state.messages.find(m => m.type === replyType); };
+  const hexOfVar = (v) => { const c = Object.values(v.valuesByMode)[0]; const h = (n) => Math.round(n * 255).toString(16).padStart(2, '0'); return `#${h(c.r)}${h(c.g)}${h(c.b)}`; };
+
+  await test('preview: ramps for valid colours only, named like the generated primitives', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    const r = await ask(fig, { type: 'preview-ramps', colors: { ...COLORS, tertiary: '', accent: '#12' } }, 'ramp-preview');
+    const keys = r.ramps.map(x => x.key);
+    assert(JSON.stringify(keys) === JSON.stringify(['primary', 'secondary', 'info', 'success', 'error', 'warning', 'neutral']), keys.join());
+    assert(r.ramps.every(x => x.contrast.stops.length === 10), 'every ramp has 10 stops');
+    const p = r.ramps.find(x => x.key === 'primary'), info = r.ramps.find(x => x.key === 'info');
+    assert(p.name === 'cobalt' && p.label === 'Primary' && info.name === 'blue', `${p.name} / ${info.name}`);
+    assert(p.contrast.stops.find(s => s.stop === 500).hex === '#3d6be8', 'stop 500 is the input colour');
+  });
+
+  await test('preview: junk input gives an empty list instead of an error', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    for (const colors of [undefined, null, 'red', 42, [], {}, { primary: 5 }]) {
+      const r = await ask(fig, { type: 'preview-ramps', colors }, 'ramp-preview');
+      assert(r && Array.isArray(r.ramps) && r.ramps.length === 0, `${JSON.stringify(colors)} -> ${r && r.ramps.length}`);
+    }
+  });
+
+  await test('preview matches what generation then creates, stop for stop', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    const preview = await ask(fig, { type: 'preview-ramps', colors: COLORS }, 'ramp-preview');
+    await fig.send(scratchMsg({ type: 'generate', approach: '2tier' }));
+    await fig.finished();
+    for (const ramp of preview.ramps) {
+      const lowered = ramp.name;
+      for (const s of ramp.contrast.stops) {
+        const v = fig.state.variables.find(x => x.name === `color/${lowered}/${s.stop}`);
+        assert(v && hexOfVar(v) === s.hex, `${lowered}/${s.stop}: preview ${s.hex} vs generated ${v && hexOfVar(v)}`);
+      }
+    }
+  });
+
+  for (const approach of ['2tier', '3tier']) {
+    await test(`contrast checker reads a generated ${approach} system and agrees with the preview`, async () => {
+      const fig = createFigma({}); fig.load(BUNDLE);
+      await fig.send(scratchMsg({ type: 'generate', approach, colors: { ...COLORS, tertiary: '' } }));
+      await fig.finished();
+      const before = fig.snapshot();
+      const data = await ask(fig, { type: 'check-contrast' }, 'contrast-data');
+      assert(!data.error, data.error);
+      assert(JSON.stringify(data.ramps.map(r => r.key)) === JSON.stringify(['primary', 'secondary', 'accent', 'info', 'success', 'error', 'warning', 'neutral']), data.ramps.map(r => r.key).join());
+      const preview = await ask(fig, { type: 'preview-ramps', colors: { ...COLORS, tertiary: '' } }, 'ramp-preview');
+      for (const r of data.ramps) {
+        const p = preview.ramps.find(x => x.key === r.key);
+        assert(r.contrast.stops.length === 10 && p, `${r.key}: ${r.contrast.stops.length} stops`);
+        assert(JSON.stringify(r.contrast) === JSON.stringify(p.contrast), `${r.key}: file and preview disagree`);
+      }
+      assert(fig.snapshot() === before, 'checking contrast changed the document');
+    });
+  }
+
+  await test('contrast checker works on Starter and Smart Convert systems', async () => {
+    const starter = createFigma({}); starter.load(BUNDLE);
+    await starter.send(scratchMsg({ type: 'generate', approach: '3tier', mode: 'starter' }));
+    await starter.finished();
+    const s = await ask(starter, { type: 'check-contrast' }, 'contrast-data');
+    assert(s.ramps.length === 9 && s.ramps.every(r => r.contrast.stops.length === 10), `starter: ${s.ramps.length} ramps`);
+    for (const approach of ['2tier', '3tier']) {
+      const conv = createFigma(CONVERT_DOC); conv.load(BUNDLE);
+      await conv.send(scratchMsg({ type: 'generate', approach, mode: 'convert' }));
+      await conv.finished();
+      const c = await ask(conv, { type: 'check-contrast' }, 'contrast-data');
+      assert(c.ramps.length >= 1 && c.ramps.every(r => r.contrast.stops.length >= 2), `${approach} convert: ${c.ramps.length} ramps`);
+    }
+  });
+
+  await test('contrast checker: an empty file, or only the user\'s collections, has nothing to check', async () => {
+    const empty = createFigma({}); empty.load(BUNDLE);
+    assert((await ask(empty, { type: 'check-contrast' }, 'contrast-data')).ramps.length === 0, 'empty file');
+    const own = createFigma({}); own.load(BUNDLE);
+    const c = own.figma.variables.createVariableCollection('Brand');
+    const v = own.figma.variables.createVariable('color/primary/500', c, 'COLOR'); v.setValueForMode(c.modes[0].modeId, { r: 1, g: 0, b: 0, a: 1 });
+    assert((await ask(own, { type: 'check-contrast' }, 'contrast-data')).ramps.length === 0, "the user's own collection was read");
+  });
+
+  await test('contrast checker follows alias chains of more than one hop', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    const g = fig.figma.variables.createVariableCollection('01 Global'), a = fig.figma.variables.createVariableCollection('02 Alias');
+    const mk = (coll, name, value) => { const v = fig.figma.variables.createVariable(name, coll, 'COLOR'); v.setValueForMode(coll.modes[0].modeId, value); return v; };
+    const blue = mk(g, 'color/blue/500', { r: 0, g: 0, b: 1, a: 1 }), light = mk(g, 'color/blue/50', { r: .9, g: .9, b: 1, a: 1 });
+    const mid = mk(a, 'color/accent-mid/500', { type: 'VARIABLE_ALIAS', id: blue.id });
+    mk(a, 'color/primary/500', { type: 'VARIABLE_ALIAS', id: mid.id });
+    mk(a, 'color/primary/50', { type: 'VARIABLE_ALIAS', id: light.id });
+    const data = await ask(fig, { type: 'check-contrast' }, 'contrast-data');
+    const p = data.ramps.find(r => r.key === 'primary');
+    assert(p && p.contrast.stops.find(s => s.stop === 500).hex === '#0000ff', JSON.stringify(p && p.contrast.stops.map(s => s.hex)));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();
