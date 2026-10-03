@@ -105,7 +105,7 @@ export function Banner({
   style?: React.CSSProperties;
 }) {
   return (
-    <div className={`banner banner-${kind}`} style={style}>
+    <div className={`banner banner-${kind}`} style={style} role={kind === "error" ? "alert" : "status"}>
       <span>{children}</span>
       {onDismiss && (
         <button className="banner-close" onClick={onDismiss} aria-label="Dismiss">

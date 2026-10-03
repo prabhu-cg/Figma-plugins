@@ -21,14 +21,27 @@ function writeStoredTheme(theme: ThemePreference): void {
   }
 }
 
+function systemPrefersDark(): boolean {
+  return typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+/**
+ * `data-theme` is always set explicitly (never removed for "system"), so the stylesheet
+ * needs a single dark block. index.html runs the same resolution before first paint.
+ */
 export function useTheme() {
   const [theme, setTheme] = useState<ThemePreference>(readStoredTheme);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", theme);
+    const apply = () => root.setAttribute("data-theme", theme === "system" ? (systemPrefersDark() ? "dark" : "light") : theme);
+    apply();
     writeStoredTheme(theme);
+
+    if (theme !== "system" || typeof window.matchMedia !== "function") return;
+    const query = window.matchMedia("(prefers-color-scheme: dark)");
+    query.addEventListener("change", apply);
+    return () => query.removeEventListener("change", apply);
   }, [theme]);
 
   return { theme, setTheme };

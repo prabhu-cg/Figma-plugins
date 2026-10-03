@@ -6,7 +6,6 @@ import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
 import { DeprecationControl } from "./DeprecationControl";
 import { useProjectState } from "@ui/state/ProjectContext";
 
-const REVIEW_STATE_OPTIONS: ReviewState[] = ["unreviewed", "reviewed", "accepted", "rejected"];
 const VERDICT_OPTIONS: ChangeVerdict[] = ["breaking", "potentially-breaking", "non-breaking", "informational"];
 
 function verdictToOverride(
@@ -45,7 +44,22 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function ChangeDetail({ change, changeSetId }: { change: Change | null; changeSetId: string }) {
+const REVIEW_ACTIONS: { state: Exclude<ReviewState, "unreviewed">; label: string; key: string; tone?: "success" | "critical" }[] = [
+  { state: "accepted", label: "Accept", key: "A", tone: "success" },
+  { state: "rejected", label: "Reject", key: "R", tone: "critical" },
+  { state: "reviewed", label: "Reviewed", key: "V" },
+];
+
+export function ChangeDetail({
+  change,
+  changeSetId,
+  onReview,
+}: {
+  change: Change | null;
+  changeSetId: string;
+  /** Review decisions go through the page so they share auto-advance and undo with the keyboard shortcuts. */
+  onReview: (state: ReviewState) => void;
+}) {
   const { send, project } = useProjectState();
   const [reviewNote, setReviewNote] = useState(change?.reviewNote ?? "");
   const [migrationNote, setMigrationNote] = useState(change?.migrationNote ?? "");
@@ -64,6 +78,8 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
   }
 
   const effective = getEffectiveClassification(change);
+  const trackedEntity = project?.trackedEntities.find((e) => e.id === change.entityId);
+  const trackedDeprecated = trackedEntity?.deprecated ?? false;
 
   return (
     <div
@@ -94,6 +110,30 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
             </div>
           </div>
 
+          <div className="seg" role="group" aria-label="Review decision" style={{ alignSelf: "flex-start" }}>
+            {REVIEW_ACTIONS.map((action) => {
+              const pressed = change.reviewState === action.state;
+              return (
+                <button
+                  key={action.state}
+                  className="seg-btn"
+                  data-tone={action.tone}
+                  aria-pressed={pressed}
+                  title={pressed ? `Clear — back to unreviewed` : `${action.label} (${action.key})`}
+                  onClick={() => onReview(pressed ? "unreviewed" : action.state)}
+                >
+                  {action.label}
+                  <span className="kbd" aria-hidden>
+                    {action.key}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <details key={change.id} open={effective.overridden || trackedDeprecated} className="detail-group">
+            <summary className="detail-summary">Classification and deprecation</summary>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 12 }}>
           <Field label="Classification">
             <div className="flex items-center gap-2">
               <div className="select-wrapper" style={{ flex: 1 }}>
@@ -136,8 +176,10 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
             entityId={change.entityId}
             kind={change.entityType === "token" ? "token" : "component"}
             displayName={change.entityName}
-            trackedEntity={project?.trackedEntities.find((e) => e.id === change.entityId)}
+            trackedEntity={trackedEntity}
           />
+            </div>
+          </details>
 
           {change.modeDetails && change.modeDetails.length > 0 ? (
             <Field label="Modes">
@@ -173,23 +215,23 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
             </div>
           )}
 
-          <Field label="Reason">
+          <Field label="Release note">
             <textarea
               className="textarea"
               rows={2}
               value={reviewNote}
-              placeholder="Add release note"
+              placeholder="What should consumers know about this change?"
               onChange={(e) => setReviewNote(e.target.value)}
               onBlur={() => send({ type: "update-change", changeSetId, changeId: change.id, reviewNote })}
             />
           </Field>
 
-          <Field label="Migration">
+          <Field label="Migration note">
             <textarea
               className="textarea"
               rows={2}
               value={migrationNote}
-              placeholder="Describe migration"
+              placeholder="How should they update their usage?"
               onChange={(e) => setMigrationNote(e.target.value)}
               onBlur={() => send({ type: "update-change", changeSetId, changeId: change.id, migrationNote })}
             />
@@ -204,26 +246,6 @@ export function ChangeDetail({ change, changeSetId }: { change: Change | null; c
                 Select in canvas
               </button>
             )}
-            <div className="select-wrapper">
-              <select
-                className="select"
-                value={change.reviewState}
-                onChange={(e) =>
-                  send({
-                    type: "update-change",
-                    changeSetId,
-                    changeId: change.id,
-                    reviewState: e.target.value as ReviewState,
-                  })
-                }
-              >
-                {REVIEW_STATE_OPTIONS.map((state) => (
-                  <option key={state} value={state}>
-                    {state.charAt(0).toUpperCase() + state.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
       </div>

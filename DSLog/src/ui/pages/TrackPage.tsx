@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { Banner, OptionCard } from "@ui/components/Shared";
+import { useDismissOnce } from "@ui/state/useDismissOnce";
 import type { ComponentScanScope } from "@shared/types/scan";
 import type { PageId } from "@ui/App";
 import {
@@ -34,6 +35,7 @@ const SCOPE_OPTIONS: Array<{ id: ComponentScanScope; label: string; description:
 
 export function TrackPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const { discovered, send, lastBaseline, clearLastBaseline, scanning } = useProjectState();
+  const [explainerDismissed, dismissExplainer] = useDismissOnce("track-explainer");
   const [scope, setScope] = useState<ComponentScanScope | undefined>(undefined);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [tokensEnabled, setTokensEnabled] = useState(false);
@@ -132,11 +134,13 @@ export function TrackPage({ onNavigate }: { onNavigate: (page: PageId) => void }
           </div>
         </div>
 
-        <Banner kind="info" style={{ marginBottom: "var(--space-3)" }}>
-          A baseline is a snapshot of your components and tokens right now. Once it exists, DSLog compares
-          future scans against it to tell you what changed — so create one whenever you want a new starting
-          point to track from.
-        </Banner>
+        {!explainerDismissed && (
+          <Banner kind="info" style={{ marginBottom: "var(--space-3)" }} onDismiss={dismissExplainer}>
+            A baseline is a snapshot of your components and tokens right now. Once it exists, DSLog compares
+            future scans against it to tell you what changed — so create one whenever you want a new starting
+            point to track from.
+          </Banner>
+        )}
 
         <div className="grid" style={{ gridTemplateColumns: "1fr 360px" }}>
           <div className="card-title">Components</div>

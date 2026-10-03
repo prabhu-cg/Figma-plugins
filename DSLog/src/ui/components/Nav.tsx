@@ -44,6 +44,7 @@ export function Nav({
         key={item.id}
         className={`nav-item${active === item.id ? " active" : ""}`}
         onClick={() => onSelect(item.id)}
+        aria-current={active === item.id ? "page" : undefined}
       >
         <Icon className="icon" />
         {item.label}
@@ -52,7 +53,7 @@ export function Nav({
   }
 
   return (
-    <nav className="nav">
+    <nav className="nav" aria-label="DSLog">
       <div className="nav-brand">
         <Logo size={26} />
         <div className="nav-brand-text">

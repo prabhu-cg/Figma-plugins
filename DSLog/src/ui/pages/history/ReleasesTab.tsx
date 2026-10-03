@@ -3,7 +3,7 @@ import { useProjectState } from "@ui/state/ProjectContext";
 import { ChangeListItem } from "@ui/components/ChangeListItem";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
 import { summarizeChanges } from "@shared/utils/changeSetStats";
-import { formatDate } from "./formatDate";
+import { formatDate } from "@ui/utils/formatDate";
 
 export function ReleasesTab({
   focusReleaseId,
@@ -12,7 +12,7 @@ export function ReleasesTab({
   focusReleaseId?: string;
   onFocusConsumed?: () => void;
 } = {}) {
-  const { project } = useProjectState();
+  const { project, send } = useProjectState();
   const [selectedReleaseId, setSelectedReleaseId] = useState<string | null>(null);
   const [selectedChangeId, setSelectedChangeId] = useState<string | null>(null);
 
@@ -86,7 +86,15 @@ export function ReleasesTab({
             ))
           )}
         </div>
-        <ChangeDetail change={selectedChange} changeSetId={changeSet?.id ?? ""} />
+        <ChangeDetail
+          change={selectedChange}
+          changeSetId={changeSet?.id ?? ""}
+          onReview={(reviewState) => {
+            if (selectedChange && changeSet) {
+              send({ type: "update-change", changeSetId: changeSet.id, changeId: selectedChange.id, reviewState });
+            }
+          }}
+        />
       </div>
     </div>
   );

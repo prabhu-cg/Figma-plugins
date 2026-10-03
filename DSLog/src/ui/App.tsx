@@ -71,6 +71,7 @@ function Shell() {
       <div style={{ height: "100%", display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {toasts.length > 0 && (
           <div
+            aria-live="polite"
             style={{
               flexShrink: 0,
               display: "flex",

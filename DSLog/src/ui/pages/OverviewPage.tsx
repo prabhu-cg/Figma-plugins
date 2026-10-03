@@ -1,14 +1,11 @@
 import React from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
-import { StatCard } from "@ui/components/Shared";
 import { TrackIcon } from "@ui/components/Icons";
 import type { PageId } from "@ui/App";
 import { getLatestChangeSetForBaseline } from "@shared/utils/changeSets";
 import { summarizeChanges } from "@shared/utils/changeSetStats";
+import { formatDate } from "@ui/utils/formatDate";
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
-}
 
 export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => void }) {
   const { project, send, scanning, scanProgress } = useProjectState();
@@ -38,6 +35,21 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
   const stats = summarizeChanges(changeSet?.changes ?? []);
 
   const latestRelease = [...project.releases].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const sinceVersion = latestRelease?.version ?? baseline.version;
+  const unreviewed = (changeSet?.changes ?? []).filter((c) => c.reviewState === "unreviewed").length;
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const leadTitle =
+    stats.total === 0
+      ? `No changes since v${sinceVersion}`
+      : stats.breaking > 0
+        ? `${plural(stats.breaking, "breaking change")} since v${sinceVersion}`
+        : `${plural(stats.total, "change")} since v${sinceVersion}`;
+  const leadSub =
+    stats.total === 0
+      ? "The last scan found nothing new. Scan again after you edit components or tokens."
+      : unreviewed === 0
+        ? `All ${stats.total} reviewed — ready to release.`
+        : `${unreviewed} of ${stats.total} still unreviewed${stats.deprecated > 0 ? ` · ${stats.deprecated} deprecated` : ""}`;
 
   const pctComponents =
     scanProgress && scanProgress.componentsTotal > 0
@@ -60,10 +72,17 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
           </div>
         </div>
         <div className="flex gap-2">
-          <button className="btn btn-secondary" disabled={scanning} onClick={() => send({ type: "scan" })}>
+          <button
+            className={stats.total === 0 ? "btn btn-primary" : "btn btn-secondary"}
+            disabled={scanning}
+            onClick={() => send({ type: "scan" })}
+          >
             Scan for changes
           </button>
-          <button className="btn btn-primary" onClick={() => onNavigate("releases")}>
+          <button
+            className={unreviewed > 0 || stats.total === 0 ? "btn btn-secondary" : "btn btn-primary"}
+            onClick={() => onNavigate("releases")}
+          >
             Create release
           </button>
         </div>
@@ -77,8 +96,16 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               {scanProgress.componentsDone} / {scanProgress.componentsTotal}
             </span>
           </div>
-          <div className="progress-track" style={{ marginBottom: "var(--space-3)" }}>
-            <div className="progress-fill" style={{ width: `${pctComponents}%` }} />
+          <div
+            className="progress-track"
+            style={{ marginBottom: "var(--space-3)" }}
+            role="progressbar"
+            aria-label="Components scanned"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pctComponents}
+          >
+            <div className="progress-fill" style={{ transform: `scaleX(${pctComponents / 100})` }} />
           </div>
           <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
             <span style={{ fontWeight: 700, fontSize: 12.5 }}>Tokens</span>
@@ -86,29 +113,37 @@ export function OverviewPage({ onNavigate }: { onNavigate: (page: PageId) => voi
               {scanProgress.tokensDone} / {scanProgress.tokensTotal}
             </span>
           </div>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${pctTokens}%` }} />
+          <div
+            className="progress-track"
+            role="progressbar"
+            aria-label="Tokens scanned"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pctTokens}
+          >
+            <div className="progress-fill" style={{ transform: `scaleX(${pctTokens / 100})` }} />
           </div>
         </div>
       )}
 
-      <div className="card-title" style={{ marginBottom: 8 }}>
-        Tracked
-      </div>
-      <div className="grid grid-cols-3" style={{ marginBottom: "var(--space-3)" }}>
-        <StatCard label="Components" value={baseline.snapshot.components.length} />
-        <StatCard label="Tokens" value={baseline.snapshot.tokens.length} />
-        <StatCard label="Releases" value={project.releases.length} />
-      </div>
+      <section className="card" aria-labelledby="overview-lead">
+        <h2 id="overview-lead" className="lead-title">
+          {leadTitle}
+        </h2>
+        <p className="lead-sub">{leadSub}</p>
+        {stats.total > 0 && (
+          <div className="flex gap-2" style={{ marginTop: "var(--space-3)" }}>
+            <button className="btn btn-primary" onClick={() => onNavigate(unreviewed > 0 ? "changes" : "releases")}>
+              {unreviewed > 0 ? "Review changes" : "Create release"}
+            </button>
+          </div>
+        )}
+      </section>
 
-      <div className="card-title" style={{ marginBottom: 8 }}>
-        Since last release
-      </div>
-      <div className="grid grid-cols-3">
-        <StatCard label="Changes" value={stats.total} />
-        <StatCard label="Breaking" value={stats.breaking} />
-        <StatCard label="Deprecated" value={stats.deprecated} />
-      </div>
+      <p className="text-secondary" style={{ marginTop: "var(--space-3)", fontSize: 12.5 }}>
+        Tracking {plural(baseline.snapshot.components.length, "component")} and{" "}
+        {plural(baseline.snapshot.tokens.length, "token")} · {plural(project.releases.length, "release")} so far
+      </p>
     </div>
   );
 }

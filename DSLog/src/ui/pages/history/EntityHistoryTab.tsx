@@ -5,7 +5,7 @@ import { ImpactIndexControl } from "@ui/components/ImpactIndexControl";
 import { SearchIcon } from "@ui/components/Icons";
 import { getEntityHistory } from "@shared/utils/entityHistory";
 import type { EntityKind } from "@shared/types/entity";
-import { formatDate } from "./formatDate";
+import { formatDate } from "@ui/utils/formatDate";
 import { ComponentImpactSection, TokenDependencyChain, TokenImpactSection } from "./EntityImpact";
 
 export function EntityHistoryTab({

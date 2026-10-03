@@ -43,6 +43,7 @@ rsync "${RSYNC_FLAGS[@]}" \
   --exclude 'node_modules' \
   --exclude '.git' \
   --exclude '.claude' \
+  --exclude '.impeccable' \
   --exclude '.DS_Store' \
   --exclude '*.log' \
   "$SOURCE_DIR/" "$MONOREPO_DIR/DSLog/"

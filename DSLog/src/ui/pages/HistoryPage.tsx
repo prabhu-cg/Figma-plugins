@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Tabs } from "@ui/components/Tabs";
+import { Tabs, tabId, tabPanelId } from "@ui/components/Tabs";
 import { ReleasesTab } from "./history/ReleasesTab";
 import { EntityHistoryTab } from "./history/EntityHistoryTab";
 import { DeprecationsTab } from "./history/DeprecationsTab";
@@ -32,6 +32,7 @@ export function HistoryPage({
           </div>
         </div>
         <Tabs
+          idPrefix="history"
           tabs={[
             { id: "releases", label: "Releases" },
             { id: "components", label: "Components" },
@@ -43,7 +44,12 @@ export function HistoryPage({
           onChange={(id) => setTab(id as HistoryTab)}
         />
       </div>
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      <div
+        role="tabpanel"
+        id={tabPanelId("history", tab)}
+        aria-labelledby={tabId("history", tab)}
+        style={{ flex: 1, minHeight: 0, overflowY: "auto" }}
+      >
         {tab === "releases" && (
           <ReleasesTab
             focusReleaseId={tab === focusTab ? focusEntityId : undefined}

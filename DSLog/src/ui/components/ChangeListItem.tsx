@@ -3,6 +3,10 @@ import type { Change } from "@shared/types/change";
 import { getEffectiveClassification } from "@shared/utils/classification";
 import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
 
+export function changeItemDomId(changeId: string): string {
+  return `change-item-${changeId}`;
+}
+
 export function ChangeListItem({
   change,
   selected,
@@ -30,17 +34,10 @@ export function ChangeListItem({
         />
       )}
       <button
+        id={changeItemDomId(change.id)}
         onClick={onSelect}
-        className="card"
-        style={{
-          textAlign: "left",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          width: "100%",
-          opacity: change.reviewState === "unreviewed" ? 1 : 0.6,
-          border: `1px solid ${selected ? "var(--color-primary)" : "var(--color-border)"}`,
-        }}
+        aria-current={selected ? "true" : undefined}
+        className={`card change-item${selected ? " is-selected" : ""}${change.reviewState === "unreviewed" ? "" : " is-done"}`}
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -49,7 +46,7 @@ export function ChangeListItem({
           </div>
           {change.reviewState !== "unreviewed" && <ReviewStateBadge state={change.reviewState} />}
         </div>
-        <div style={{ fontWeight: 700, fontSize: 12.5 }}>{change.entityName}</div>
+        <div className="change-item-name">{change.entityName}</div>
         <div className="text-secondary" style={{ fontSize: 12 }}>
           {change.summary}
         </div>
