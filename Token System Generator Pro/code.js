@@ -906,7 +906,7 @@
     if (generating) rollbackStaged();
   });
   figma.ui.onmessage = async (msg) => {
-    var _a;
+    var _a, _b;
     if (msg.type === "generate" || msg.type === "confirm-continue") {
       await exclusive(() => runSafely(async () => {
         const r = parseRequest(msg);
@@ -929,15 +929,27 @@
       }
     }
     if (msg.type === "check-tokens") {
-      const exists = await tokensExist();
-      const total = exists ? (await figma.variables.getLocalVariablesAsync()).length : 0;
-      const cols = exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0;
-      figma.ui.postMessage({ type: "tokens-status", exists, total, cols });
+      let status = { exists: false, total: 0, cols: 0 };
+      try {
+        const exists = await tokensExist();
+        status = {
+          exists,
+          total: exists ? (await figma.variables.getLocalVariablesAsync()).length : 0,
+          cols: exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0
+        };
+      } catch (e) {
+        figma.notify(`\u26A0\uFE0F Couldn't read existing variables: ${(_b = e == null ? void 0 : e.message) != null ? _b : String(e)}`);
+      }
+      figma.ui.postMessage(__spreadValues({ type: "tokens-status" }, status));
     }
     if (msg.type === "get-fonts") {
-      const fonts = await figma.listAvailableFontsAsync();
-      const fontNames = [...new Set(fonts.map((f) => f.fontName.family))].sort();
-      figma.ui.postMessage({ type: "fonts-list", fonts: fontNames });
+      try {
+        const fonts = await figma.listAvailableFontsAsync();
+        const fontNames = [...new Set(fonts.map((f) => f.fontName.family))].sort();
+        figma.ui.postMessage({ type: "fonts-list", fonts: fontNames });
+      } catch (_e) {
+        figma.notify("\u26A0\uFE0F Couldn't load the font list \u2014 Inter will be used");
+      }
     }
   };
 })();

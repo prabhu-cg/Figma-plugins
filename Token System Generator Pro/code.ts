@@ -911,14 +911,27 @@ figma.ui.onmessage = async (msg: UiMessage) => {
     }
   }
   if (msg.type === 'check-tokens') {
-    const exists = await tokensExist();
-    const total  = exists ? (await figma.variables.getLocalVariablesAsync()).length : 0;
-    const cols   = exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0;
-    figma.ui.postMessage({ type: 'tokens-status', exists, total, cols });
+    // The UI waits for this reply before showing its first screen, so always send one.
+    let status = { exists: false, total: 0, cols: 0 };
+    try {
+      const exists = await tokensExist();
+      status = {
+        exists,
+        total: exists ? (await figma.variables.getLocalVariablesAsync()).length : 0,
+        cols:  exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0,
+      };
+    } catch (e) {
+      figma.notify(`⚠️ Couldn't read existing variables: ${(e as { message?: string } | null)?.message ?? String(e)}`);
+    }
+    figma.ui.postMessage({ type: 'tokens-status', ...status });
   }
   if (msg.type === 'get-fonts') {
-    const fonts = await figma.listAvailableFontsAsync();
-    const fontNames = [...new Set(fonts.map((f: Font) => f.fontName.family))].sort();
-    figma.ui.postMessage({ type: 'fonts-list', fonts: fontNames });
+    try {
+      const fonts = await figma.listAvailableFontsAsync();
+      const fontNames = [...new Set(fonts.map((f: Font) => f.fontName.family))].sort();
+      figma.ui.postMessage({ type: 'fonts-list', fonts: fontNames });
+    } catch (_e) {
+      figma.notify('⚠️ Couldn\'t load the font list — Inter will be used');
+    }
   }
 };
