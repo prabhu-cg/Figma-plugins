@@ -57,7 +57,22 @@ async function dispatch(message: UiToPluginMessage): Promise<void> {
  * JSON round-trip rather than structuredClone: the latter isn't available in
  * Figma's plugin sandbox, and Project is plain JSON (it's persisted as such).
  */
-export async function handleMessage(message: UiToPluginMessage): Promise<void> {
+let queueTail: Promise<void> = Promise.resolve();
+
+/**
+ * Messages are handled strictly one at a time, in arrival order. Handlers mutate the shared project and then
+ * await a save, so two running at once would interleave — one handler's rollback could undo the other's
+ * changes, and two saves could overlap. (Pressing A then R quickly sends two messages back to back.)
+ * Only `focus-node`, which just moves the canvas selection, skips the queue so it never waits behind a long scan.
+ */
+export function handleMessage(message: UiToPluginMessage): Promise<void> {
+  if (message.type === "focus-node") return process(message);
+  const run = queueTail.then(() => process(message));
+  queueTail = run.catch(() => undefined);
+  return run;
+}
+
+async function process(message: UiToPluginMessage): Promise<void> {
   await ensureProject();
   if (READ_ONLY_MESSAGES.has(message.type)) return dispatch(message);
 

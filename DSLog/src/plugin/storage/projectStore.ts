@@ -87,7 +87,20 @@ export async function loadProject(): Promise<Project> {
   });
 }
 
-export async function saveProject(project: Project): Promise<void> {
+let saveTail: Promise<void> = Promise.resolve();
+
+/**
+ * Saves are serialised: `heavy` and `meta` are two blobs that must be written in a fixed order (see below),
+ * and two overlapping saves would interleave those writes. Each save serialises the project when it actually
+ * runs, so a queued save always stores the newest state.
+ */
+export function saveProject(project: Project): Promise<void> {
+  const run = saveTail.catch(() => undefined).then(() => writeProject(project));
+  saveTail = run.catch(() => undefined);
+  return run;
+}
+
+async function writeProject(project: Project): Promise<void> {
   const snapshots: Record<string, DesignSystemSnapshot> = {};
   const baselinesWithoutSnapshot: BaselineWithoutSnapshot[] = project.baselines.map((baseline) => {
     snapshots[baseline.id] = baseline.snapshot;

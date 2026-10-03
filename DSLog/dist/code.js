@@ -181,8 +181,27 @@
     }
     return chunks;
   }
-  async function writeChunked(store, prefix, data, chunkSizeBytes) {
+  const locks = /* @__PURE__ */ new WeakMap();
+  function withLock(store, prefix, task) {
+    let byPrefix = locks.get(store);
+    if (!byPrefix) {
+      byPrefix = /* @__PURE__ */ new Map();
+      locks.set(store, byPrefix);
+    }
+    const previous = byPrefix.get(prefix) ?? Promise.resolve();
+    const run = previous.catch(() => void 0).then(task);
+    const tail = run.catch(() => void 0);
+    byPrefix.set(prefix, tail);
+    void tail.then(() => {
+      if (byPrefix.get(prefix) === tail) byPrefix.delete(prefix);
+    });
+    return run;
+  }
+  function writeChunked(store, prefix, data, chunkSizeBytes) {
     const serialized = JSON.stringify(data);
+    return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
+  }
+  async function writeSerialized(store, prefix, serialized, chunkSizeBytes) {
     const bytes = utf8Encode(serialized);
     const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
     if (chunks.length === 0) chunks.push("");
@@ -205,7 +224,10 @@
     } catch {
     }
   }
-  async function readChunked(store, prefix) {
+  function readChunked(store, prefix) {
+    return withLock(store, prefix, () => readUnlocked(store, prefix));
+  }
+  async function readUnlocked(store, prefix) {
     const index = parseIndex(await store.get(`${prefix}:index`));
     if (!index) return void 0;
     const parts = [];
@@ -257,7 +279,13 @@
       settings: { ...DEFAULT_SETTINGS, ...metaRaw.settings }
     });
   }
-  async function saveProject(project) {
+  let saveTail = Promise.resolve();
+  function saveProject(project) {
+    const run = saveTail.catch(() => void 0).then(() => writeProject(project));
+    saveTail = run.catch(() => void 0);
+    return run;
+  }
+  async function writeProject(project) {
     const snapshots = {};
     const baselinesWithoutSnapshot = project.baselines.map((baseline) => {
       snapshots[baseline.id] = baseline.snapshot;
@@ -2206,7 +2234,14 @@
     const handler = handlers[message.type];
     if (handler) await handler(message);
   }
-  async function handleMessage(message) {
+  let queueTail = Promise.resolve();
+  function handleMessage(message) {
+    if (message.type === "focus-node") return process(message);
+    const run = queueTail.then(() => process(message));
+    queueTail = run.catch(() => void 0);
+    return run;
+  }
+  async function process(message) {
     await ensureProject();
     if (READ_ONLY_MESSAGES.has(message.type)) return dispatch(message);
     const backup = JSON.stringify(session.project);

@@ -73,6 +73,31 @@ function splitUtf8Bytes(bytes: Uint8Array, chunkSizeBytes: number): string[] {
 }
 
 /**
+ * Chunked blobs are read, written and deleted as several separate key operations, so two operations on the
+ * same blob must never overlap: a second save cleaning up "stale" chunks would delete the chunks a concurrent
+ * save had just written, leaving the index pointing at data that no longer exists. Operations on one
+ * (store, prefix) therefore run strictly one after another, in the order they were requested.
+ */
+const locks = new WeakMap<KVStore, Map<string, Promise<unknown>>>();
+
+function withLock<T>(store: KVStore, prefix: string, task: () => Promise<T>): Promise<T> {
+  let byPrefix = locks.get(store);
+  if (!byPrefix) {
+    byPrefix = new Map();
+    locks.set(store, byPrefix);
+  }
+  const previous = byPrefix.get(prefix) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(task);
+  const tail = run.catch(() => undefined);
+  byPrefix.set(prefix, tail);
+  // Drop the entry once nothing newer is queued behind it, so the map doesn't grow with every prefix ever used.
+  void tail.then(() => {
+    if (byPrefix!.get(prefix) === tail) byPrefix!.delete(prefix);
+  });
+  return run;
+}
+
+/**
  * Splits JSON-serialized data across multiple keys so any single value stays
  * under platform per-key size limits (clientStorage and plugin data both
  * cap individual values — plugin data caps each entry at 100 kB, measured
@@ -85,13 +110,18 @@ function splitUtf8Bytes(bytes: Uint8Array, chunkSizeBytes: number): string[] {
  * a good project into one that reads back as empty or corrupt. Leftover
  * chunks from a failed cleanup are collected by the next successful write.
  */
-export async function writeChunked(
+export function writeChunked(
   store: KVStore,
   prefix: string,
   data: unknown,
   chunkSizeBytes: number,
 ): Promise<void> {
+  // Serialise now, so a save always stores the data as it was when it was requested.
   const serialized = JSON.stringify(data);
+  return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
+}
+
+async function writeSerialized(store: KVStore, prefix: string, serialized: string, chunkSizeBytes: number): Promise<void> {
   const bytes = utf8Encode(serialized);
   const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
   if (chunks.length === 0) chunks.push("");
@@ -122,7 +152,11 @@ export async function writeChunked(
 }
 
 /** Returns undefined when nothing is stored, or when stored data is corrupted/unparseable. */
-export async function readChunked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
+export function readChunked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
+  return withLock(store, prefix, () => readUnlocked<T>(store, prefix));
+}
+
+async function readUnlocked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
   const index = parseIndex(await store.get(`${prefix}:index`));
   if (!index) return undefined;
 
@@ -143,7 +177,11 @@ export async function readChunked<T>(store: KVStore, prefix: string): Promise<T 
   }
 }
 
-export async function deleteChunked(store: KVStore, prefix: string): Promise<void> {
+export function deleteChunked(store: KVStore, prefix: string): Promise<void> {
+  return withLock(store, prefix, () => deleteUnlocked(store, prefix));
+}
+
+async function deleteUnlocked(store: KVStore, prefix: string): Promise<void> {
   const pattern = chunkKeyPattern(prefix);
   const keys = await store.keys();
   const toDelete = keys.filter((k) => k === `${prefix}:index` || pattern.test(k));
