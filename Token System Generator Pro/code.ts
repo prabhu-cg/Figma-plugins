@@ -22,6 +22,19 @@ interface ScratchColors {
   neutral: string;
 }
 
+// Errors with wording written for the person using the plugin (bad input, nothing to convert, …)
+// are UserErrors and are shown as they are. Anything else is an unexpected failure: its detail goes
+// to the console for whoever is debugging, and the person sees a plain sentence instead.
+class UserError extends Error {}
+
+const GENERIC_FAILURE = 'Something unexpected went wrong.';
+
+function userMessage(e: unknown, fallback = GENERIC_FAILURE): string {
+  if (e instanceof UserError) return e.message;
+  console.error('[Token System Generator Pro]', e);
+  return fallback;
+}
+
 // Non-fatal problems collected during a run and shown on the done screen.
 const issues = new Map<string, number>();
 function warn(message: string): void {
@@ -215,7 +228,7 @@ async function resolveTextFont(requested: string, weight: number): Promise<{ fon
     if (pick && !pick.exact) warn(`Font "${family}" has no ${weightName(weight)} style, used ${pick.style}`);
     return { font: { family, style }, exactWeight: !!pick && pick.exact, fellBack };
   }
-  throw new Error(`No usable font found for "${requested}".`);
+  throw new UserError(`No usable font found for "${requested}".`);
 }
 
 interface TextStyleSpec {
@@ -340,7 +353,7 @@ async function convertStylesToTokens(tier: Tier): Promise<FoundationData> {
   const colorStyles = await figma.getLocalPaintStylesAsync();
   const textStyles  = await figma.getLocalTextStylesAsync();
   if (colorStyles.length === 0 && textStyles.length === 0) {
-    throw new Error('No local styles found to convert.');
+    throw new UserError('No local styles found to convert.');
   }
 
   const global   = stageCollection('01 Global');
@@ -365,7 +378,7 @@ async function convertStylesToTokens(tier: Tier): Promise<FoundationData> {
   });
 
   if (globalColors.length === 0) {
-    throw new Error('No solid color styles found to convert.');
+    throw new UserError('No solid color styles found to convert.');
   }
 
   // Every variable created above lives under color/, in creation order.
@@ -992,10 +1005,10 @@ async function runSafely(run: () => Promise<void>): Promise<void> {
   try {
     await run();
   } catch (e) {
-    const err = e as { message?: string; leftover?: number } | null;
-    const message = err?.message ?? String(e);
+    const err = e as { leftover?: number } | null;
+    const message = e instanceof GenerationError ? e.message : userMessage(e);
     const leftover = err?.leftover ?? 0;
-    figma.notify(`❌ Generation failed: ${message}`, { error: true });
+    figma.notify(`❌ Generation failed. ${message}`, { error: true });
     figma.ui.postMessage({ type: 'generation-failed', message, leftover });
   }
 }
@@ -1043,8 +1056,7 @@ async function generate(r: GenerateRequest): Promise<void> {
     if (r.options.canvas && data) await drawFoundationSafely(data, old.foundationFrames[0]);
   } catch (e) {
     const leftover = rollbackStaged();
-    const reason = (e as { message?: string } | null)?.message ?? String(e);
-    throw new GenerationError(reason, leftover);
+    throw new GenerationError(userMessage(e), leftover);
   }
 
   commitStaged(old);
@@ -1302,7 +1314,8 @@ async function drawFoundationSafely(data: FoundationData, previous: FrameNode | 
     for (const node of staged.nodes.splice(before)) {
       try { node.remove(); } catch (_e) { warn(`Couldn't remove a partly drawn foundation frame`); }
     }
-    warn(`Couldn't draw the foundation on the canvas: ${(e as { message?: string } | null)?.message ?? String(e)}`);
+    console.error('[Token System Generator Pro]', e);
+    warn("Couldn't draw the foundation on the canvas.");
   }
 }
 
@@ -1414,7 +1427,7 @@ const LIMITS = {
 function intInRange(value: unknown, key: keyof typeof LIMITS): number {
   const { min, max, label } = LIMITS[key];
   if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
-    throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
+    throw new UserError(`${label} must be a whole number from ${min} to ${max}.`);
   }
   return value;
 }
@@ -1422,12 +1435,12 @@ function intInRange(value: unknown, key: keyof typeof LIMITS): number {
 // A settings object of true/false flags: missing flags take their default, anything else is rejected.
 function parseFlags<T extends object>(raw: unknown, defaults: T, label: string): T {
   if (raw === undefined) return { ...defaults };
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new Error(`Invalid ${label}.`);
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) throw new UserError(`Invalid ${label}.`);
   const out = { ...defaults } as Record<string, boolean>;
   for (const key of Object.keys(defaults)) {
     const value = (raw as Record<string, unknown>)[key];
     if (value === undefined) continue;
-    if (typeof value !== 'boolean') throw new Error(`Invalid ${label}.${key}.`);
+    if (typeof value !== 'boolean') throw new UserError(`Invalid ${label}.${key}.`);
     out[key] = value;
   }
   return out as unknown as T;
@@ -1435,8 +1448,8 @@ function parseFlags<T extends object>(raw: unknown, defaults: T, label: string):
 
 // The UI is trusted to be ours, but it is the only input to everything that follows, so check it.
 function parseRequest(msg: UiMessage): GenerateRequest {
-  if (msg.approach !== '2tier' && msg.approach !== '3tier') throw new Error('Unknown architecture.');
-  if (msg.mode !== 'scratch' && msg.mode !== 'starter' && msg.mode !== 'convert') throw new Error('Unknown mode.');
+  if (msg.approach !== '2tier' && msg.approach !== '3tier') throw new UserError('Unknown architecture.');
+  if (msg.mode !== 'scratch' && msg.mode !== 'starter' && msg.mode !== 'convert') throw new UserError('Unknown mode.');
   const request: GenerateRequest = {
     approach: msg.approach, mode: msg.mode,
     extras: msg.mode === 'starter' ? ALL_EXTRAS : NO_EXTRAS,
@@ -1445,25 +1458,25 @@ function parseRequest(msg: UiMessage): GenerateRequest {
   if (msg.mode !== 'scratch') return request;
 
   const raw = msg.colors as Record<string, unknown> | undefined;
-  if (!raw || typeof raw !== 'object') throw new Error('Brand colors are missing.');
+  if (!raw || typeof raw !== 'object') throw new UserError('Brand colors are missing.');
   const colors = {} as Record<string, string>;
   for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
     const hex = raw[key];
     const required = key === 'primary' || key === 'secondary' || key === 'accent';
     if (typeof hex === 'string' && HEX_RE.test(hex)) colors[key] = hex;
     else if (!required && (hex === undefined || hex === '' || hex === '#')) colors[key] = '';
-    else throw new Error(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
+    else throw new UserError(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
   }
   if (typeof msg.ratioKey !== 'string' || !Object.prototype.hasOwnProperty.call(TS_RATIO, msg.ratioKey)) {
-    throw new Error('Unknown type scale ratio.');
+    throw new UserError('Unknown type scale ratio.');
   }
   if (typeof msg.fontFamily !== 'string' || !msg.fontFamily || msg.fontFamily.length > 200) {
-    throw new Error('Choose a font family.');
+    throw new UserError('Choose a font family.');
   }
   // Optional: blank or missing means one font for everything.
   const body = msg.bodyFontFamily;
   if (body !== undefined && body !== '' && (typeof body !== 'string' || body.length > 200)) {
-    throw new Error('Body font is not valid.');
+    throw new UserError('Body font is not valid.');
   }
   return {
     ...request,
@@ -1515,7 +1528,7 @@ figma.ui.onmessage = async (msg: UiMessage) => {
       const cols  = (await figma.variables.getLocalVariableCollectionsAsync()).length;
       figma.ui.postMessage({ type: 'export-ready', json, total, cols });
     } catch (e) {
-      figma.notify(`❌ Export failed: ${(e as { message?: string } | null)?.message ?? String(e)}`, { error: true });
+      figma.notify(`❌ ${userMessage(e, "Couldn't export your variables. Please try again.")}`, { error: true });
     }
   }
   if (msg.type === 'check-tokens') {
@@ -1529,7 +1542,8 @@ figma.ui.onmessage = async (msg: UiMessage) => {
         cols:  exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0,
       };
     } catch (e) {
-      figma.notify(`⚠️ Couldn't read existing variables: ${(e as { message?: string } | null)?.message ?? String(e)}`);
+      console.error('[Token System Generator Pro]', e);
+      figma.notify("⚠️ Couldn't read the existing variables.");
     }
     figma.ui.postMessage({ type: 'tokens-status', ...status });
   }
@@ -1540,7 +1554,7 @@ figma.ui.onmessage = async (msg: UiMessage) => {
     try {
       figma.ui.postMessage({ type: 'contrast-data', ramps: await readFileRamps() });
     } catch (e) {
-      figma.ui.postMessage({ type: 'contrast-data', ramps: [], error: (e as { message?: string } | null)?.message ?? String(e) });
+      figma.ui.postMessage({ type: 'contrast-data', ramps: [], error: userMessage(e, "Couldn't read your color variables. Please try again.") });
     }
   }
   if (msg.type === 'get-fonts') {

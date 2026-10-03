@@ -1090,7 +1090,7 @@
     const body = document.getElementById('contrast-body');
     body.textContent = '';
     if (msg.error) {
-      body.appendChild(el('div', 'ramp-empty error', `Couldn't read your variables: ${msg.error}`));
+      body.appendChild(el('div', 'ramp-empty error', msg.error));
     } else if (!msg.ramps.length) {
       body.appendChild(el('div', 'ramp-empty', 'No color ramps found. Generate a token system first, or open a file whose Alias collection has color/primary/50 … 900 style variables.'));
     } else {

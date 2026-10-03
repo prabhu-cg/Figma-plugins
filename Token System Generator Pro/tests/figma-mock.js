@@ -14,7 +14,7 @@ const fs = require('fs');
 
 function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {}, hooks = {}, fonts = DEFAULT_FONTS, pageNodes = [] } = {}) {
   let nextId = 0;
-  const state = { collections: [], variables: [], paintStyles: [], textStyles: [], effectStyles: [], messages: [], notes: [], resizes: [], window: null };
+  const state = { collections: [], variables: [], paintStyles: [], textStyles: [], effectStyles: [], messages: [], notes: [], resizes: [], window: null, logs: [] };
   const counts = {};
   let armed = false; // faults only apply to the run, not to seeding the document
   const tick = (op) => {
@@ -213,7 +213,7 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
 
   let ctx;
   const load = (bundlePath) => {
-    ctx = { figma, __html__: '', console, setTimeout };
+    ctx = { figma, __html__: '', console: { log() {}, warn() {}, error: (...args) => state.logs.push(args) }, setTimeout };
     vm.createContext(ctx);
     vm.runInContext(fs.readFileSync(bundlePath, 'utf8'), ctx);
   };

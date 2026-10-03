@@ -1039,6 +1039,53 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(fig.state.resizes.length === 0, 'the window was resized');
   });
 
+  // ── Messages for people, not developers ──
+  await test('an unexpected failure shows a plain sentence; the technical detail goes to the console only', async () => {
+    const fig = createFigma({ ...EXISTING, faults: { createVariable: 5 } }); fig.load(BUNDLE);
+    fig.send(scratchMsg());
+    const result = await fig.finished();
+    assert(result.type === 'generation-failed', result.type);
+    assert(!/injected|createVariable|failure #/.test(result.message), `technical text reached the user: ${result.message}`);
+    assert(/something unexpected went wrong/i.test(result.message), result.message);
+    assert(!fig.state.notes.some(n => /injected|createVariable/.test(n)), `a notification leaked detail: ${fig.state.notes.join(' | ')}`);
+    assert(fig.state.logs.some(a => String(a[1] && a[1].message).includes('injected createVariable')), 'detail was not logged for debugging');
+  });
+
+  await test('Figma API wording (for example an unloaded font) never reaches the user either', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    const original = fig.figma.createTextStyle;
+    fig.figma.createTextStyle = () => { throw new Error('in set_fontSize: Cannot write to node with unloaded font "Inter Regular"'); };
+    await fig.send(scratchMsg({ type: 'generate' }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-failed' && !/set_fontSize|unloaded font|Inter Regular/.test(result.message), result.message);
+    fig.figma.createTextStyle = original;
+  });
+
+  await test('intentional messages are still shown as written', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    fig.send(scratchMsg({ spacingBase: 99 }));
+    const bad = await fig.finished();
+    assert(/Spacing base unit must be a whole number from 1 to 32/.test(bad.message), bad.message);
+    const conv = createFigma({ textStyles: [] , collections: [] }); conv.load(BUNDLE);
+    await conv.send(scratchMsg({ type: 'generate', mode: 'convert' }));
+    const blocked = await conv.finished();
+    assert(blocked.type === 'generation-blocked' && /No local color or text styles/.test(blocked.reason), JSON.stringify(blocked));
+    const noSolid = createFigma({ textStyles: [['h1', 32, 'Bold']] }); noSolid.load(BUNDLE);
+    noSolid.send(scratchMsg({ type: 'confirm-continue', mode: 'convert' }));
+    const r = await noSolid.finished();
+    assert(r.type === 'generation-failed' && /No solid color styles found to convert/.test(r.message), r.message);
+  });
+
+  await test('export and contrast errors are plain sentences too', async () => {
+    const fig = createFigma({ collections: [{ name: '01 Global', variables: ['a'] }, { name: '02 Alias', variables: ['b'] }] }); fig.load(BUNDLE);
+    fig.figma.variables.getLocalVariablesAsync = async () => { throw new Error('secret internal detail'); };
+    const contrast = await ask(fig, { type: 'check-contrast' }, 'contrast-data');
+    assert(contrast.error && !/secret/.test(contrast.error) && contrast.ramps.length === 0, contrast.error);
+    fig.state.notes.length = 0;
+    await fig.send({ type: 'export-json' });
+    assert(fig.state.notes.length > 0 && fig.state.notes.every(n => !/secret/.test(n)), fig.state.notes.join(' | '));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

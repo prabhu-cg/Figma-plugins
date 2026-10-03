@@ -424,6 +424,14 @@
 
   // code.ts
   figma.showUI(__html__, { width: 560, height: 510 });
+  var UserError = class extends Error {
+  };
+  var GENERIC_FAILURE = "Something unexpected went wrong.";
+  function userMessage(e, fallback = GENERIC_FAILURE) {
+    if (e instanceof UserError) return e.message;
+    console.error("[Token System Generator Pro]", e);
+    return fallback;
+  }
   var issues = /* @__PURE__ */ new Map();
   function warn(message) {
     var _a;
@@ -610,7 +618,7 @@
       if (pick && !pick.exact) warn(`Font "${family}" has no ${weightName(weight)} style, used ${pick.style}`);
       return { font: { family, style }, exactWeight: !!pick && pick.exact, fellBack };
     }
-    throw new Error(`No usable font found for "${requested}".`);
+    throw new UserError(`No usable font found for "${requested}".`);
   }
   async function createLocalTextStyle(spec) {
     await figma.loadFontAsync(NEW_STYLE_FONT);
@@ -669,7 +677,7 @@
     const colorStyles = await figma.getLocalPaintStylesAsync();
     const textStyles = await figma.getLocalTextStylesAsync();
     if (colorStyles.length === 0 && textStyles.length === 0) {
-      throw new Error("No local styles found to convert.");
+      throw new UserError("No local styles found to convert.");
     }
     const global = stageCollection("01 Global");
     const aliasCol = stageCollection("02 Alias");
@@ -689,7 +697,7 @@
       globalColors.push({ name, brightness: paint.color.r + paint.color.g + paint.color.b, variable: v });
     });
     if (globalColors.length === 0) {
-      throw new Error("No solid color styles found to convert.");
+      throw new UserError("No solid color styles found to convert.");
     }
     const allGlobalVars = globalColors.map((c) => c.variable);
     const colorFamilies = /* @__PURE__ */ new Map();
@@ -1161,14 +1169,14 @@
     }
   };
   async function runSafely(run) {
-    var _a, _b;
+    var _a;
     try {
       await run();
     } catch (e) {
       const err = e;
-      const message = (_a = err == null ? void 0 : err.message) != null ? _a : String(e);
-      const leftover = (_b = err == null ? void 0 : err.leftover) != null ? _b : 0;
-      figma.notify(`\u274C Generation failed: ${message}`, { error: true });
+      const message = e instanceof GenerationError ? e.message : userMessage(e);
+      const leftover = (_a = err == null ? void 0 : err.leftover) != null ? _a : 0;
+      figma.notify(`\u274C Generation failed. ${message}`, { error: true });
       figma.ui.postMessage({ type: "generation-failed", message, leftover });
     }
   }
@@ -1203,7 +1211,6 @@
     };
   }
   async function generate(r) {
-    var _a;
     const blocked = await blockedReason(r.mode);
     if (blocked) {
       figma.ui.postMessage({ type: "generation-blocked", reason: blocked });
@@ -1222,8 +1229,7 @@
       if (r.options.canvas && data) await drawFoundationSafely(data, old.foundationFrames[0]);
     } catch (e) {
       const leftover = rollbackStaged();
-      const reason = (_a = e == null ? void 0 : e.message) != null ? _a : String(e);
-      throw new GenerationError(reason, leftover);
+      throw new GenerationError(userMessage(e), leftover);
     }
     commitStaged(old);
     let json = "";
@@ -1438,7 +1444,6 @@
     figma.viewport.scrollAndZoomIntoView([root]);
   }
   async function drawFoundationSafely(data, previous) {
-    var _a;
     const before = staged.nodes.length;
     try {
       await drawFoundation(data, previous);
@@ -1450,7 +1455,8 @@
           warn(`Couldn't remove a partly drawn foundation frame`);
         }
       }
-      warn(`Couldn't draw the foundation on the canvas: ${(_a = e == null ? void 0 : e.message) != null ? _a : String(e)}`);
+      console.error("[Token System Generator Pro]", e);
+      warn("Couldn't draw the foundation on the canvas.");
     }
   }
   function previewRamps(raw) {
@@ -1515,25 +1521,25 @@
   function intInRange(value, key) {
     const { min, max, label } = LIMITS[key];
     if (typeof value !== "number" || !Number.isInteger(value) || value < min || value > max) {
-      throw new Error(`${label} must be a whole number from ${min} to ${max}.`);
+      throw new UserError(`${label} must be a whole number from ${min} to ${max}.`);
     }
     return value;
   }
   function parseFlags(raw, defaults, label) {
     if (raw === void 0) return __spreadValues({}, defaults);
-    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new Error(`Invalid ${label}.`);
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) throw new UserError(`Invalid ${label}.`);
     const out = __spreadValues({}, defaults);
     for (const key of Object.keys(defaults)) {
       const value = raw[key];
       if (value === void 0) continue;
-      if (typeof value !== "boolean") throw new Error(`Invalid ${label}.${key}.`);
+      if (typeof value !== "boolean") throw new UserError(`Invalid ${label}.${key}.`);
       out[key] = value;
     }
     return out;
   }
   function parseRequest(msg) {
-    if (msg.approach !== "2tier" && msg.approach !== "3tier") throw new Error("Unknown architecture.");
-    if (msg.mode !== "scratch" && msg.mode !== "starter" && msg.mode !== "convert") throw new Error("Unknown mode.");
+    if (msg.approach !== "2tier" && msg.approach !== "3tier") throw new UserError("Unknown architecture.");
+    if (msg.mode !== "scratch" && msg.mode !== "starter" && msg.mode !== "convert") throw new UserError("Unknown mode.");
     const request = {
       approach: msg.approach,
       mode: msg.mode,
@@ -1542,24 +1548,24 @@
     };
     if (msg.mode !== "scratch") return request;
     const raw = msg.colors;
-    if (!raw || typeof raw !== "object") throw new Error("Brand colors are missing.");
+    if (!raw || typeof raw !== "object") throw new UserError("Brand colors are missing.");
     const colors = {};
     for (const key of [...BRAND_KEYS, ...SEMANTIC_KEYS]) {
       const hex = raw[key];
       const required = key === "primary" || key === "secondary" || key === "accent";
       if (typeof hex === "string" && HEX_RE.test(hex)) colors[key] = hex;
       else if (!required && (hex === void 0 || hex === "" || hex === "#")) colors[key] = "";
-      else throw new Error(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
+      else throw new UserError(`${key[0].toUpperCase()}${key.slice(1)} must be a 6-digit hex color like #3D6BE8.`);
     }
     if (typeof msg.ratioKey !== "string" || !Object.prototype.hasOwnProperty.call(TS_RATIO, msg.ratioKey)) {
-      throw new Error("Unknown type scale ratio.");
+      throw new UserError("Unknown type scale ratio.");
     }
     if (typeof msg.fontFamily !== "string" || !msg.fontFamily || msg.fontFamily.length > 200) {
-      throw new Error("Choose a font family.");
+      throw new UserError("Choose a font family.");
     }
     const body = msg.bodyFontFamily;
     if (body !== void 0 && body !== "" && (typeof body !== "string" || body.length > 200)) {
-      throw new Error("Body font is not valid.");
+      throw new UserError("Body font is not valid.");
     }
     return __spreadProps(__spreadValues({}, request), {
       extras: parseFlags(msg.extras, NO_EXTRAS, "extras"),
@@ -1591,7 +1597,6 @@
     if (generating) rollbackStaged();
   });
   figma.ui.onmessage = async (msg) => {
-    var _a, _b, _c;
     if (msg.type === "generate" || msg.type === "confirm-continue") {
       await exclusive(() => runSafely(async () => {
         const r = parseRequest(msg);
@@ -1610,7 +1615,7 @@
         const cols = (await figma.variables.getLocalVariableCollectionsAsync()).length;
         figma.ui.postMessage({ type: "export-ready", json, total, cols });
       } catch (e) {
-        figma.notify(`\u274C Export failed: ${(_a = e == null ? void 0 : e.message) != null ? _a : String(e)}`, { error: true });
+        figma.notify(`\u274C ${userMessage(e, "Couldn't export your variables. Please try again.")}`, { error: true });
       }
     }
     if (msg.type === "check-tokens") {
@@ -1623,7 +1628,8 @@
           cols: exists ? (await figma.variables.getLocalVariableCollectionsAsync()).length : 0
         };
       } catch (e) {
-        figma.notify(`\u26A0\uFE0F Couldn't read existing variables: ${(_b = e == null ? void 0 : e.message) != null ? _b : String(e)}`);
+        console.error("[Token System Generator Pro]", e);
+        figma.notify("\u26A0\uFE0F Couldn't read the existing variables.");
       }
       figma.ui.postMessage(__spreadValues({ type: "tokens-status" }, status));
     }
@@ -1634,7 +1640,7 @@
       try {
         figma.ui.postMessage({ type: "contrast-data", ramps: await readFileRamps() });
       } catch (e) {
-        figma.ui.postMessage({ type: "contrast-data", ramps: [], error: (_c = e == null ? void 0 : e.message) != null ? _c : String(e) });
+        figma.ui.postMessage({ type: "contrast-data", ramps: [], error: userMessage(e, "Couldn't read your color variables. Please try again.") });
       }
     }
     if (msg.type === "get-fonts") {
