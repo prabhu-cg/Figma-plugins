@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Carousel slide</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; }
+  body { font-family: Inter, system-ui, sans-serif; color: #fff; position: relative;
+         background: linear-gradient(135deg, #0D1117 0%, #1A1A2A 100%); }
+  .glow { position: absolute; left: 1080px; top: 120px; width: 1000px; height: 1000px; border-radius: 50%;
+          background: radial-gradient(circle, rgba(238,102,29,.24), rgba(238,102,29,0) 62%); }
+  .ring { position: absolute; left: 1180px; top: 220px; width: 800px; height: 800px; border-radius: 50%; border: 1.5px solid rgba(238,102,29,.07); }
+  .copy { position: absolute; left: 110px; top: 0; bottom: 0; width: 760px; display: flex; flex-direction: column; justify-content: center; gap: 30px; padding-bottom: 40px; }
+  h1 { font-size: 78px; line-height: 1.04; font-weight: 800; letter-spacing: -2.4px; text-wrap: balance; }
+  h1 em { font-style: normal; color: #EE661D; }
+  .sub { font-size: 30px; line-height: 1.45; color: #94A3B8; max-width: 700px; text-wrap: pretty; }
+  ul { list-style: none; display: flex; flex-direction: column; gap: 14px; margin-top: 6px; }
+  li { font-size: 25px; color: #CBD5E1; padding-left: 32px; position: relative; line-height: 1.35; }
+  li::before { content: ""; position: absolute; left: 0; top: 11px; width: 12px; height: 12px; border-radius: 50%; background: #EE661D; }
+  .brand { position: absolute; left: 110px; bottom: 60px; display: flex; align-items: center; gap: 16px; font-size: 22px; font-weight: 500; color: #64748B; }
+  .brand img { width: 40px; height: 40px; }
+  .brand b { color: #34D399; font-weight: 600; margin-left: 6px; }
+  .window { position: absolute; left: 905px; top: 66px; width: 560px; transform: scale(1.7); transform-origin: top left;
+            border-radius: 12px; overflow: hidden; background: #fafafa; box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.08); }
+  .titlebar { height: 44px; background: #2C2C2C; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: 1px solid #3a3a3a; }
+  .titlebar .left { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: #fff; }
+  .titlebar .logo { width: 22px; height: 22px; border-radius: 6px; background: #fff; display: flex; align-items: center; justify-content: center; color: #2C2C2C; font: 700 11px Menlo, monospace; }
+  .titlebar .x { color: #fff; font-size: 20px; line-height: 1; opacity: .9; }
+  iframe { display: block; width: 560px; height: 510px; border: 0; background: #fafafa; }
+</style>
+</head>
+<body>
+  <div class="glow"></div><div class="ring"></div>
+  <div class="copy"><h1 id="h"></h1><p class="sub" id="sub"></p><ul id="points"></ul></div>
+  <div class="brand"><img src="../../icon.svg" alt=""><span>Token System Generator Pro</span><b>Free</b></div>
+  <div class="window">
+    <div class="titlebar"><div class="left"><div class="logo">&lt;/&gt;</div>Token System Generator Pro</div><div class="x">×</div></div>
+    <iframe id="ui" src="../../ui.html"></iframe>
+  </div>
+
+<script>
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const n = Number(new URLSearchParams(location.search).get('s') || 1);
+
+const SLIDES = {
+  1: { h: 'Build a complete <em>token system</em> in one click',
+       sub: 'Start from your brand colors, a ready-made starter, or convert the styles you already have.',
+       points: ['From Scratch, Starter System or Smart Convert', '2-tier or 3-tier structure', 'Colors, type, spacing, radius and more'],
+       async setup(f, d) { f.postMessage({ pluginMessage: { type: 'tokens-status', exists: false } }, '*'); await wait(900); } },
+  2: { h: 'See your <em>color ramps</em> as you type',
+       sub: 'Perceptually even OKLCH ramps. Stop 500 is exactly your color, and a color picker sits beside every field.',
+       points: ['Live preview for every color', 'Brand and semantic colors', 'Names like cobalt and violet'],
+       async setup(f, d, data) { await scratch(f, d, data); const doc = f.document; f.postMessage({ pluginMessage: data.preview }, '*'); await wait(500);
+         doc.querySelector('#screen2 .screen-body').scrollTop = doc.getElementById('ramp-preview-section').offsetTop - 14; await wait(300); } },
+  3: { h: 'Check <em>contrast</em> before you ship',
+       sub: 'WCAG 2 and APCA scores for every stop, with white and black text, plus where each ramp reaches AA.',
+       points: ['AAA, AA, Large and Fail at a glance', 'Works on any generated system', 'Reads your variables, changes nothing'],
+       async setup(f, d, data) { f.postMessage({ pluginMessage: { type: 'tokens-status', exists: true, total: data.total, cols: data.cols } }, '*'); await wait(700);
+         f.openContrast('screen-landing'); await wait(300); f.postMessage({ pluginMessage: data.contrast }, '*'); await wait(500);
+         const doc = f.document; doc.querySelector('#screen-contrast .screen-body').scrollTop = doc.querySelector('.contrast-ramp').offsetTop - 6; await wait(300); } },
+  4: { h: 'Elevation, opacity and <em>z-index</em> too',
+       sub: 'Optional extras that arrive with matching effect styles, so shadows and layers are ready to use.',
+       points: ['5 shadow levels as variables and styles', 'Opacity steps from 0 to 100', 'Z-index layers for developers'],
+       async setup(f, d, data) { await scratch(f, d, data); const doc = f.document; const sec = doc.getElementById('chk-elevation').closest('.scale-section');
+         doc.querySelector('#screen2 .screen-body').scrollTop = sec.offsetTop - 14; await wait(300); } },
+  5: { h: 'Tidy pickers, <em>developer-ready</em> names',
+       sub: 'Scopes hide the primitives so designers reach for the right layer, and code syntax shows the CSS variable name.',
+       points: ['Variable scopes for every token', 'var(--alias-color-primary-500) in Dev Mode', 'Optional foundation drawn on the canvas'],
+       async setup(f, d, data) { await scratch(f, d, data); f.goTo('screen3', 'left'); await wait(500); f.selectArch('3tier'); await wait(400);
+         const doc = f.document; doc.getElementById('chk-canvas').checked = true; doc.querySelector('#screen3 .screen-body').scrollTop = doc.querySelector('.output-options').offsetTop - 8; await wait(300); } },
+  6: { h: 'Dev-ready <em>JSON</em>, Style Dictionary compatible',
+       sub: 'Copy or download tokens with aliases resolved and sizes in px. It builds to CSS, SCSS and JavaScript.',
+       points: ['global, alias and component layers', 'References like {global.color.cobalt.500}', 'Refresh any time after editing in Figma'],
+       async setup(f, d, data) { f.postMessage({ pluginMessage: { type: 'tokens-status', exists: false } }, '*'); await wait(700); f.goTo('screen4', 'left'); f.showExport(data.json, data.total, data.cols, []); await wait(500); } },
+  7: { h: 'Replaces only what it <em>made</em>',
+       sub: 'Your own collections and styles are never touched, and generation is all or nothing: if anything fails, nothing changes.',
+       points: ['A confirmation lists exactly what is replaced', 'Failed runs roll back completely', 'No network access, no data collected'],
+       async setup(f, d, data) { await scratch(f, d, data); f.goTo('screen3', 'left'); await wait(500); f.selectArch('3tier'); await wait(400);
+         f.postMessage({ pluginMessage: { type: 'confirm-replace', existing: { collections: [{ name: '01 Global', variables: 312 }, { name: '02 Alias', variables: 118 }, { name: '03 Component', variables: 20 }],
+           paintStyles: 90, textStyles: 13, effectStyles: 5, foundationFrames: 1 } } }, '*'); await wait(700);
+         f.document.activeElement.blur(); } },
+};
+
+// From Scratch screen with the example colors filled in.
+async function scratch(f, d, data) {
+  f.postMessage({ pluginMessage: { type: 'tokens-status', exists: false } }, '*'); await wait(700);
+  const doc = f.document;
+  for (const k of Object.keys(data.colors)) { const input = doc.getElementById('inp-' + k); input.value = data.colors[k]; f.onColorInput(k); }
+  f.selectMode('scratch'); await wait(600);
+  f.postMessage({ pluginMessage: data.preview }, '*'); await wait(300);
+}
+
+(async () => {
+  const s = SLIDES[n];
+  document.getElementById('h').innerHTML = s.h;
+  document.getElementById('sub').textContent = s.sub;
+  s.points.forEach((p) => { const li = document.createElement('li'); li.textContent = p; document.getElementById('points').appendChild(li); });
+  const data = await (await fetch('data.json')).json();
+  const frame = document.getElementById('ui');
+  await new Promise((r) => (frame.contentDocument && frame.contentDocument.readyState === 'complete') ? r() : frame.addEventListener('load', r));
+  const f = frame.contentWindow;
+  const link = f.document.createElement('link'); link.rel = 'stylesheet'; link.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap'; f.document.head.appendChild(link);
+  await wait(400);
+  await s.setup(f, f.document, data);
+  document.title = 'ready';
+})();
+</script>
+</body>
+</html>
