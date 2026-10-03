@@ -330,6 +330,129 @@ const MODES = [['scratch', ['2tier', '3tier']], ['starter', ['2tier', '3tier']],
     assert(a.heading.type === 'fontFamily' && /^\{01 Global\.typography\.fontFamily\.heading\}$/.test(a.heading.value), JSON.stringify(a));
   });
 
+  // ── Paragraph spacing + font weight ──
+  const val = (v) => Object.values(v.valuesByMode)[0];
+  const aliasTarget = (fig, name) => {
+    const v = fig.state.variables.find(x => x.name === name && val(x) && val(x).type === 'VARIABLE_ALIAS');
+    return v && fig.state.variables.find(x => x.id === val(v).id);
+  };
+  const LEVELS = ['display-lg', 'display-md', 'display-sm', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'body-lg', 'body', 'caption', 'xs'];
+
+  for (const approach of ['2tier', '3tier']) {
+    await test(`${approach}: paragraph spacing and font weight variables exist for every level, aliased in Alias`, async () => {
+      const { fig, run } = request({}, { approach, mode: 'scratch', confirmed: false });
+      const result = await run();
+      assert(result.type === 'generation-complete' && result.warnings.length === 0, JSON.stringify(result));
+      LEVELS.forEach(l => {
+        const ps = varNamed(fig, `typography/paragraph-spacing/${l}`);
+        assert(ps && typeof val(ps) === 'number', `missing paragraph-spacing/${l}`);
+        const target = aliasTarget(fig, `text/${l}/paragraph-spacing`);
+        assert(target && target.id === ps.id, `text/${l}/paragraph-spacing does not alias its global`);
+        assert(aliasTarget(fig, `text/${l}/font-weight`), `text/${l}/font-weight alias missing`);
+      });
+      const weights = fig.state.variables.filter(v => v.name.startsWith('typography/font-weight/'));
+      assert(JSON.stringify(weights.map(v => [v.name, val(v)])) === JSON.stringify([['typography/font-weight/regular', 400], ['typography/font-weight/semibold', 600], ['typography/font-weight/bold', 700]]), JSON.stringify(weights.map(v => [v.name, val(v)])));
+      assert(aliasTarget(fig, 'text/h1/font-weight').name === 'typography/font-weight/bold', 'h1 should alias bold');
+      assert(aliasTarget(fig, 'text/h4/font-weight').name === 'typography/font-weight/semibold', 'h4 should alias semibold');
+      assert(aliasTarget(fig, 'text/body/font-weight').name === 'typography/font-weight/regular', 'body should alias regular');
+    });
+  }
+
+  await test('text styles get the weight, paragraph spacing, and bindings for both', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', confirmed: false });
+    await run();
+    const s = (n) => textStyle(fig, n);
+    assert(s('Display/display-lg').fontName.style === 'Bold' && s('Heading/h1').fontName.style === 'Bold', 'display/h1 should be Bold');
+    assert(s('Heading/h3').fontName.style === 'Semi Bold', `h3 is ${s('Heading/h3').fontName.style}`);   // Inter's real style name
+    assert(s('Body copy/body').fontName.style === 'Regular', 'body should be Regular');
+    assert(s('Body copy/body').paragraphSpacing === 12 && s('Display/display-lg').paragraphSpacing === 0, 'paragraph spacing values');
+    assert(s('Heading/h1').bound.fontWeight === 'typography/font-weight/bold', `h1 weight bound to ${s('Heading/h1').bound.fontWeight}`);
+    assert(s('Heading/h3').bound.fontWeight === 'typography/font-weight/semibold', 'h3 weight binding');
+    assert(s('Body copy/body').bound.paragraphSpacing === 'typography/paragraph-spacing/body', 'body paragraph-spacing binding');
+    assert(s('Body copy/body').bound.fontFamily === 'typography/font-family', 'font family binding kept');
+  });
+
+  await test('two fonts: each uses its own weights, with exact matches and no warnings', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Playfair Display', bodyFontFamily: 'Source Sans 3', confirmed: false });
+    const result = await run();
+    assert(result.warnings.length === 0, JSON.stringify(result.warnings));
+    assert(textStyle(fig, 'Heading/h4').fontName.style === 'SemiBold' && textStyle(fig, 'Heading/h4').fontName.family === 'Playfair Display', 'heading font/weight');
+    assert(textStyle(fig, 'Body copy/body').fontName.style === 'Regular' && textStyle(fig, 'Body copy/body').fontName.family === 'Source Sans 3', 'body font/weight');
+  });
+
+  await test('a font without the wanted weight uses the nearest, warns, and skips only the weight binding', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Georgia', confirmed: false });   // Georgia: Regular + Bold only
+    const result = await run();
+    assert(result.type === 'generation-complete', result.message);
+    assert(result.warnings.some(w => /Georgia/.test(w) && /semibold/.test(w) && /Bold/.test(w)), JSON.stringify(result.warnings));
+    const h4 = textStyle(fig, 'Heading/h4'), h1 = textStyle(fig, 'Heading/h1');
+    assert(h4.fontName.style === 'Bold' && h4.bound.fontWeight === undefined, `h4: ${h4.fontName.style} / ${h4.bound.fontWeight}`);
+    assert(h4.bound.fontFamily === 'typography/font-family' && h4.bound.fontSize, 'other bindings should remain');
+    assert(h1.bound.fontWeight === 'typography/font-weight/bold', 'exact weights are still bound');
+  });
+
+  await test('an unavailable font falls back to Helvetica without binding to the missing font', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', fontFamily: 'Missing Font', confirmed: false });
+    const result = await run();
+    assert(result.warnings.some(w => /Missing Font/.test(w) && /Helvetica/.test(w)), JSON.stringify(result.warnings));
+    const h1 = textStyle(fig, 'Heading/h1');
+    assert(h1.fontName.family === 'Helvetica' && h1.fontName.style === 'Bold', `${h1.fontName.family} ${h1.fontName.style}`);
+    assert(h1.bound.fontFamily === undefined && h1.bound.fontWeight === undefined, 'should not bind to the missing font');
+    assert(h1.bound.fontSize, 'size should still be bound');
+  });
+
+  await test('font catalog unreadable: styles are still created (Regular), without failing', async () => {
+    const fig = createFigma({}); fig.load(BUNDLE);
+    fig.figma.listAvailableFontsAsync = async () => { throw new Error('no font list'); };
+    await fig.send(scratchMsg({ type: 'generate', approach: '2tier' }));
+    const result = await fig.finished();
+    assert(result.type === 'generation-complete', `${result.type}: ${result.message}`);
+    assert(fig.state.textStyles.length === 13, 'text styles missing');
+  });
+
+  await test('Smart Convert: font weight and paragraph spacing come from the existing text styles', async () => {
+    const doc = {
+      paintStyles: [['red-500', .9, .1, .1], ['blue-500', .1, .1, .9]],
+      textStyles: [['Heading/h1', 32, 'Bold'], ['Body/body', 16, 'Regular'], ['Label/small', 12, 'Semi Bold'], ['Odd/thing', 14, 'Mystery']],
+    };
+    const { fig, run } = request(doc, { approach: '2tier', mode: 'convert' });
+    // give one style paragraph spacing, as a designer would
+    fig.state.textStyles.find(s => s.name === 'Body/body').paragraphSpacing = 12;
+    const result = await run();
+    assert(result.type === 'generation-complete', `${result.type}: ${result.message}`);
+    const g = (n) => val(varNamed(fig, n));
+    assert(g('typography/fontWeight/heading/h1') === 700 && g('typography/fontWeight/body/body') === 400 && g('typography/fontWeight/label/small') === 600, 'weights from style names');
+    assert(g('typography/fontWeight/odd/thing') === 400, 'unknown style name should default to 400');
+    assert(g('typography/paragraphSpacing/body/body') === 12, 'paragraph spacing');
+    assert(aliasTarget(fig, 'text/heading/h1/fontWeight').name === 'typography/fontWeight/heading/h1', 'weight alias');
+    assert(aliasTarget(fig, 'text/body/body/paragraphSpacing').name === 'typography/paragraphSpacing/body/body', 'paragraph spacing alias');
+  });
+
+  await test('Smart Convert JSON export: weight tokens are typed fontWeight, spacing as dimension', async () => {
+    const doc = { paintStyles: [['red-500', .9, .1, .1]], textStyles: [['h1', 32, 'Bold']] };
+    const { fig, run } = request(doc, { approach: '2tier', mode: 'convert' });
+    await run();
+    fig.state.messages.length = 0;
+    await fig.send({ type: 'export-json' });
+    const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
+    const alias = out['02 Alias'].text.h1;
+    assert(alias.fontWeight.type === 'fontWeight' && alias.fontWeight.value === '{01 Global.typography.fontWeight.h1}', JSON.stringify(alias.fontWeight));
+    assert(alias.paragraphSpacing.type === 'dimension' && alias.paragraphSpacing.value === '{01 Global.typography.paragraphSpacing.h1}', JSON.stringify(alias.paragraphSpacing));
+    assert(out['01 Global'].typography.fontWeight.h1.type === 'fontWeight' && out['01 Global'].typography.fontWeight.h1.value === 700, JSON.stringify(out['01 Global'].typography));
+  });
+
+  await test('scratch JSON export: weight and paragraph-spacing tokens are exported with sensible types', async () => {
+    const { fig, run } = request({}, { approach: '2tier', mode: 'scratch', confirmed: false });
+    await run();
+    fig.state.messages.length = 0;
+    await fig.send({ type: 'export-json' });
+    const out = JSON.parse(fig.state.messages.find(m => m.type === 'export-ready').json);
+    const g = out['01 Global'].typography;
+    assert(g.fontWeight.bold.type === 'fontWeight' && g.fontWeight.bold.value === 700, JSON.stringify(g.fontWeight));
+    assert(g.paragraphSpacing.body.type === 'dimension' && g.paragraphSpacing.body.value === 12, JSON.stringify(g.paragraphSpacing));
+    assert(out['02 Alias'].text.h1.fontWeight.value === '{01 Global.typography.fontWeight.bold}', JSON.stringify(out['02 Alias'].text.h1.fontWeight));
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 })();

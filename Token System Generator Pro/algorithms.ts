@@ -151,31 +151,84 @@ export const TS_RATIO: Record<string, number> = {
   'aug-fourth':     1.414,
 };
 
-export interface TypeLevel { name: string; fontSize: number; lineHeight: number; letterSpacing: number; }
+export interface TypeLevel {
+  name: string;
+  fontSize: number;
+  lineHeight: number;      // ratio of font size
+  letterSpacing: number;   // ratio of font size (em)
+  paragraphSpacing: number; // px, on the 4pt grid
+  fontWeight: number;      // 100–900
+}
 
+// Weights read as a hierarchy: displays and the top headings are bold, the smaller headings
+// semibold, running text regular. Paragraph spacing is a share of the font size: none for
+// display lines (one line each), more for body copy where paragraphs stack.
 export function generateTypographyScale(fontBase: number, ratioKey: string): TypeLevel[] {
   const ratio = Object.prototype.hasOwnProperty.call(TS_RATIO, ratioKey) ? TS_RATIO[ratioKey] : 1.25;
   const levels = [
-    { name: 'display-lg', step: 10, lh: 1.0,  ls: -0.05 },
-    { name: 'display-md', step:  9, lh: 1.0,  ls: -0.05 },
-    { name: 'display-sm', step:  8, lh: 1.05, ls: -0.04 },
-    { name: 'h1',         step:  7, lh: 1.1,  ls: -0.03 },
-    { name: 'h2',         step:  6, lh: 1.1,  ls: -0.03 },
-    { name: 'h3',         step:  5, lh: 1.2,  ls: -0.02 },
-    { name: 'h4',         step:  4, lh: 1.2,  ls: -0.02 },
-    { name: 'h5',         step:  3, lh: 1.2,  ls:  0    },
-    { name: 'h6',         step:  2, lh: 1.2,  ls:  0    },
-    { name: 'body-lg',    step:  1, lh: 1.5,  ls:  0    },
-    { name: 'body',       step:  0, lh: 1.5,  ls:  0    },
-    { name: 'caption',    step: -1, lh: 1.4,  ls:  0.01 },
-    { name: 'xs',         step: -2, lh: 1.4,  ls:  0.02 },
+    { name: 'display-lg', step: 10, lh: 1.0,  ls: -0.05, ps: 0,    fw: 700 },
+    { name: 'display-md', step:  9, lh: 1.0,  ls: -0.05, ps: 0,    fw: 700 },
+    { name: 'display-sm', step:  8, lh: 1.05, ls: -0.04, ps: 0,    fw: 700 },
+    { name: 'h1',         step:  7, lh: 1.1,  ls: -0.03, ps: 0.25, fw: 700 },
+    { name: 'h2',         step:  6, lh: 1.1,  ls: -0.03, ps: 0.25, fw: 700 },
+    { name: 'h3',         step:  5, lh: 1.2,  ls: -0.02, ps: 0.5,  fw: 600 },
+    { name: 'h4',         step:  4, lh: 1.2,  ls: -0.02, ps: 0.5,  fw: 600 },
+    { name: 'h5',         step:  3, lh: 1.2,  ls:  0,    ps: 0.5,  fw: 600 },
+    { name: 'h6',         step:  2, lh: 1.2,  ls:  0,    ps: 0.5,  fw: 600 },
+    { name: 'body-lg',    step:  1, lh: 1.5,  ls:  0,    ps: 0.75, fw: 400 },
+    { name: 'body',       step:  0, lh: 1.5,  ls:  0,    ps: 0.75, fw: 400 },
+    { name: 'caption',    step: -1, lh: 1.4,  ls:  0.01, ps: 0.5,  fw: 400 },
+    { name: 'xs',         step: -2, lh: 1.4,  ls:  0.02, ps: 0.5,  fw: 400 },
   ];
-  return levels.map(({ name, step, lh, ls }) => ({
-    name,
-    fontSize:      Math.round(fontBase * Math.pow(ratio, step) / 4) * 4,
-    lineHeight:    lh,
-    letterSpacing: ls,
-  }));
+  return levels.map(({ name, step, lh, ls, ps, fw }) => {
+    const fontSize = Math.round(fontBase * Math.pow(ratio, step) / 4) * 4;
+    return {
+      name,
+      fontSize,
+      lineHeight:       lh,
+      letterSpacing:    ls,
+      paragraphSpacing: Math.round(fontSize * ps / 4) * 4,
+      fontWeight:       fw,
+    };
+  });
+}
+
+// ─── FONT WEIGHTS ─────────────────────────────────────────────────
+// Fonts report styles by name ("Semi Bold", "Demi", "Heavy"), not by number, so names are mapped
+// to the usual 100–900 weights. Italic styles are left out: text styles here are upright.
+
+export const FONT_WEIGHT_NAMES: Record<number, string> = {
+  100: 'thin', 200: 'extra-light', 300: 'light', 400: 'regular', 500: 'medium',
+  600: 'semibold', 700: 'bold', 800: 'extra-bold', 900: 'black',
+};
+
+// Order matters: "extrabold" must be tested before "bold", "semibold" before "bold", etc.
+const STYLE_WEIGHT_PATTERNS: [RegExp, number][] = [
+  [/(extra|ultra)bold/, 800], [/(semi|demi)bold|^demi$/, 600], [/(extra|ultra)light/, 200],
+  [/^(thin|hairline)$/, 100], [/^light$/, 300], [/^medium$/, 500], [/^bold$/, 700],
+  [/^(black|heavy)$/, 900], [/^(regular|book|normal|roman)$/, 400],
+];
+
+export function weightFromStyleName(style: string): number | null {
+  const s = style.toLowerCase().replace(/[\s_-]+/g, '');
+  if (s.includes('italic') || s.includes('oblique')) return null;
+  for (const [pattern, weight] of STYLE_WEIGHT_PATTERNS) if (pattern.test(s)) return weight;
+  return null;
+}
+
+// The style of a font's available styles closest to a wanted weight (exact match preferred;
+// on a tie the heavier one wins). null when the font has no upright style we can place.
+export function pickFontStyle(weight: number, styles: string[]): { style: string; weight: number; exact: boolean } | null {
+  let best: { style: string; weight: number; exact: boolean } | null = null;
+  for (const style of styles) {
+    const w = weightFromStyleName(style);
+    if (w === null) continue;
+    const better = best === null
+      || Math.abs(w - weight) < Math.abs(best.weight - weight)
+      || (Math.abs(w - weight) === Math.abs(best.weight - weight) && w > best.weight);
+    if (better) best = { style, weight: w, exact: w === weight };
+  }
+  return best;
 }
 
 export const SPACING_MULTIPLIERS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16];

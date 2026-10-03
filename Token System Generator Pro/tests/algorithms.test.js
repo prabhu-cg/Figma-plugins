@@ -21,6 +21,7 @@ const {
   hexToRgb, rgbToHsl, rgbToHex, generateColorRamp, generateSpacingScale, generateRadiusScale,
   generateTypographyScale, generateBorderWidthScale, getColorName,
   rgbToOklch, oklchToRgb, STARTER_COLORS,
+  weightFromStyleName, pickFontStyle,
 } = require('../.test-build/algorithms.js');
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -205,6 +206,41 @@ test('generateColorRamp yields distinct, valid hex values for every starter colo
     if (new Set(hexes).size !== 10) throw new Error(`${hex}: duplicate stops ${hexes}`);
     hexes.forEach(h => { if (!/^#[0-9a-f]{6}$/.test(h)) throw new Error(`bad hex ${h}`); });
   }
+});
+
+test('weightFromStyleName maps common style names to 100–900', () => {
+  const cases = { Thin: 100, 'Extra Light': 200, ExtraLight: 200, Light: 300, Regular: 400, Book: 400, Medium: 500,
+    'Semi Bold': 600, SemiBold: 600, 'Demi Bold': 600, Bold: 700, 'Extra Bold': 800, ExtraBold: 800, 'Ultra Bold': 800, Black: 900, Heavy: 900 };
+  for (const [style, weight] of Object.entries(cases)) assertEqual(weightFromStyleName(style), weight, style);
+});
+test('weightFromStyleName ignores italic, oblique and unrecognised styles', () => {
+  for (const s of ['Italic', 'Bold Italic', 'Light Oblique', 'Condensed Bold', 'Weird']) assertEqual(weightFromStyleName(s), null, s);
+});
+test('pickFontStyle returns the exact weight when the font has it', () => {
+  assertEqual(pickFontStyle(600, ['Regular', 'Medium', 'Semi Bold', 'Bold']), { style: 'Semi Bold', weight: 600, exact: true });
+});
+test('pickFontStyle falls back to the nearest weight, heavier on a tie', () => {
+  assertEqual(pickFontStyle(600, ['Regular', 'Bold']), { style: 'Bold', weight: 700, exact: false });
+  assertEqual(pickFontStyle(500, ['Light', 'Bold']).style, 'Bold');
+  assertEqual(pickFontStyle(700, ['Regular', 'Medium']).style, 'Medium');
+});
+test('pickFontStyle skips italics and returns null when nothing usable', () => {
+  assertEqual(pickFontStyle(400, ['Italic', 'Bold Italic']), null);
+  assertEqual(pickFontStyle(400, ['Regular', 'Italic']).style, 'Regular');
+});
+test('typography scale: weights step down from displays to body', () => {
+  const s = generateTypographyScale(16, 'major-third'), w = (n) => s.find(l => l.name === n).fontWeight;
+  assertEqual([w('display-lg'), w('h1'), w('h3'), w('h6'), w('body'), w('xs')], [700, 700, 600, 600, 400, 400]);
+});
+test('typography scale: paragraph spacing is on the 4pt grid, none for displays, 12px for 16px body', () => {
+  const s = generateTypographyScale(16, 'major-third'), ps = (n) => s.find(l => l.name === n).paragraphSpacing;
+  assertEqual([ps('display-lg'), ps('display-md'), ps('display-sm')], [0, 0, 0]);
+  assertEqual(ps('body'), 12);
+  s.forEach(l => { if (l.paragraphSpacing % 4 !== 0 || l.paragraphSpacing < 0) throw new Error(`${l.name}: ${l.paragraphSpacing}`); });
+});
+test('typography scale: body paragraph spacing grows with the base size', () => {
+  const ps = (base) => generateTypographyScale(base, 'major-third').find(l => l.name === 'body').paragraphSpacing;
+  if (!(ps(12) < ps(16) && ps(16) < ps(24))) throw new Error('not increasing');
 });
 
 // ── Summary ───────────────────────────────────────────────────────

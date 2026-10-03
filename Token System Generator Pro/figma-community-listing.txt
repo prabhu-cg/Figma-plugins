@@ -54,7 +54,8 @@ Typography
     caption, xs
   - 5 musical scale ratios: Major Second (1.125×), Minor Third (1.2×),
     Major Third (1.25×), Perfect Fourth (1.333×), Aug. Fourth (1.414×)
-  - Font size, line height, and letter spacing for every level
+  - Font size, line height, letter spacing, paragraph spacing, and font weight
+    for every level, bound to the generated text styles
   - Font family variable, bound to every text style. Optionally use a second
     font for body copy, so headings and displays can differ from body text
   - Live bar chart preview as you configure
@@ -151,9 +152,9 @@ LIMITATIONS
 - Only light mode tokens are generated. A single set of variable values is
   created per collection (no separate light/dark modes within one collection).
 
-- Typography tokens cover font family, font size, line height, and letter
-  spacing. Text styles use the Regular weight; font weight tokens are not yet
-  included in the generated token set.
+- Font weights are mapped to the closest style the chosen font offers (for
+  example, a font without SemiBold uses Bold) and the plugin tells you when it
+  does. Italic styles are not generated.
 
 - Shadow and elevation tokens are not generated in this version.
 
@@ -171,7 +172,6 @@ COMING SOON
   collection with multiple modes
 - Full JSON export — complete Style Dictionary v3 JSON output covering all
   generated variables, with alias references preserved as {dot.path} tokens
-- Font weight tokens
 - Shadow and elevation token scale
 - Opacity token scale
 - Z-index / layer token scale

@@ -19,7 +19,7 @@ Token System Generator Pro creates production-ready Figma Variable collections f
 
 🎨 **What gets generated**
 - **Color ramps** — 10-stop (50–900) per brand color with semantic aliases (Primary, Secondary, Tertiary, Accent, Feedback). Ramps are generated in [OKLCH](https://oklch.fyi/): stop 500 is exactly your color, every other stop keeps its hue and moves in perceptually even lightness steps, and chroma eases off toward the light and dark ends (gamut-mapped to sRGB)
-- **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios with font family binding. Use one font throughout, or optionally a second font for body copy (headings and displays keep the first)
+- **Typography scale** — 13 levels (Display-lg → xs) across 5 musical scale ratios, each with font size, line height, letter spacing, **paragraph spacing** and **font weight** (displays and h1–h2 bold, h3–h6 semibold, body regular), all bound to the text styles. Weights map to the closest style the font actually has. Use one font throughout, or optionally a second font for body copy (headings and displays keep the first)
 - **Spacing scale** — 10-level scale from configurable base unit
 - **Border radius** — 7 semantic values (none → full circle)
 - **Border width** — 5 semantic values (hairline → xl)
@@ -79,12 +79,13 @@ Export includes proper token path references, composite typography objects, and 
   - `color/primary/50` ... `color/primary/900`
   - `color/secondary/50` ... (all primary colors with stops)
   - `typography/font-family` (or `typography/font-family/heading` + `/body` when a second body font is chosen)
-  - `typography/font-size/*`, `typography/line-height/*`, `typography/letter-spacing/*`
+  - `typography/font-size/*`, `typography/line-height/*`, `typography/letter-spacing/*`, `typography/paragraph-spacing/*`
+  - `typography/font-weight/{regular,semibold,bold}` (weights shared by levels)
   - `spacing/*`, `radius/*`, `border-width/*`
 
 - **Alias** — semantic decisions, for use in designs
   - `color/primary/50` ... (all stops mapped to Global)
-  - `text/*` — typography composites (fontSize, lineHeight, letterSpacing)
+  - `text/*` — typography values per level (font-size, line-height, letter-spacing, paragraph-spacing, font-weight)
 
 ### 3-Tier (Global + Alias + Component)
 Adds **Component** collection:

@@ -1,7 +1,7 @@
 import {
   RAMP_STOPS, STARTER_COLORS, TypeLevel, TS_RATIO,
   generateColorRamp, generateTypographyScale, generateSpacingScale, generateRadiusScale,
-  generateBorderWidthScale, getColorName,
+  generateBorderWidthScale, getColorName, pickFontStyle, weightFromStyleName, FONT_WEIGHT_NAMES,
 } from './algorithms';
 
 figma.showUI(__html__, { width: 560, height: 510 });
@@ -125,22 +125,81 @@ function createLocalPaintStyle(path: string, r: number, g: number, b: number): v
   style.paints = [paint];
 }
 
-async function createLocalTextStyle(path: string, fontSize: number, lineHeight: number, letterSpacing: number, fontFamily: string): Promise<TextStyle> {
-  let family = fontFamily;
-  try {
-    await figma.loadFontAsync({ family, style: 'Regular' });
-  } catch (_e) {
-    warn(`Font "${fontFamily}" unavailable, used Helvetica for text styles`);
-    family = 'Helvetica';
-    await figma.loadFontAsync({ family, style: 'Regular' });
+// A new text style starts out as Inter Regular, and Figma refuses to change a style whose current
+// font isn't loaded, so that starting font must be loaded as well as the one we want. The font is
+// switched first; only then are size and spacing written.
+const NEW_STYLE_FONT: FontName = { family: 'Inter', style: 'Regular' };
+
+// The styles each installed family offers ("Regular", "Semi Bold", …), read once per run.
+// null means the list couldn't be read, so styles are tried by name instead.
+let fontCatalog: Promise<Map<string, string[]> | null> | null = null;
+
+function loadFontCatalog(): Promise<Map<string, string[]> | null> {
+  if (!fontCatalog) {
+    fontCatalog = figma.listAvailableFontsAsync().then(fonts => {
+      const byFamily = new Map<string, string[]>();
+      for (const { fontName } of fonts) {
+        const styles = byFamily.get(fontName.family);
+        if (styles) styles.push(fontName.style); else byFamily.set(fontName.family, [fontName.style]);
+      }
+      return byFamily;
+    }, () => null);
   }
+  return fontCatalog;
+}
+
+const weightName = (w: number): string => FONT_WEIGHT_NAMES[w] ?? String(w);
+
+// Find a font + style that exists and loads: the requested family at the closest available weight,
+// otherwise Helvetica. Says so (as warnings) whenever it had to settle for less.
+async function resolveTextFont(requested: string, weight: number): Promise<{ font: FontName; exactWeight: boolean; fellBack: boolean }> {
+  const catalog = await loadFontCatalog();
+  const families = requested === 'Helvetica' ? ['Helvetica'] : [requested, 'Helvetica'];
+  for (const family of families) {
+    const styles = catalog ? catalog.get(family) : undefined;
+    if (catalog && !styles) continue;                       // not installed
+    const pick = styles ? pickFontStyle(weight, styles) : null;
+    const style = pick ? pick.style : 'Regular';
+    try {
+      await figma.loadFontAsync({ family, style });
+    } catch (_e) {
+      continue;
+    }
+    const fellBack = family !== requested;
+    if (fellBack) warn(`Font "${requested}" unavailable, used Helvetica for text styles`);
+    if (pick && !pick.exact) warn(`Font "${family}" has no ${weightName(weight)} style, used ${pick.style}`);
+    return { font: { family, style }, exactWeight: !!pick && pick.exact, fellBack };
+  }
+  throw new Error(`No usable font found for "${requested}".`);
+}
+
+interface TextStyleSpec {
+  path: string;
+  fontSize: number;
+  lineHeight: number;
+  letterSpacing: number;
+  paragraphSpacing: number;
+  fontFamily: string;
+  fontWeight: number;
+}
+
+interface CreatedTextStyle {
+  style: TextStyle;
+  bindFont: boolean;    // the style uses the requested family, so its font variables apply
+  bindWeight: boolean;  // ...and an exact weight match exists, so the weight variable applies
+}
+
+async function createLocalTextStyle(spec: TextStyleSpec): Promise<CreatedTextStyle> {
+  await figma.loadFontAsync(NEW_STYLE_FONT);
+  const { font, exactWeight, fellBack } = await resolveTextFont(spec.fontFamily, spec.fontWeight);
   const style = stageStyle(figma.createTextStyle());
-  style.name = path;
-  style.fontSize = fontSize;
-  style.fontName = { family, style: 'Regular' };
-  style.lineHeight = { unit: 'PIXELS', value: lineHeight };
-  style.letterSpacing = { unit: 'PIXELS', value: letterSpacing };
-  return style;
+  style.name = spec.path;
+  style.fontName = font;
+  style.fontSize = spec.fontSize;
+  style.lineHeight = { unit: 'PIXELS', value: spec.lineHeight };
+  style.letterSpacing = { unit: 'PIXELS', value: spec.letterSpacing };
+  style.paragraphSpacing = spec.paragraphSpacing;
+  return { style, bindFont: !fellBack, bindWeight: !fellBack && exactWeight };
 }
 
 function createNumber(
@@ -308,11 +367,13 @@ async function convertStylesToTokens(tier: Tier): Promise<void> {
       : style.letterSpacing.value;
     const ls = createNumber(global, `typography/letterSpacing/${name}`, lsVal);
     const ps = createNumber(global, `typography/paragraphSpacing/${name}`, style.paragraphSpacing || 0);
+    const fw = createNumber(global, `typography/fontWeight/${name}`, weightFromStyleName(style.fontName.style) ?? 400);
 
     alias(aliasCol, `text/${name}/fontSize`,        fs);
     alias(aliasCol, `text/${name}/lineHeight`,       lh);
     alias(aliasCol, `text/${name}/letterSpacing`,    ls);
     alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
+    alias(aliasCol, `text/${name}/fontWeight`, fw);
   });
 
   if (component) createComponentColorTokens(component, aliasByName, aliasColorRoot);
@@ -362,6 +423,8 @@ interface TypographyVars {
   lineHeight: Record<string, Variable>;
   letterSpacing: Record<string, Variable>;
   // One variable when a single font is used (both roles point at it), two when body copy differs.
+  paragraphSpacing: Record<string, Variable>;
+  fontWeight: Record<string, Variable>; // per level; levels with the same weight share one variable
   fontFamily: { heading: Variable; body: Variable };
   fonts: { heading: string; body: string };
 }
@@ -450,15 +513,25 @@ function createTypographyVariables(
     : (() => { const v = makeFont('typography/font-family', font); return { heading: v, body: v }; })();
   const fonts = { heading: font, body: split ? (bodyFont as string) : font };
 
+  // Font weights are primitives named by weight (regular, semibold, bold, …) that levels share.
+  const weightVars = new Map<number, Variable>();
+  for (const w of Array.from(new Set(levels.map(l => l.fontWeight))).sort((a, b) => a - b)) {
+    weightVars.set(w, createNumber(global, `typography/font-weight/${weightName(w)}`, w));
+  }
+
   const fontSize: Record<string, Variable> = {};
   const lineHeight: Record<string, Variable> = {};
   const letterSpacing: Record<string, Variable> = {};
+  const paragraphSpacing: Record<string, Variable> = {};
+  const fontWeight: Record<string, Variable> = {};
   for (const t of levels) {
-    fontSize[t.name]      = createNumber(global, `typography/font-size/${t.name}`,      t.fontSize);
-    lineHeight[t.name]    = createNumber(global, `typography/line-height/${t.name}`,    lineHeightPx(t));
-    letterSpacing[t.name] = createNumber(global, `typography/letter-spacing/${t.name}`, t.letterSpacing);
+    fontSize[t.name]         = createNumber(global, `typography/font-size/${t.name}`,         t.fontSize);
+    lineHeight[t.name]       = createNumber(global, `typography/line-height/${t.name}`,       lineHeightPx(t));
+    letterSpacing[t.name]    = createNumber(global, `typography/letter-spacing/${t.name}`,    t.letterSpacing);
+    paragraphSpacing[t.name] = createNumber(global, `typography/paragraph-spacing/${t.name}`, t.paragraphSpacing);
+    fontWeight[t.name]       = weightVars.get(t.fontWeight) as Variable;
   }
-  return { levels, fontSize, lineHeight, letterSpacing, fontFamily, fonts };
+  return { levels, fontSize, lineHeight, letterSpacing, paragraphSpacing, fontWeight, fontFamily, fonts };
 }
 
 function aliasScale(aliasCol: VariableCollection, prefix: string, scale: ScaleVars): void {
@@ -500,6 +573,8 @@ function createAliasCollection(
     alias(aliasCol, `text/${t.name}/font-size`,      typo.fontSize[t.name]);
     alias(aliasCol, `text/${t.name}/line-height`,    typo.lineHeight[t.name]);
     alias(aliasCol, `text/${t.name}/letter-spacing`, typo.letterSpacing[t.name]);
+    alias(aliasCol, `text/${t.name}/paragraph-spacing`, typo.paragraphSpacing[t.name]);
+    alias(aliasCol, `text/${t.name}/font-weight`, typo.fontWeight[t.name]);
   }
   return { aliasCol, colorAliases };
 }
@@ -514,23 +589,30 @@ function textStyleGroup(levelName: string): string {
 // Local text styles for each level, then bound to the typography variables.
 // Body copy uses the body font; displays and headings use the heading font.
 async function createTextStyles(typo: TypographyVars): Promise<void> {
-  const created: { style: TextStyle; level: string; role: 'heading' | 'body' }[] = [];
+  fontCatalog = null;
+  const created: { made: CreatedTextStyle; level: string; role: 'heading' | 'body' }[] = [];
   for (const t of typo.levels) {
     const group = textStyleGroup(t.name);
     if (!group) continue;
     const role = group === 'Body copy' ? 'body' : 'heading';
-    const style = await createLocalTextStyle(
-      `${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, typo.fonts[role]
-    );
-    created.push({ style, level: t.name, role });
+    const made = await createLocalTextStyle({
+      path: `${group}/${t.name}`, fontSize: t.fontSize, lineHeight: lineHeightPx(t),
+      letterSpacing: t.fontSize * t.letterSpacing, paragraphSpacing: t.paragraphSpacing,
+      fontFamily: typo.fonts[role], fontWeight: t.fontWeight,
+    });
+    created.push({ made, level: t.name, role });
   }
 
-  for (const { style, level, role } of created) {
+  for (const { made, level, role } of created) {
     try {
+      const { style } = made;
       style.setBoundVariable('fontSize', typo.fontSize[level]);
       style.setBoundVariable('lineHeight', typo.lineHeight[level]);
       style.setBoundVariable('letterSpacing', typo.letterSpacing[level]);
-      style.setBoundVariable('fontFamily', typo.fontFamily[role]);
+      style.setBoundVariable('paragraphSpacing', typo.paragraphSpacing[level]);
+      // A style that fell back to another font keeps that font instead of pointing at a missing one.
+      if (made.bindFont) style.setBoundVariable('fontFamily', typo.fontFamily[role]);
+      if (made.bindWeight) style.setBoundVariable('fontWeight', typo.fontWeight[level]);
     } catch (_e) {
       warn(`Couldn't link a text style to its variables`);
     }
@@ -677,7 +759,7 @@ async function exportVariablesToJSON(): Promise<string> {
       let current = colResult;
       for (let i = 0; i < parts.length - 1; i++) current = childNode(current, toCamelCase(parts[i]));
 
-      const type = TOKEN_TYPES[v.resolvedType] ?? 'unknown';
+      const type = /(^|\/)(font-weight|fontWeight)(\/|$)/.test(v.name) ? 'fontWeight' : (TOKEN_TYPES[v.resolvedType] ?? 'unknown');
       let value: unknown = val;
       if (v.resolvedType === 'COLOR' && val && typeof val === 'object' && 'r' in val) {
         value = colorToHex(val as { r: number; g: number; b: number });
@@ -765,6 +847,7 @@ async function generate(r: GenerateRequest): Promise<void> {
   const blocked = await blockedReason(r.mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   issues.clear();
+  fontCatalog = null;
   const old = await snapshotExisting(r.mode);
   const tier = r.approach;
 

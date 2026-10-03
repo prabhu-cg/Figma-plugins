@@ -1,9 +1,18 @@
 // Minimal in-memory Figma API, just enough to run code.ts end to end in Node.
 // `faults` lets a test make the Nth call of an operation throw.
 const vm = require('vm');
+
+// Installed fonts: family -> styles. Style names follow real fonts ("Semi Bold" in Inter, "SemiBold" elsewhere).
+const DEFAULT_FONTS = {
+  'Inter': ['Thin', 'Extra Light', 'Light', 'Regular', 'Medium', 'Semi Bold', 'Bold', 'Extra Bold', 'Black', 'Italic', 'Bold Italic'],
+  'Georgia': ['Regular', 'Bold', 'Italic', 'Bold Italic'],
+  'Playfair Display': ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold', 'Black'],
+  'Source Sans 3': ['ExtraLight', 'Light', 'Regular', 'SemiBold', 'Bold', 'Black'],
+  'Helvetica': ['Light', 'Regular', 'Bold'],
+};
 const fs = require('fs');
 
-function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {}, hooks = {} } = {}) {
+function createFigma({ paintStyles = [], textStyles = [], collections = [], faults = {}, hooks = {}, fonts = DEFAULT_FONTS } = {}) {
   let nextId = 0;
   const state = { collections: [], variables: [], paintStyles: [], textStyles: [], messages: [], notes: [] };
   const counts = {};
@@ -51,14 +60,35 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     state.paintStyles.push(s);
     return s;
   };
+  // Like Figma: a new text style starts as Inter Regular, and changing size, line height or letter
+  // spacing throws unless the style's *current* font has been loaded. Changing fontName needs the
+  // *new* font loaded. (Seeding the document skips these checks.)
+  const loadedFonts = new Set();
+  const fontKey = (f) => `${f.family} ${f.style}`;
   const makeTextStyle = () => {
     tick('createTextStyle');
+    const values = { fontSize: 12, lineHeight: { unit: 'AUTO' }, letterSpacing: { unit: 'PIXELS', value: 0 }, fontName: { family: 'Inter', style: 'Regular' } };
     const s = {
-      name: '', bound: {}, fontSize: 0,
-      lineHeight: { unit: 'AUTO' }, letterSpacing: { unit: 'PIXELS', value: 0 }, paragraphSpacing: 0,
+      name: '', bound: {}, paragraphSpacing: 0,
       remove() { tick('removeTextStyle'); state.textStyles.splice(state.textStyles.indexOf(s), 1); },
       setBoundVariable(field, variable) { tick('bind'); s.bound[field] = variable.name; },
     };
+    for (const prop of Object.keys(values)) {
+      Object.defineProperty(s, prop, {
+        enumerable: true,
+        get: () => values[prop],
+        set: (v) => {
+          if (armed) {
+            if (prop === 'fontName') {
+              if (!loadedFonts.has(fontKey(v))) throw new Error(`in set_fontName: Cannot write to node with unloaded font "${fontKey(v)}". Please call figma.loadFontAsync first.`);
+            } else if (!loadedFonts.has(fontKey(values.fontName))) {
+              throw new Error(`in set_${prop}: Cannot write to node with unloaded font "${fontKey(values.fontName)}". Please call figma.loadFontAsync({ family: "${values.fontName.family}", style: "${values.fontName.style}" }) and await the returned promise first.`);
+            }
+          }
+          values[prop] = v;
+        },
+      });
+    }
     state.textStyles.push(s);
     return s;
   };
@@ -69,7 +99,7 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     (variables || []).forEach(vn => { const v = makeVariable(vn, c, 'FLOAT'); v.setValueForMode(c.modes[0].modeId, 1); });
   });
   paintStyles.forEach(([name, r, g, b]) => { const s = makePaintStyle(); s.name = name; s.paints = [{ type: 'SOLID', color: { r, g, b } }]; });
-  textStyles.forEach(([name, size]) => { const s = makeTextStyle(); s.name = name; s.fontSize = size; });
+  textStyles.forEach(([name, size, fontStyle]) => { const s = makeTextStyle(); s.name = name; s.fontSize = size; if (fontStyle) s.fontName = { family: 'Inter', style: fontStyle }; });
   armed = true;
 
   // With "documentAccess": "dynamic-page" the synchronous getters throw, so the mock only has the async ones.
@@ -93,8 +123,12 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     getLocalTextStyles: syncRemoved('getLocalTextStyles'),
     createPaintStyle: makePaintStyle,
     createTextStyle: makeTextStyle,
-    loadFontAsync: async (font) => { tick('loadFont'); if (font.family === 'Missing Font') throw new Error('font not found'); },
-    listAvailableFontsAsync: async () => [],
+    loadFontAsync: async (font) => {
+      tick('loadFont');
+      if (!(fonts[font.family] || []).includes(font.style)) throw new Error(`The font "${fontKey(font)}" could not be loaded`);
+      loadedFonts.add(fontKey(font));
+    },
+    listAvailableFontsAsync: async () => Object.entries(fonts).flatMap(([family, styles]) => styles.map(style => ({ fontName: { family, style } }))),
   };
 
   let ctx;
@@ -117,7 +151,7 @@ function createFigma({ paintStyles = [], textStyles = [], collections = [], faul
     collections: state.collections.map(c => c.name).sort(),
     variables: state.variables.map(v => [v.name, v.variableCollectionId, JSON.stringify(v.valuesByMode)]).sort(),
     paint: state.paintStyles.map(s => [s.name, JSON.stringify(s.paints)]).sort(),
-    text: state.textStyles.map(s => [s.name, s.fontSize]).sort(),
+    text: state.textStyles.map(s => [s.name, s.fontSize, s.paragraphSpacing, s.fontName && s.fontName.style]).sort(),
   });
   return { figma, state, counts, load, send, finished, snapshot, evalInPlugin, emit };
 }
