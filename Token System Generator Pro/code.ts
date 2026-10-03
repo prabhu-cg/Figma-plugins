@@ -39,41 +39,108 @@ function createColor(
   return v;
 }
 
-function createLocalPaintStyle(path: string, r: number, g: number, b: number): void {
-  try {
-    const style = figma.createPaintStyle();
-    style.name = path;
-    const paint: SolidPaint = { type: 'SOLID', color: { r, g, b }, opacity: 1 };
-    style.paints = [paint];
-  } catch (_e) {
-    warn(`Couldn't create a color style`);
-  }
+// ─── ATOMIC GENERATION ───────────────────────────────────────────
+// Everything a run creates is "staged": collections carry a temporary name and every
+// style is recorded. If the build throws, rollbackStaged() removes it all and the file
+// is exactly as it was. Only after the build succeeds are the old tokens removed and
+// the staged collections renamed (commitStaged). Old tokens are never touched before then.
+
+const PENDING_PREFIX = '(generating) ';
+
+const staged = {
+  collections: [] as { collection: VariableCollection; finalName: string }[],
+  styles: [] as BaseStyle[],
+};
+
+function stageCollection(name: string): VariableCollection {
+  const collection = figma.variables.createVariableCollection(PENDING_PREFIX + name);
+  staged.collections.push({ collection, finalName: name });
+  return collection;
 }
 
-async function createLocalTextStyle(path: string, fontSize: number, lineHeight: number, letterSpacing: number, fontFamily: string): Promise<void> {
-  try {
-    await figma.loadFontAsync({ family: fontFamily, style: 'Regular' });
-    const style = figma.createTextStyle();
-    style.name = path;
-    style.fontSize = fontSize;
-    style.fontName = { family: fontFamily, style: 'Regular' };
-    style.lineHeight = { unit: 'PIXELS', value: lineHeight };
-    style.letterSpacing = { unit: 'PIXELS', value: letterSpacing };
-  } catch (_e) {
-    // Font not available, try system fallback
-    try {
-      warn(`Font "${fontFamily}" unavailable, used Helvetica for text styles`);
-      await figma.loadFontAsync({ family: 'Helvetica', style: 'Regular' });
-      const style = figma.createTextStyle();
-      style.name = path;
-      style.fontSize = fontSize;
-      style.fontName = { family: 'Helvetica', style: 'Regular' };
-      style.lineHeight = { unit: 'PIXELS', value: lineHeight };
-      style.letterSpacing = { unit: 'PIXELS', value: letterSpacing };
-    } catch (_e2) {
-      warn(`Couldn't create a text style (no usable font)`);
-    }
+function stageStyle<T extends BaseStyle>(style: T): T {
+  staged.styles.push(style);
+  return style;
+}
+
+// Returns how many staged items could not be removed.
+function rollbackStaged(): number {
+  let failed = 0;
+  for (const style of staged.styles) {
+    try { style.remove(); } catch (_e) { failed++; }
   }
+  for (const { collection } of staged.collections) {
+    try { collection.remove(); } catch (_e) { failed++; }
+  }
+  staged.styles = [];
+  staged.collections = [];
+  return failed;
+}
+
+interface ExistingTokens {
+  collections: VariableCollection[];
+  variables: Variable[];
+  paintStyles: PaintStyle[];
+  textStyles: TextStyle[];
+}
+
+function snapshotExisting(mode: string): ExistingTokens {
+  return {
+    collections: figma.variables.getLocalVariableCollections(),
+    variables:   figma.variables.getLocalVariables(),
+    // Smart Convert reads the local styles, so they are kept.
+    paintStyles: mode === 'convert' ? [] : figma.getLocalPaintStyles(),
+    textStyles:  mode === 'convert' ? [] : figma.getLocalTextStyles(),
+  };
+}
+
+// The build succeeded: drop what it replaces, then give the new collections their real names.
+// Problems here leave a complete new system plus some old leftovers, so they are warnings.
+function commitStaged(old: ExistingTokens): void {
+  for (const col of old.collections) {
+    for (const v of old.variables) {
+      if (v.variableCollectionId === col.id) {
+        try { v.remove(); } catch (_e) { warn(`Couldn't remove an old variable`); }
+      }
+    }
+    try { col.remove(); } catch (_e) { warn(`Couldn't remove old collection "${col.name}"`); }
+  }
+  for (const style of old.paintStyles) {
+    try { style.remove(); } catch (_e) { warn(`Couldn't remove an old color style`); }
+  }
+  for (const style of old.textStyles) {
+    try { style.remove(); } catch (_e) { warn(`Couldn't remove an old text style`); }
+  }
+  for (const { collection, finalName } of staged.collections) {
+    try { collection.name = finalName; } catch (_e) { warn(`Couldn't rename "${finalName}"`); }
+  }
+  staged.collections = [];
+  staged.styles = [];
+}
+
+function createLocalPaintStyle(path: string, r: number, g: number, b: number): void {
+  const style = stageStyle(figma.createPaintStyle());
+  style.name = path;
+  const paint: SolidPaint = { type: 'SOLID', color: { r, g, b }, opacity: 1 };
+  style.paints = [paint];
+}
+
+async function createLocalTextStyle(path: string, fontSize: number, lineHeight: number, letterSpacing: number, fontFamily: string): Promise<TextStyle> {
+  let family = fontFamily;
+  try {
+    await figma.loadFontAsync({ family, style: 'Regular' });
+  } catch (_e) {
+    warn(`Font "${fontFamily}" unavailable, used Helvetica for text styles`);
+    family = 'Helvetica';
+    await figma.loadFontAsync({ family, style: 'Regular' });
+  }
+  const style = stageStyle(figma.createTextStyle());
+  style.name = path;
+  style.fontSize = fontSize;
+  style.fontName = { family, style: 'Regular' };
+  style.lineHeight = { unit: 'PIXELS', value: lineHeight };
+  style.letterSpacing = { unit: 'PIXELS', value: letterSpacing };
+  return style;
 }
 
 function createNumber(
@@ -95,28 +162,6 @@ function alias(
   const v = figma.variables.createVariable(name, collection.id, ref.resolvedType);
   v.setValueForMode(collection.modes[0].modeId, { type: 'VARIABLE_ALIAS', id: ref.id });
   return v;
-}
-
-function deleteAllCollections(): void {
-  const collections = figma.variables.getLocalVariableCollections();
-  const vars = figma.variables.getLocalVariables();
-  collections.forEach(col => {
-    vars.forEach(v => {
-      if (v.variableCollectionId === col.id) {
-        try { v.remove(); } catch (_e) { warn(`Couldn't remove an existing variable`); }
-      }
-    });
-    try { col.remove(); } catch (_e) { warn(`Couldn't remove collection "${col.name}"`); }
-  });
-}
-
-function deleteAllLocalStyles(): void {
-  figma.getLocalPaintStyles().forEach(style => {
-    try { style.remove(); } catch (_e) { warn(`Couldn't remove an existing color style`); }
-  });
-  figma.getLocalTextStyles().forEach(style => {
-    try { style.remove(); } catch (_e) { warn(`Couldn't remove an existing text style`); }
-  });
 }
 
 function tokensExist(): boolean {
@@ -156,12 +201,12 @@ function convertStylesToTokens(tier: Tier): void {
   const colorStyles = figma.getLocalPaintStyles();
   const textStyles  = figma.getLocalTextStyles();
   if (colorStyles.length === 0 && textStyles.length === 0) {
-    warn('No local styles found to convert'); figma.notify('⚠️ No styles found'); return;
+    throw new Error('No local styles found to convert.');
   }
 
-  const global   = figma.variables.createVariableCollection('01 Global');
-  const aliasCol = figma.variables.createVariableCollection('02 Alias');
-  const component = tier === '3tier' ? figma.variables.createVariableCollection('03 Component') : undefined;
+  const global   = stageCollection('01 Global');
+  const aliasCol = stageCollection('02 Alias');
+  const component = tier === '3tier' ? stageCollection('03 Component') : undefined;
   const modeId = global.modes[0].modeId;
   const aliasModeId = aliasCol.modes[0].modeId;
   const aliasColorRoot = tier === '3tier' ? 'colors' : 'color';
@@ -181,7 +226,7 @@ function convertStylesToTokens(tier: Tier): void {
   });
 
   if (globalColors.length === 0) {
-    warn('No solid color styles found to convert'); figma.notify('⚠️ No paint styles found'); return;
+    throw new Error('No solid color styles found to convert.');
   }
 
   const allGlobalVars = figma.variables.getLocalVariables()
@@ -222,21 +267,15 @@ function convertStylesToTokens(tier: Tier): void {
     });
   };
 
-  try {
-    aliasFamily(primaryFamily,   'primary');
-    aliasFamily(secondaryFamily, 'secondary');
-    aliasFamily(tertiaryFamily,  'tertiary');
-    aliasFamily(accentFamily,    'accent');
-    // Feedback: darkest family stands in for info + error, lightest for success, primary for warning
-    aliasFamily(darkestFamily, 'feedback/info');
-    aliasFamily(darkestFamily, 'feedback/error');
-    if (lightestFamily !== darkestFamily) aliasFamily(lightestFamily, 'feedback/success');
-    aliasFamily(primaryFamily, 'feedback/warning');
-  } catch (e) {
-    warn(`Color aliases were not fully created: ${e}`);
-    figma.notify(`❌ Color aliases: ${e}`);
-    return;
-  }
+  aliasFamily(primaryFamily,   'primary');
+  aliasFamily(secondaryFamily, 'secondary');
+  aliasFamily(tertiaryFamily,  'tertiary');
+  aliasFamily(accentFamily,    'accent');
+  // Feedback: darkest family stands in for info + error, lightest for success, primary for warning
+  aliasFamily(darkestFamily, 'feedback/info');
+  aliasFamily(darkestFamily, 'feedback/error');
+  if (lightestFamily !== darkestFamily) aliasFamily(lightestFamily, 'feedback/success');
+  aliasFamily(primaryFamily, 'feedback/warning');
 
   textStyles.forEach(style => {
     const name = style.name.replace(/\s+/g, '-').toLowerCase();
@@ -257,17 +296,7 @@ function convertStylesToTokens(tier: Tier): void {
     alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
   });
 
-  if (component) {
-    try {
-      createComponentColorTokens(aliasCol, component, aliasColorRoot);
-    } catch (e) {
-      warn(`Component variables were not fully created: ${e}`);
-      figma.notify(`❌ Component vars: ${e}`);
-      return;
-    }
-  }
-
-  figma.notify('✅ Typography + color tokens created!');
+  if (component) createComponentColorTokens(aliasCol, component, aliasColorRoot);
 }
 
 // Component-tier color tokens that point at the 500 stop of each alias role.
@@ -414,7 +443,7 @@ function createAliasCollection(
   width: ScaleVars,
   typo: TypographyVars
 ): { aliasCol: VariableCollection; colorAliases: AliasRamps } {
-  const aliasCol = figma.variables.createVariableCollection('02 Alias');
+  const aliasCol = stageCollection('02 Alias');
   const colorAliases: AliasRamps = {};
 
   const aliasRamp = (key: string, prefix: string): void => {
@@ -447,19 +476,19 @@ function textStyleGroup(levelName: string): string {
 
 // Local text styles for each level, then bound to the typography variables.
 async function createTextStyles(typo: TypographyVars, font: string): Promise<void> {
+  const created: { style: TextStyle; level: string }[] = [];
   for (const t of typo.levels) {
     const group = textStyleGroup(t.name);
     if (!group) continue;
-    await createLocalTextStyle(`${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, font);
+    const style = await createLocalTextStyle(`${group}/${t.name}`, t.fontSize, lineHeightPx(t), t.fontSize * t.letterSpacing, font);
+    created.push({ style, level: t.name });
   }
 
-  for (const style of figma.getLocalTextStyles()) {
-    const levelName = style.name.split('/').pop();
-    if (!levelName || !typo.fontSize[levelName]) continue;
+  for (const { style, level } of created) {
     try {
-      style.setBoundVariable('fontSize', typo.fontSize[levelName]);
-      style.setBoundVariable('lineHeight', typo.lineHeight[levelName]);
-      style.setBoundVariable('letterSpacing', typo.letterSpacing[levelName]);
+      style.setBoundVariable('fontSize', typo.fontSize[level]);
+      style.setBoundVariable('lineHeight', typo.lineHeight[level]);
+      style.setBoundVariable('letterSpacing', typo.letterSpacing[level]);
       style.setBoundVariable('fontFamily', typo.fontFamily);
     } catch (_e) {
       warn(`Couldn't link a text style to its variables`);
@@ -487,7 +516,7 @@ function createPaintStyles(global: VariableCollection, ramps: Ramps, brandNames:
 
 // 03 Component: text, icon, surface and border tokens that point at the alias colors.
 function createComponentCollection(colorAliases: AliasRamps): void {
-  const comp = figma.variables.createVariableCollection('03 Component');
+  const comp = stageCollection('03 Component');
   const primary = colorAliases['primary'];
 
   if (primary) {
@@ -532,7 +561,7 @@ async function buildFromScratch(
   const font = fontFamily || 'Inter';
 
   // 01 Global
-  const global = figma.variables.createVariableCollection('01 Global');
+  const global = stageCollection('01 Global');
   const { ramps, brandNames } = createGlobalColors(global, colors);
   createSpacingVariables(global, spacingBase);
   const radius = createScaleGlobals(global, 'borderRadius', generateRadiusScale(radiusBase));
@@ -686,19 +715,30 @@ function blockedReason(mode: string): string | null {
   return null;
 }
 
-// generate() runs past several awaits and is not awaited by the message handler,
-// so a throw would otherwise vanish. Report it to the UI instead.
-async function runSafely(run: () => void | Promise<void>): Promise<void> {
-  try {
-    await run();
-  } catch (e) {
-    const message = (e as { message?: string } | null)?.message ?? String(e);
-    figma.notify(`❌ Generation failed: ${message}`, { error: true });
-    figma.ui.postMessage({ type: 'generation-failed', message });
+// Thrown by generate() once the build has been rolled back. `leftover` counts staged items
+// that could not be removed (0 means the file is exactly as it was before the run).
+class GenerationError extends Error {
+  leftover: number;
+  constructor(message: string, leftover: number) {
+    super(message);
+    this.leftover = leftover;
   }
 }
 
-function runGeneration(
+// The message handler doesn't await generation, so report failures from here instead of losing them.
+async function runSafely(run: () => Promise<void>): Promise<void> {
+  try {
+    await run();
+  } catch (e) {
+    const err = e as { message?: string; leftover?: number } | null;
+    const message = err?.message ?? String(e);
+    const leftover = err?.leftover ?? 0;
+    figma.notify(`❌ Generation failed: ${message}`, { error: true });
+    figma.ui.postMessage({ type: 'generation-failed', message, leftover });
+  }
+}
+
+async function runGeneration(
   approach: string,
   mode: string,
   colors?: ScratchColors,
@@ -708,15 +748,17 @@ function runGeneration(
   fontBase?: number,
   ratioKey?: string,
   fontFamily?: string
-): void {
+): Promise<void> {
   const blocked = blockedReason(mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   if (tokensExist()) {
     figma.ui.postMessage({ type: 'confirm-replace', existing: describeExisting(mode) }); return;
   }
-  generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
+  await generate(approach, mode, colors, spacingBase, radiusBase, widthBase, fontBase, ratioKey, fontFamily);
 }
 
+// Build everything under staging names first; replace the old tokens only if the whole build worked.
+// If it throws, everything staged is removed and the file is left exactly as it was.
 async function generate(
   approach: string,
   mode: string,
@@ -731,24 +773,36 @@ async function generate(
   const blocked = blockedReason(mode);
   if (blocked) { figma.ui.postMessage({ type: 'generation-blocked', reason: blocked }); return; }
   issues.clear();
-  deleteAllCollections();
-  if (mode !== 'convert') {
-    deleteAllLocalStyles();
-  }
+  const old = snapshotExisting(mode);
   const tier: Tier = approach === '3tier' ? '3tier' : '2tier';
-  if (mode === 'scratch') {
-    await buildFromScratch(
-      colors!, spacingBase!, radiusBase!, widthBase ?? 1,
-      fontBase ?? 16, ratioKey ?? 'major-third',
-      tier,
-      fontFamily
-    );
-  } else if (mode === 'starter') {
-    await createStarterSystem(tier);
-  } else if (mode === 'convert') {
-    convertStylesToTokens(tier);
+
+  try {
+    if (mode === 'scratch') {
+      await buildFromScratch(
+        colors!, spacingBase!, radiusBase!, widthBase ?? 1,
+        fontBase ?? 16, ratioKey ?? 'major-third',
+        tier,
+        fontFamily
+      );
+    } else if (mode === 'starter') {
+      await createStarterSystem(tier);
+    } else if (mode === 'convert') {
+      convertStylesToTokens(tier);
+    }
+  } catch (e) {
+    const leftover = rollbackStaged();
+    const reason = (e as { message?: string } | null)?.message ?? String(e);
+    throw new GenerationError(reason, leftover);
   }
-  const json  = exportVariablesToJSON();
+
+  commitStaged(old);
+
+  let json = '';
+  try {
+    json = exportVariablesToJSON();
+  } catch (_e) {
+    warn(`Tokens were created, but the JSON export failed. Use Refresh JSON to retry.`);
+  }
   const total = figma.variables.getLocalVariables().length;
   const cols  = figma.variables.getLocalVariableCollections().length;
   const warnings = collectIssues();

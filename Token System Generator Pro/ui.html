@@ -1037,7 +1037,9 @@
 
     if (msg.type === 'generation-failed') {
       const hint = document.getElementById('hint-generate');
-      hint.textContent = `Generation failed: ${msg.message}. Some tokens may have been created; check Figma's Variables panel before retrying.`;
+      hint.textContent = msg.leftover
+        ? `Generation failed: ${msg.message} ${msg.leftover} new item${msg.leftover !== 1 ? 's' : ''} could not be removed. Check the Variables panel before retrying.`
+        : `Generation failed: ${msg.message} Nothing was changed.`;
       hint.classList.add('error');
     }
 

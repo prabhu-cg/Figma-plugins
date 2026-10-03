@@ -9,8 +9,8 @@
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "watch": "esbuild code.ts --bundle --target=es2017 --outfile=code.js --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "pretest": "esbuild algorithms.ts --bundle --format=cjs --outfile=.test-build/algorithms.js",
-    "test": "node tests/algorithms.test.js"
+    "pretest": "esbuild algorithms.ts --bundle --format=cjs --outfile=.test-build/algorithms.js && esbuild code.ts --bundle --target=es2017 --outfile=.test-build/code.js --log-level=warning",
+    "test": "node tests/algorithms.test.js && node tests/generation.test.js"
   },
   "author": "",
   "license": "",
