@@ -3,7 +3,7 @@ import type { ChangeSet } from "@shared/types/change";
 import type { DiscoveredComponent, ScanProgress } from "@shared/types/scan";
 import type { Baseline, Project, Release } from "@shared/types/project";
 import type { InstanceScanProgress } from "@shared/types/instance";
-import type { UiToPluginMessage } from "@shared/types/messages";
+import type { PluginToUiMessage, UiToPluginMessage } from "@shared/types/messages";
 import { applyChangePatches } from "@shared/utils/changePatches";
 import { onPluginMessage, sendToPlugin } from "./bridge";
 
@@ -39,6 +39,14 @@ interface ProjectState {
 const ProjectStateContext = createContext<ProjectState | undefined>(undefined);
 
 let toastCounter = 0;
+
+function describeScan(message: Extract<PluginToUiMessage, { type: "scan-complete" }>): string {
+  const count = message.changeSet.changes.length;
+  const parts = [`Scan complete — ${count} change${count === 1 ? "" : "s"} detected`];
+  if (message.reviewsKept) parts.push(`${message.reviewsKept} review${message.reviewsKept === 1 ? "" : "s"} kept`);
+  if (message.reviewsReset) parts.push(`${message.reviewsReset} changed since you reviewed ${message.reviewsReset === 1 ? "it" : "them"}`);
+  return `${parts.join(" · ")}.`;
+}
 
 export function ProjectProvider({ children }: { children: React.ReactNode }) {
   const [project, setProject] = useState<Project | undefined>(undefined);
@@ -93,7 +101,7 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         case "scan-complete":
           setScanning(false);
           setLatestChangeSet(message.changeSet);
-          pushToast("info", `Scan complete — ${message.changeSet.changes.length} changes detected.`);
+          pushToast("info", describeScan(message));
           return;
         case "baseline-created":
           setLastBaseline(message.baseline);

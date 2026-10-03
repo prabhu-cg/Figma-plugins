@@ -49,6 +49,13 @@ export function useChangesView(changeSet: ChangeSet | undefined, focusChangeId?:
   const [bulkTarget, setBulkTarget] = useState<ReviewState>("reviewed");
   const [lastAction, setLastAction] = useState<UndoableAction | null>(null);
 
+  // A re-scan replaces the change set (new ids), so a pending undo or ticked rows would point at nothing.
+  const changeSetId = changeSet?.id;
+  useEffect(() => {
+    setLastAction(null);
+    setCheckedIds(new Set());
+  }, [changeSetId]);
+
   const filtered = useMemo(() => (changeSet ? filterChanges(changeSet.changes, filters) : []), [changeSet, filters]);
   const selected = filtered.find((c) => c.id === selectedId) ?? null;
   const filtersActive = areFiltersActive(filters);

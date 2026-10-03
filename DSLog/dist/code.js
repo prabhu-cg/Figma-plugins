@@ -1919,6 +1919,101 @@
       scanSummary
     };
   }
+  function foldConfirmedRename(changeSet, added, removed) {
+    const kind = added.entityType === "token" ? "token" : "component";
+    added.changeType = `${kind}-renamed`;
+    added.category = "modified";
+    added.before = removed.entityName;
+    added.after = added.entityName;
+    added.summary = `Renamed from "${removed.entityName}" to "${added.entityName}" (id changed)`;
+    added.renameResolution = "confirmed";
+    changeSet.changes = changeSet.changes.filter((c) => c.id !== removed.id);
+  }
+  function carryOverReviews(next, previous, trackedEntities) {
+    const result = { carried: 0, reset: 0 };
+    reapplyConfirmedRenames(next, trackedEntities);
+    if (!previous) return result;
+    const previousByKey = groupByIdentity(previous.changes);
+    const nextByKey = groupByIdentity(next.changes);
+    for (const [key, added] of nextByKey) {
+      const candidates = [...previousByKey.get(key) ?? []];
+      if (candidates.length === 0) continue;
+      const rest = [];
+      for (const change of added) {
+        const content = contentOf(change);
+        const index = candidates.findIndex((old) => contentOf(old) === content);
+        if (index === -1) rest.push(change);
+        else adopt(change, candidates.splice(index, 1)[0], true, result);
+      }
+      if (rest.length > 0 && rest.length === candidates.length) {
+        rest.forEach((change, i) => adopt(change, candidates[i], false, result));
+      }
+    }
+    carryOverDeprecations(next, previous, trackedEntities, nextByKey, result);
+    return result;
+  }
+  function identityOf(change) {
+    return [change.entityType, change.entityId, change.changeType, change.field ?? ""].join("\0");
+  }
+  function contentOf(change) {
+    return JSON.stringify([change.summary, change.before ?? null, change.after ?? null, change.modeDetails ?? null]);
+  }
+  function groupByIdentity(changes) {
+    const groups = /* @__PURE__ */ new Map();
+    for (const change of changes) {
+      const key = identityOf(change);
+      const group = groups.get(key);
+      if (group) group.push(change);
+      else groups.set(key, [change]);
+    }
+    return groups;
+  }
+  function adopt(target, old, sameContent, result) {
+    if (old.reviewNote !== void 0) target.reviewNote = old.reviewNote;
+    if (old.migrationNote !== void 0) target.migrationNote = old.migrationNote;
+    if (old.manualClassification) target.manualClassification = { ...old.manualClassification };
+    if (old.renameResolution === "dismissed") target.renameResolution = "dismissed";
+    const reviewed = old.reviewState !== "unreviewed";
+    if (sameContent) {
+      target.reviewState = old.reviewState;
+      if (old.changedSinceReview) target.changedSinceReview = true;
+      if (reviewed) result.carried++;
+      return;
+    }
+    target.reviewState = "unreviewed";
+    if (reviewed || old.changedSinceReview) target.changedSinceReview = true;
+    if (reviewed) result.reset++;
+  }
+  function reapplyConfirmedRenames(next, trackedEntities) {
+    const confirmed = /* @__PURE__ */ new Set();
+    for (const entity of trackedEntities) {
+      const chain = [];
+      for (const entry of entity.renameHistory) {
+        if (chain.length === 0) chain.push(entry.fromId);
+        chain.push(entry.toId);
+      }
+      for (let i = 0; i < chain.length; i++) {
+        for (let j = i + 1; j < chain.length; j++) confirmed.add(`${chain[i]}\0${chain[j]}`);
+      }
+    }
+    if (confirmed.size === 0) return;
+    const byId2 = new Map(next.changes.map((c) => [c.id, c]));
+    for (const added of [...next.changes]) {
+      if (!added.possibleRenameOf || added.renameResolution) continue;
+      const removed = byId2.get(added.possibleRenameOf);
+      if (removed && confirmed.has(`${removed.entityId}\0${added.entityId}`)) foldConfirmedRename(next, added, removed);
+    }
+  }
+  function carryOverDeprecations(next, previous, trackedEntities, nextByKey, result) {
+    for (const old of previous.changes) {
+      if (old.category !== "deprecated" || !old.changeType.endsWith("-deprecated")) continue;
+      if (nextByKey.has(identityOf(old))) continue;
+      const entity = trackedEntities.find((e) => e.id === old.entityId);
+      if (!entity?.deprecated) continue;
+      next.changes.push({ ...old });
+      if (old.reviewState !== "unreviewed") result.carried++;
+    }
+  }
   async function resolveComponentIds(baseline) {
     const tracking = baseline.tracking.components;
     if (tracking.scope === "selection") return tracking.includedIds;
@@ -2015,13 +2110,15 @@
       baseline.tracking.tokens.includedCollectionIds,
       baseline.tracking.tokens.enabled
     );
+    const previous = getLatestChangeSetForBaseline(project, baseline.id);
     const changeSet = diffSnapshots(baseline.id, baseline.snapshot, snapshot, scanSummary);
+    const { carried, reset } = carryOverReviews(changeSet, previous, project.trackedEntities);
     project.changeSets.push(changeSet);
     session.latestScannedSnapshot = snapshot;
     session.latestScanSummary = scanSummary;
     session.project = pruneStaleChangeSets(project);
     await persist();
-    postToUi({ type: "scan-complete", changeSet });
+    postToUi({ type: "scan-complete", changeSet, reviewsKept: carried, reviewsReset: reset });
     postToUi({ type: "state", project: session.project });
   }
   function getEffectiveClassification(change) {
@@ -2133,6 +2230,7 @@
       baseline.tracking.tokens.includedCollectionIds,
       baseline.tracking.tokens.enabled
     )).snapshot;
+    const previous = getLatestChangeSetForBaseline(project, baseline.id);
     const changeSet = diffSnapshots(
       baseline.id,
       baseline.snapshot,
@@ -2145,6 +2243,7 @@
         skippedItems: []
       }
     );
+    carryOverReviews(changeSet, previous, project.trackedEntities);
     project.changeSets.push(changeSet);
     const newBaseline = {
       id: generateId("baseline"),
@@ -2221,7 +2320,10 @@
   }
   function applyPatch(change, patch) {
     const next = { ...change };
-    if (patch.reviewState !== void 0) next.reviewState = patch.reviewState;
+    if (patch.reviewState !== void 0) {
+      next.reviewState = patch.reviewState;
+      delete next.changedSinceReview;
+    }
     if (patch.reviewNote !== void 0) next.reviewNote = patch.reviewNote;
     if (patch.migrationNote !== void 0) next.migrationNote = patch.migrationNote;
     if (patch.manualClassification !== void 0) next.manualClassification = patch.manualClassification ?? void 0;
@@ -2305,13 +2407,7 @@
       };
       project.trackedEntities.push(entity);
     }
-    addedChange.changeType = kind === "token" ? "token-renamed" : "component-renamed";
-    addedChange.category = "modified";
-    addedChange.before = removedChange.entityName;
-    addedChange.after = addedChange.entityName;
-    addedChange.summary = `Renamed from "${removedChange.entityName}" to "${addedChange.entityName}" (id changed)`;
-    addedChange.renameResolution = "confirmed";
-    changeSet.changes = changeSet.changes.filter((c) => c.id !== removedChange.id);
+    foldConfirmedRename(changeSet, addedChange, removedChange);
     await persist();
     postToUi({ type: "state", project });
   }

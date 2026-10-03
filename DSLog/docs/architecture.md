@@ -92,6 +92,26 @@ layer that touches `figma.*` and a layer that doesn't:
    one). This is what makes releases behave like check-points: the next
    scan diffs against the release, not against v1.0.0 forever.
 
+### Carrying reviews across scans
+
+Every diff produces new `Change` objects with new ids, so a re-scan used to throw away all review work, and a
+release's changelog (built from its own fresh diff) never contained the notes typed during review.
+`shared/utils/carryOverReviews.ts` copies the work from the previous change set onto the new one, for both a scan
+and a release. Changes are matched by what they *are* — entity, change type and field — not by id:
+
+| Situation | Result |
+|---|---|
+| Same change, same values | Review state, notes, manual classification and a dismissed rename all kept |
+| Same kind of change, different values | State resets to *unreviewed* and the change is flagged `changedSinceReview` ("Updated since review" badge); notes and classification are kept, since they are the user's own text. A new decision clears the flag |
+| Several candidates of one kind | Paired by identical content first; leftovers are only paired when the counts line up, never guessed |
+| Confirmed rename | Re-applied from the tracked entity's `renameHistory` (including A → B → C chains), so it stays one "renamed" change |
+| Manual deprecation entry | Carried while the entity is still deprecated (a diff never produces these) |
+| Change that is gone / brand new | Gone / starts unreviewed |
+
+The scan result reports `reviewsKept` and `reviewsReset`, which the toast shows ("14 reviews kept · 2 changed since
+you reviewed them"). `renames.foldConfirmedRename` is the one place a rename pair is folded, shared by the confirm
+button and this re-application.
+
 ## Performance approach
 
 Component and token scanning both run in batches

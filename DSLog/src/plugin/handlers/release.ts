@@ -3,7 +3,8 @@ import { generateId } from "@shared/utils/id";
 import { diffSnapshots } from "@plugin/diff";
 import { generateJson, generateMarkdown } from "@plugin/export";
 import { postToUi } from "@plugin/utils/postMessage";
-import { pruneStaleChangeSets } from "@shared/utils/changeSets";
+import { getLatestChangeSetForBaseline, pruneStaleChangeSets } from "@shared/utils/changeSets";
+import { carryOverReviews } from "@shared/utils/carryOverReviews";
 import { findCurrentBaseline, persist, session } from "./session";
 import { captureSnapshot, resolveComponentIds } from "./scanSupport";
 import type { Msg } from "./types";
@@ -26,6 +27,7 @@ export async function handleCreateRelease(message: Msg<"create-release">): Promi
       )
     ).snapshot;
 
+  const previous = getLatestChangeSetForBaseline(project, baseline.id);
   const changeSet = diffSnapshots(
     baseline.id,
     baseline.snapshot,
@@ -38,6 +40,9 @@ export async function handleCreateRelease(message: Msg<"create-release">): Promi
       skippedItems: [],
     },
   );
+  // The release is built from this fresh diff, so it has to inherit the reviews, migration notes and classification
+  // overrides made on the scan being released — otherwise the changelog would never contain them.
+  carryOverReviews(changeSet, previous, project.trackedEntities);
   project.changeSets.push(changeSet);
 
   const newBaseline: Baseline = {

@@ -53,6 +53,11 @@ export interface Change {
   }>;
 
   reviewState: ReviewState;
+  /**
+   * Set when a re-scan found this change again but with different values from the ones that were reviewed, so
+   * the earlier decision was reset to "unreviewed". Cleared as soon as the change is reviewed again.
+   */
+  changedSinceReview?: boolean;
   reviewNote?: string;
   migrationNote?: string;
 

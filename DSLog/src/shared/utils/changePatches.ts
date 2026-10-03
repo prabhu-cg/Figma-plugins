@@ -4,7 +4,10 @@ import type { Project } from "@shared/types/project";
 
 function applyPatch(change: Change, patch: ChangePatch): Change {
   const next: Change = { ...change };
-  if (patch.reviewState !== undefined) next.reviewState = patch.reviewState;
+  if (patch.reviewState !== undefined) {
+    next.reviewState = patch.reviewState;
+    delete next.changedSinceReview; // a fresh decision answers "changed since you reviewed it"
+  }
   if (patch.reviewNote !== undefined) next.reviewNote = patch.reviewNote;
   if (patch.migrationNote !== undefined) next.migrationNote = patch.migrationNote;
   if (patch.manualClassification !== undefined) next.manualClassification = patch.manualClassification ?? undefined;

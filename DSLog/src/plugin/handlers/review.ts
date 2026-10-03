@@ -2,6 +2,7 @@ import type { TrackedEntity } from "@shared/types/entity";
 import { postToUi } from "@plugin/utils/postMessage";
 import type { ChangePatch } from "@shared/types/messages";
 import { applyChangePatches } from "@shared/utils/changePatches";
+import { foldConfirmedRename } from "@shared/utils/renames";
 import { persist, schedulePersist, session } from "./session";
 import type { Msg } from "./types";
 
@@ -76,15 +77,7 @@ export async function handleConfirmRename(message: Msg<"confirm-rename">): Promi
     project.trackedEntities.push(entity);
   }
 
-  // Fold the add+remove pair into a single "renamed" change rather than
-  // silently deleting the audit trail (spec §13 — never silently merge).
-  addedChange.changeType = kind === "token" ? "token-renamed" : "component-renamed";
-  addedChange.category = "modified";
-  addedChange.before = removedChange.entityName;
-  addedChange.after = addedChange.entityName;
-  addedChange.summary = `Renamed from "${removedChange.entityName}" to "${addedChange.entityName}" (id changed)`;
-  addedChange.renameResolution = "confirmed";
-  changeSet.changes = changeSet.changes.filter((c) => c.id !== removedChange.id);
+  foldConfirmedRename(changeSet, addedChange, removedChange);
 
   await persist();
   postToUi({ type: "state", project });

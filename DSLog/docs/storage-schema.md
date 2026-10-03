@@ -133,8 +133,9 @@ listed the same change once per scan. A project now keeps only:
 - every change set a **release** points at (its permanent record).
 
 Pruning happens after a scan, a baseline and a release, and once when an older
-project is opened. Note that re-scanning still starts from a fresh, all-
-unreviewed change set (review decisions are not carried across scans).
+project is opened. A new scan inherits the review work from the one it
+replaces before the old one is dropped — see "Carrying reviews across scans"
+in `docs/architecture.md`.
 
 ## Concurrency and failure handling
 

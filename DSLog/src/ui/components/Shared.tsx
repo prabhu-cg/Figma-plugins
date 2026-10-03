@@ -55,6 +55,15 @@ export function ReviewStateBadge({ state }: { state: ReviewState }) {
   return <span className={`badge ${REVIEW_STATE_BADGE_CLASS[state]}`}>{REVIEW_STATE_LABEL[state]}</span>;
 }
 
+/** Shown when a re-scan found this change again with different values, so the earlier decision was reset. */
+export function ChangedSinceReviewBadge() {
+  return (
+    <span className="badge badge-warning" title="This change was reviewed before, but its values have changed since — the earlier decision was reset.">
+      Updated since review
+    </span>
+  );
+}
+
 export function OptionCard({
   icon,
   title,

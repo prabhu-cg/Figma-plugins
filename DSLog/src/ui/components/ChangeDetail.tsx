@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { Change, ChangeSeverity, ChangeVerdict } from "@shared/types/change";
 import type { ReviewState } from "@shared/types/entity";
 import { getEffectiveClassification, getVerdict, VERDICT_LABEL } from "@shared/utils/classification";
-import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
+import { CategoryBadge, BreakingBadge, ChangedSinceReviewBadge, ReviewStateBadge } from "./Shared";
 import { DeprecationControl } from "./DeprecationControl";
 import { useProjectState } from "@ui/state/ProjectContext";
 
@@ -100,6 +100,7 @@ export function ChangeDetail({
             <CategoryBadge category={effective.category} />
             <BreakingBadge breaking={effective.breaking} potential={effective.potentialBreaking} />
             <ReviewStateBadge state={change.reviewState} />
+            {change.changedSinceReview && <ChangedSinceReviewBadge />}
             {effective.overridden && <span className="badge badge-neutral">Overridden</span>}
           </div>
 

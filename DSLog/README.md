@@ -30,7 +30,10 @@ human-written changelog.
    review state (unreviewed / reviewed / accepted / rejected), or a manual
    classification override. A possible rename (same component/token key or
    structural shape under a new id) is flagged for confirmation rather than
-   silently merged.
+   silently merged. Review decisions, notes and rename confirmations carry
+   across re-scans and into the release; a decision is only reset (and the
+   change marked "Updated since review") when the change itself came back with
+   different values.
 6. **Create a release** — bundles the current change set into a named
    version, generates a baseline for the new state, and produces a
    Markdown + JSON changelog.

@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 import type { Change } from "@shared/types/change";
 import { getEffectiveClassification } from "@shared/utils/classification";
-import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
+import { CategoryBadge, BreakingBadge, ChangedSinceReviewBadge, ReviewStateBadge } from "./Shared";
 
 export function changeItemDomId(changeId: string): string {
   return `change-item-${changeId}`;
@@ -47,6 +47,7 @@ export const ChangeListItem = memo(function ChangeListItem({
           <div className="flex items-center gap-2">
             <CategoryBadge category={effective.category} />
             <BreakingBadge breaking={effective.breaking} potential={effective.potentialBreaking} />
+            {change.changedSinceReview && <ChangedSinceReviewBadge />}
           </div>
           {change.reviewState !== "unreviewed" && <ReviewStateBadge state={change.reviewState} />}
         </div>

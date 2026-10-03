@@ -3,7 +3,8 @@ import { generateId } from "@shared/utils/id";
 import { discoverComponents } from "@plugin/scanner";
 import { diffSnapshots } from "@plugin/diff";
 import { postToUi } from "@plugin/utils/postMessage";
-import { pruneStaleChangeSets } from "@shared/utils/changeSets";
+import { getLatestChangeSetForBaseline, pruneStaleChangeSets } from "@shared/utils/changeSets";
+import { carryOverReviews } from "@shared/utils/carryOverReviews";
 import { findCurrentBaseline, persist, session } from "./session";
 import { captureSnapshot, resolveComponentIds } from "./scanSupport";
 import type { Msg } from "./types";
@@ -62,7 +63,10 @@ export async function handleScan(message: Msg<"scan">): Promise<void> {
     baseline.tracking.tokens.enabled,
   );
 
+  const previous = getLatestChangeSetForBaseline(project, baseline.id);
   const changeSet = diffSnapshots(baseline.id, baseline.snapshot, snapshot, scanSummary);
+  // A re-scan must not throw away the review work done on the previous one.
+  const { carried, reset } = carryOverReviews(changeSet, previous, project.trackedEntities);
   project.changeSets.push(changeSet);
 
   // Stash the freshly scanned state on the baseline's tracking-config-compatible
@@ -73,6 +77,6 @@ export async function handleScan(message: Msg<"scan">): Promise<void> {
   session.project = pruneStaleChangeSets(project);
 
   await persist();
-  postToUi({ type: "scan-complete", changeSet });
+  postToUi({ type: "scan-complete", changeSet, reviewsKept: carried, reviewsReset: reset });
   postToUi({ type: "state", project: session.project });
 }

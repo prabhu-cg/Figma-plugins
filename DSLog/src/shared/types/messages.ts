@@ -73,7 +73,7 @@ export type PluginToUiMessage =
   | { type: "changes-updated"; changeSetId: string; patches: ChangePatch[] }
   | { type: "discovered-components"; components: DiscoveredComponent[] }
   | { type: "scan-progress"; progress: ScanProgress }
-  | { type: "scan-complete"; changeSet: ChangeSet }
+  | { type: "scan-complete"; changeSet: ChangeSet; reviewsKept?: number; reviewsReset?: number }
   | { type: "baseline-created"; baseline: Baseline }
   | { type: "release-created"; release: Release }
   | { type: "export-result"; format: "markdown" | "json"; content: string; releaseId: string }
