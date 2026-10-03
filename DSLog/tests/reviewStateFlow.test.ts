@@ -38,7 +38,12 @@ describe("review state flow (simulated Figma runtime)", () => {
       changeId: first!.id,
       reviewState: "accepted",
     });
-    const afterUpdate = updateMessages.find((m) => m.type === "state");
+    expect(updateMessages.find((m) => m.type === "changes-updated")).toEqual({
+      type: "changes-updated",
+      changeSetId: changeSet.id,
+      patches: [{ changeId: first!.id, reviewState: "accepted" }],
+    });
+    const afterUpdate = (await send({ type: "get-state" })).find((m) => m.type === "state");
     if (afterUpdate?.type !== "state") throw new Error("unreachable");
     const updatedChangeSet = afterUpdate.project.changeSets.find((cs) => cs.id === changeSet.id);
     expect(updatedChangeSet?.changes.find((c) => c.id === first!.id)?.reviewState).toBe("accepted");
@@ -50,7 +55,10 @@ describe("review state flow (simulated Figma runtime)", () => {
       changeIds: [first!.id, second!.id],
       reviewState: "reviewed",
     });
-    const afterBulk = bulkMessages.find((m) => m.type === "state");
+    const bulkPatch = bulkMessages.find((m) => m.type === "changes-updated");
+    if (bulkPatch?.type !== "changes-updated") throw new Error("unreachable");
+    expect(bulkPatch.patches.map((p) => p.changeId)).toEqual([first!.id, second!.id]);
+    const afterBulk = (await send({ type: "get-state" })).find((m) => m.type === "state");
     if (afterBulk?.type !== "state") throw new Error("unreachable");
     const bulkChangeSet = afterBulk.project.changeSets.find((cs) => cs.id === changeSet.id);
     expect(bulkChangeSet?.changes.find((c) => c.id === first!.id)?.reviewState).toBe("reviewed");

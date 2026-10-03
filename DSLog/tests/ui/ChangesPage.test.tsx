@@ -113,6 +113,65 @@ describe("ChangesPage", () => {
     });
   });
 
+  describe("showing what the plugin reports", () => {
+    it("a review decision appears on its row and in the counts straight away", async () => {
+      const user = userEvent.setup();
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      await user.keyboard("ja");
+
+      expect(within(row("a")).getByText("Accepted")).toBeTruthy();
+      expect(within(row("b")).queryByText("Accepted")).toBeNull();
+      expect(screen.getByText(/2 unreviewed · 1 reviewed/)).toBeTruthy();
+    });
+
+    it("shows a patch the plugin sends by itself", () => {
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      act(() =>
+        bridge.emit({
+          type: "changes-updated",
+          changeSetId: "changeset-1",
+          patches: [{ changeId: "b", reviewState: "rejected" }, { changeId: "c", reviewState: "reviewed" }],
+        }),
+      );
+      expect(within(row("b")).getByText("Rejected")).toBeTruthy();
+      expect(within(row("c")).getByText("Reviewed")).toBeTruthy();
+      expect(within(row("a")).queryByText(/Rejected|Reviewed|Accepted/)).toBeNull();
+      expect(screen.getByText(/1 unreviewed · 2 reviewed/)).toBeTruthy();
+    });
+
+    it("carries a patched note into the detail pane for the selected change", async () => {
+      const user = userEvent.setup();
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      await user.click(row("a"));
+      act(() => bridge.emit({ type: "changes-updated", changeSetId: "changeset-1", patches: [{ changeId: "a", reviewState: "rejected" }] }));
+      const group = screen.getByRole("group", { name: "Review decision" });
+      expect(within(group).getByRole("button", { name: /Reject/ }).getAttribute("aria-pressed")).toBe("true");
+    });
+
+    it("ignores a patch for a change set it does not have", () => {
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      act(() => bridge.emit({ type: "changes-updated", changeSetId: "someone-elses", patches: [{ changeId: "a", reviewState: "rejected" }] }));
+      expect(screen.getByText(/3 unreviewed · 0 reviewed/)).toBeTruthy();
+    });
+
+    it("ignores a patch that arrives before any project does", () => {
+      renderWithProject(<ChangesPage />, undefined);
+      expect(() =>
+        act(() => bridge.emit({ type: "changes-updated", changeSetId: "changeset-1", patches: [{ changeId: "a", reviewState: "rejected" }] })),
+      ).not.toThrow();
+    });
+
+    it("undo puts the row's badge back", async () => {
+      const user = userEvent.setup();
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      await user.keyboard("ja");
+      expect(within(row("a")).getByText("Accepted")).toBeTruthy();
+      await user.keyboard("z");
+      expect(within(row("a")).queryByText("Accepted")).toBeNull();
+      expect(screen.getByText(/3 unreviewed · 0 reviewed/)).toBeTruthy();
+    });
+  });
+
   describe("undo", () => {
     it("shows what happened with an Undo button, and Z puts the previous state back", async () => {
       const user = userEvent.setup();

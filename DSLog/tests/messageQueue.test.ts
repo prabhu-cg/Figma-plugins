@@ -97,10 +97,10 @@ describe("message queue", () => {
     const changeSet = latestState(received).changeSets[0]!;
     const target = changeSet.changes[0]!;
 
-    // The next write to plugin data fails once — that is the first message's save.
-    const realSet = fig.root.setPluginData;
+    // The next clientStorage write fails once — a settings change only writes meta there, so that is the first message's save.
+    const realSet = fig.clientStorage.setAsync;
     let failures = 1;
-    fig.root.setPluginData = (key: string, value: string) => {
+    fig.clientStorage.setAsync = async (key: string, value: string) => {
       if (failures-- > 0) throw new Error("storage full");
       return realSet(key, value);
     };
@@ -110,6 +110,8 @@ describe("message queue", () => {
     await settle();
 
     expect(received.some((m) => m.type === "error")).toBe(true);
+    fire({ type: "get-state" }); // review edits send patches, so ask for the current state
+    await settle();
     const state = latestState(received);
     expect(state.settings.tracking.components).toBe(true); // the failed settings change was rolled back
     expect(state.changeSets[0]!.changes.find((c) => c.id === target.id)?.reviewNote).toBe("survives");
@@ -117,5 +119,48 @@ describe("message queue", () => {
     const stored = await loadProject();
     expect(stored.settings.tracking.components).toBe(true);
     expect(stored.changeSets[0]!.changes.find((c) => c.id === target.id)?.reviewNote).toBe("survives");
+  });
+});
+
+describe("save coalescing", () => {
+  it("a burst of review actions costs a handful of saves, not one per key press, and loses nothing", async () => {
+    const { fire, received, ids } = await setup();
+    const storage = await import("@plugin/storage");
+    fire(baselineMessage(ids));
+    await settle();
+    const changeSet = latestState(received).changeSets[0]!;
+
+    const { setPersistDebounce } = await import("@plugin/handlers/session");
+    setPersistDebounce(120); // the production delay
+    const saves: number[] = [];
+    storage.setSaveLogger((stats) => {
+      if (stats.partsWritten > 0) saves.push(stats.partsWritten);
+    });
+    const burst = changeSet.changes.slice(0, 25);
+    for (const change of burst) {
+      fire({ type: "update-change", changeSetId: changeSet.id, changeId: change.id, reviewState: "accepted" });
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400)); // longer than the delay
+
+    expect(saves).toHaveLength(1); // all 25 reviews, one save
+    const stored = await storage.loadProject();
+    const states = stored.changeSets.find((cs) => cs.id === changeSet.id)!.changes.slice(0, 25).map((c) => c.reviewState);
+    expect(states).toEqual(Array(25).fill("accepted"));
+  });
+
+  it("the UI is told about every edit straight away, without waiting for storage", async () => {
+    const { fire, received, ids, fig } = await setup();
+    fire(baselineMessage(ids));
+    await settle();
+    const changeSet = latestState(received).changeSets[0]!;
+
+    // Storage that never finishes: the patch must still go out.
+    fig.clientStorage.setAsync = () => new Promise(() => {});
+    fig.root.setPluginData = () => {};
+    received.length = 0;
+    fire({ type: "update-change", changeSetId: changeSet.id, changeId: changeSet.changes[0]!.id, reviewState: "accepted" });
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(received.filter((m) => m.type === "changes-updated")).toHaveLength(1);
   });
 });

@@ -141,24 +141,30 @@ describe("main.ts message handling", () => {
       expect(updated.reviewNote).toBe("looks fine");
     });
 
-    it("bulk-update-review only touches the listed changes", async () => {
+    it("bulk-update-review only touches the listed changes, and announces them as a patch", async () => {
       const { send } = await loadMainWithFakeFigma();
       const baseline = await createBaseline(send);
       const project = stateOf(await send({ type: "get-state" }));
       const changeSet = project.changeSets.find((cs) => cs.baselineId === baseline.id)!;
       const [first, second] = changeSet.changes;
+      const secondBefore = second!.reviewState;
 
-      const after = stateOf(
-        await send({
-          type: "bulk-update-review",
-          changeSetId: changeSet.id,
-          changeIds: [first!.id, "unknown-id"],
-          reviewState: "accepted",
-        }),
-      );
-      const changes = after.changeSets.find((cs) => cs.id === changeSet.id)!.changes;
+      const msgs = await send({
+        type: "bulk-update-review",
+        changeSetId: changeSet.id,
+        changeIds: [first!.id, "unknown-id"],
+        reviewState: "accepted",
+      });
+      expect(msgs.find((m) => m.type === "changes-updated")).toEqual({
+        type: "changes-updated",
+        changeSetId: changeSet.id,
+        patches: [{ changeId: first!.id, reviewState: "accepted" }],
+      });
+      expect(msgs.some((m) => m.type === "state")).toBe(false); // no whole-project resend
+
+      const changes = stateOf(await send({ type: "get-state" })).changeSets.find((cs) => cs.id === changeSet.id)!.changes;
       expect(changes.find((c) => c.id === first!.id)!.reviewState).toBe("accepted");
-      expect(changes.find((c) => c.id === second!.id)!.reviewState).toBe(second!.reviewState);
+      expect(changes.find((c) => c.id === second!.id)!.reviewState).toBe(secondBefore);
     });
   });
 
@@ -256,37 +262,35 @@ describe("main.ts message handling", () => {
     it("surfaces a thrown storage error as an error message instead of crashing", async () => {
       const { send } = await loadMainWithFakeFigma();
       await createBaseline(send);
-      const fig = (globalThis as never as { figma: { root: { setPluginData: () => void } } }).figma;
-      fig.root.setPluginData = () => {
+      const fig = (globalThis as never as { figma: { clientStorage: { setAsync: () => Promise<void> } } }).figma;
+      // Settings live in clientStorage, so that is the write a settings change makes.
+      fig.clientStorage.setAsync = async () => {
         throw new Error("storage full");
       };
-      const msgs = await send({ type: "update-settings", settings: stateOf(await send({ type: "get-state" })).settings });
+      const current = stateOf(await send({ type: "get-state" })).settings;
+      const changed = { ...current, tracking: { ...current.tracking, tokens: !current.tracking.tokens } };
+      const msgs = await send({ type: "update-settings", settings: changed });
       expect(errorOf(msgs)).toMatch(/storage full|save|persist/i);
     });
 
-    it("rolls back in-memory changes when persisting fails", async () => {
+    it("rolls back in-memory changes when a save that must succeed fails", async () => {
       const { send } = await loadMainWithFakeFigma();
       const baseline = await createBaseline(send);
       const before = frozen(stateOf(await send({ type: "get-state" })));
-      const changeSet = before.changeSets.find((cs) => cs.baselineId === baseline.id)!;
-      const change = changeSet.changes[0]!;
-      const fig = (globalThis as never as { figma: { root: { setPluginData: () => void } } }).figma;
+      const change = before.changeSets.find((cs) => cs.baselineId === baseline.id)!.changes[0]!;
+      const fig = (globalThis as never as {
+        figma: { root: { setPluginData: () => void }; clientStorage: { setAsync: () => Promise<void> } };
+      }).figma;
       const originalSet = fig.root.setPluginData;
+      const originalSetAsync = fig.clientStorage.setAsync;
       fig.root.setPluginData = () => {
+        throw new Error("storage full");
+      };
+      fig.clientStorage.setAsync = async () => {
         throw new Error("storage full");
       };
 
       // Each of these mutates `project` before persist() throws.
-      expect(
-        errorOf(
-          await send({
-            type: "update-change",
-            changeSetId: changeSet.id,
-            changeId: change.id,
-            reviewNote: "should not stick",
-          }),
-        ),
-      ).toBeDefined();
       expect(
         errorOf(await send({ type: "mark-deprecated", entityId: change.entityId, kind: "component", displayName: "X" })),
       ).toBeDefined();
@@ -300,7 +304,35 @@ describe("main.ts message handling", () => {
       ).toBeDefined();
 
       fig.root.setPluginData = originalSet;
+      fig.clientStorage.setAsync = originalSetAsync;
       expect(frozen(stateOf(await send({ type: "get-state" })))).toEqual(before);
+    });
+
+    it("a review edit shows at once; if the background save fails the user is told, the edit is kept, and the next save writes it", async () => {
+      const { send } = await loadMainWithFakeFigma();
+      const baseline = await createBaseline(send);
+      const changeSet = stateOf(await send({ type: "get-state" })).changeSets.find((cs) => cs.baselineId === baseline.id)!;
+      const [first, second] = changeSet.changes;
+      const fig = (globalThis as never as { figma: { root: { setPluginData: () => void } } }).figma;
+      const originalSet = fig.root.setPluginData;
+      fig.root.setPluginData = () => {
+        throw new Error("storage full");
+      };
+
+      const msgs = await send({ type: "update-change", changeSetId: changeSet.id, changeId: first!.id, reviewState: "accepted" });
+      expect(msgs.some((m) => m.type === "changes-updated")).toBe(true); // the UI was told immediately
+      expect(errorOf(msgs)).toMatch(/Couldn't save your latest changes.*storage full/);
+      // Not rolled back: the edit is still there for this session.
+      const kept = stateOf(await send({ type: "get-state" })).changeSets.find((cs) => cs.id === changeSet.id)!.changes;
+      expect(kept.find((c) => c.id === first!.id)!.reviewState).toBe("accepted");
+
+      // The next change succeeds, and its save also writes the earlier edit that had failed.
+      fig.root.setPluginData = originalSet;
+      await send({ type: "update-change", changeSetId: changeSet.id, changeId: second!.id, reviewState: "rejected" });
+      const { loadProject } = await import("@plugin/storage");
+      const stored = (await loadProject()).changeSets.find((cs) => cs.id === changeSet.id)!.changes;
+      expect(stored.find((c) => c.id === first!.id)!.reviewState).toBe("accepted");
+      expect(stored.find((c) => c.id === second!.id)!.reviewState).toBe("rejected");
     });
 
     it("a failed scan does not leave a half-applied change set or stale scan cache", async () => {

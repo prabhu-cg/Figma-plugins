@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { changeItemDomId } from "@ui/components/ChangeListItem";
 import type { ChangeSet } from "@shared/types/change";
@@ -24,6 +24,12 @@ export interface UndoableAction {
   message: string;
   previous: PreviousReviewState[];
 }
+
+/** How many rows are rendered at first, and added each time the user scrolls near the end of the list. */
+export const ROWS_PER_PAGE = 100;
+
+/** Without IntersectionObserver there is no way to know when to load more, so everything is rendered. */
+const canLoadProgressively = () => typeof IntersectionObserver !== "undefined";
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -61,19 +67,45 @@ export function useChangesView(changeSet: ChangeSet | undefined, focusChangeId?:
     onFocusConsumed?.();
   }, [focusChangeId, changeSet]);
 
-  // Keep the selected row in view as the keyboard moves through the list.
-  useEffect(() => {
-    if (selectedId) document.getElementById(changeItemDomId(selectedId))?.scrollIntoView({ block: "nearest" });
-  }, [selectedId]);
+  // Rows are rendered a page at a time so a very large change set doesn't mean tens of thousands of DOM nodes.
+  const [visibleCount, setVisibleCount] = useState(ROWS_PER_PAGE);
+  const shownCount = canLoadProgressively() ? visibleCount : filtered.length;
+  const hasMore = shownCount < filtered.length;
+  const showMore = useCallback(() => setVisibleCount((count) => count + ROWS_PER_PAGE), []);
+  useEffect(() => setVisibleCount(ROWS_PER_PAGE), [filters]);
 
-  function toggleChecked(id: string) {
+  // Bring the selected row into view as the keyboard moves through the list — once per selection, so it never
+  // fights the user scrolling, and after loading more rows if the selection is beyond what is rendered.
+  const filteredRef = useRef(filtered);
+  filteredRef.current = filtered;
+  const scrolledFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedId) {
+      scrolledFor.current = null;
+      return;
+    }
+    if (scrolledFor.current === selectedId) return;
+    const index = filteredRef.current.findIndex((c) => c.id === selectedId);
+    if (index === -1) return;
+    if (index >= shownCount) {
+      setVisibleCount(index + ROWS_PER_PAGE);
+      return;
+    }
+    const element = document.getElementById(changeItemDomId(selectedId));
+    if (element) {
+      element.scrollIntoView({ block: "nearest" });
+      scrolledFor.current = selectedId;
+    }
+  }, [selectedId, shownCount]);
+
+  const toggleChecked = useCallback((id: string) => {
     setCheckedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
 
   function toggleAllChecked() {
     const allChecked = filtered.length > 0 && filtered.every((c) => checkedIds.has(c.id));
@@ -144,6 +176,9 @@ export function useChangesView(changeSet: ChangeSet | undefined, focusChangeId?:
     clearFilters,
     filtersActive,
     filtered,
+    shownCount,
+    hasMore,
+    showMore,
     selected,
     selectedId,
     setSelectedId,

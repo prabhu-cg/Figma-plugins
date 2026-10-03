@@ -4,6 +4,7 @@ import type { DiscoveredComponent, ScanProgress } from "@shared/types/scan";
 import type { Baseline, Project, Release } from "@shared/types/project";
 import type { InstanceScanProgress } from "@shared/types/instance";
 import type { UiToPluginMessage } from "@shared/types/messages";
+import { applyChangePatches } from "@shared/utils/changePatches";
 import { onPluginMessage, sendToPlugin } from "./bridge";
 
 interface Toast {
@@ -76,6 +77,11 @@ export function ProjectProvider({ children }: { children: React.ReactNode }) {
         case "state":
           setProject(message.project);
           setLoading(false);
+          return;
+        case "changes-updated":
+          // A small edit to a few changes: patch them in place so every other change keeps its identity and the
+          // list doesn't re-render. (Whole-project `state` messages are for everything else.)
+          setProject((prev) => (prev ? applyChangePatches(prev, message.changeSetId, message.patches) : prev));
           return;
         case "discovered-components":
           setDiscovered(message.components);

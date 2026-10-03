@@ -155,6 +155,9 @@ Figma (Figma does not hot-reload plugin code).
   real plugin message handlers (`main.ts` → `handlers/`) against a simulated `figma` global for the
   baseline → scan → release flow, deprecation, rename confirmation,
   review-state updates, and the document-wide impact-index build
+- message queue and storage concurrency (overlapping saves, rollback isolation, coalesced background saves),
+  part-wise storage (what a save skips and rewrites, migration from the original layout, failures), and
+  change-set pruning
 - UI tests (`tests/ui/`, jsdom + React Testing Library): the Changes, Releases and Overview pages, search
   combobox, tabs, nav, banners, and the theme / dismiss-once hooks, rendered with the real
   `ProjectProvider` against a mocked `bridge` and a small fake plugin that answers review and release

@@ -1,5 +1,7 @@
 import type { Project } from "@shared/types/project";
 import type { Release } from "@shared/types/project";
+import type { ChangePatch } from "@shared/types/messages";
+import { applyChangePatches } from "@shared/utils/changePatches";
 import { bridge } from "./bridge";
 
 /**
@@ -19,16 +21,22 @@ export function installFakePlugin(project: Project) {
         emitState();
         return;
       case "update-change": {
-        const change = changeSet()?.changes.find((c) => c.id === message.changeId);
-        if (change && message.reviewState !== undefined) change.reviewState = message.reviewState;
-        emitState();
+        const patch: ChangePatch = { changeId: message.changeId };
+        if (message.reviewState !== undefined) patch.reviewState = message.reviewState;
+        if (message.reviewNote !== undefined) patch.reviewNote = message.reviewNote;
+        if (message.migrationNote !== undefined) patch.migrationNote = message.migrationNote;
+        if (message.manualClassification !== undefined) patch.manualClassification = message.manualClassification;
+        state.project = applyChangePatches(state.project, message.changeSetId, [patch]);
+        bridge.emit({ type: "changes-updated", changeSetId: message.changeSetId, patches: [patch] });
         return;
       }
       case "bulk-update-review": {
-        for (const change of changeSet()?.changes ?? []) {
-          if (message.changeIds.includes(change.id)) change.reviewState = message.reviewState;
-        }
-        emitState();
+        const ids = new Set(message.changeIds);
+        const patches: ChangePatch[] = (changeSet()?.changes ?? [])
+          .filter((c) => ids.has(c.id))
+          .map((c) => ({ changeId: c.id, reviewState: message.reviewState }));
+        state.project = applyChangePatches(state.project, message.changeSetId, patches);
+        bridge.emit({ type: "changes-updated", changeSetId: message.changeSetId, patches });
         return;
       }
       case "create-release": {

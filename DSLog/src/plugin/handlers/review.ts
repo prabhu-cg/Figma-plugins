@@ -1,41 +1,45 @@
 import type { TrackedEntity } from "@shared/types/entity";
 import { postToUi } from "@plugin/utils/postMessage";
-import { persist, session } from "./session";
+import type { ChangePatch } from "@shared/types/messages";
+import { applyChangePatches } from "@shared/utils/changePatches";
+import { persist, schedulePersist, session } from "./session";
 import type { Msg } from "./types";
 
+/**
+ * Review edits are applied, announced to the UI as a small patch (not the whole project), and saved in the
+ * background — so the UI updates immediately however large the project is.
+ */
 export async function handleUpdateChange(message: Msg<"update-change">): Promise<void> {
-  const { project } = session;
-  const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-  const change = changeSet?.changes.find((c) => c.id === message.changeId);
-  if (!change) {
+  const changeSet = session.project.changeSets.find((cs) => cs.id === message.changeSetId);
+  if (!changeSet?.changes.some((c) => c.id === message.changeId)) {
     postToUi({ type: "error", message: "Change not found." });
     return;
   }
-  if (message.reviewState !== undefined) change.reviewState = message.reviewState;
-  if (message.reviewNote !== undefined) change.reviewNote = message.reviewNote;
-  if (message.migrationNote !== undefined) change.migrationNote = message.migrationNote;
-  if (message.manualClassification !== undefined) {
-    change.manualClassification = message.manualClassification ?? undefined;
-  }
+  const patch: ChangePatch = { changeId: message.changeId };
+  if (message.reviewState !== undefined) patch.reviewState = message.reviewState;
+  if (message.reviewNote !== undefined) patch.reviewNote = message.reviewNote;
+  if (message.migrationNote !== undefined) patch.migrationNote = message.migrationNote;
+  if (message.manualClassification !== undefined) patch.manualClassification = message.manualClassification;
 
-  await persist();
-  postToUi({ type: "state", project });
+  session.project = applyChangePatches(session.project, message.changeSetId, [patch]);
+  postToUi({ type: "changes-updated", changeSetId: message.changeSetId, patches: [patch] });
+  schedulePersist();
 }
 
 export async function handleBulkUpdateReview(message: Msg<"bulk-update-review">): Promise<void> {
-  const { project } = session;
-  const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+  const changeSet = session.project.changeSets.find((cs) => cs.id === message.changeSetId);
   if (!changeSet) {
     postToUi({ type: "error", message: "Change set not found." });
     return;
   }
   const ids = new Set(message.changeIds);
-  for (const change of changeSet.changes) {
-    if (ids.has(change.id)) change.reviewState = message.reviewState;
-  }
+  const patches: ChangePatch[] = changeSet.changes
+    .filter((c) => ids.has(c.id))
+    .map((c) => ({ changeId: c.id, reviewState: message.reviewState }));
 
-  await persist();
-  postToUi({ type: "state", project });
+  session.project = applyChangePatches(session.project, message.changeSetId, patches);
+  postToUi({ type: "changes-updated", changeSetId: message.changeSetId, patches });
+  schedulePersist();
 }
 
 export async function handleConfirmRename(message: Msg<"confirm-rename">): Promise<void> {

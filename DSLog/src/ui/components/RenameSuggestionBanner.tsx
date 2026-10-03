@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import type { Change } from "@shared/types/change";
 import { useProjectState } from "@ui/state/ProjectContext";
 
@@ -10,13 +10,13 @@ import { useProjectState } from "@ui/state/ProjectContext";
 export function RenameSuggestionBanner({ changeSetId, changes }: { changeSetId: string; changes: Change[] }) {
   const { send } = useProjectState();
 
-  const suggestions = changes
-    .filter((c) => c.possibleRenameOf && !c.renameResolution)
-    .map((addedChange) => ({
-      addedChange,
-      removedChange: changes.find((c) => c.id === addedChange.possibleRenameOf),
-    }))
-    .filter((s): s is { addedChange: Change; removedChange: Change } => Boolean(s.removedChange));
+  const suggestions = useMemo(() => {
+    const byId = new Map(changes.map((c) => [c.id, c]));
+    return changes
+      .filter((c) => c.possibleRenameOf && !c.renameResolution)
+      .map((addedChange) => ({ addedChange, removedChange: byId.get(addedChange.possibleRenameOf as string) }))
+      .filter((s): s is { addedChange: Change; removedChange: Change } => Boolean(s.removedChange));
+  }, [changes]);
 
   if (suggestions.length === 0) return null;
 

@@ -223,6 +223,7 @@ export function createFakeFigma() {
     currentPage: page,
     ui: { postMessage: (_msg: unknown) => {} },
     showUI: () => {},
+    on: () => {},
     loadAllPagesAsync: async () => {},
     setCurrentPageAsync: async (p: any) => {
       fakeFigma.currentPage = p;
@@ -261,6 +262,8 @@ export async function loadMainWithFakeFigma() {
   // files) don't leak state into each other.
   vi.resetModules();
   await import("@plugin/main");
+  // Production waits ~120 ms before background saves so bursts coalesce; tests want them immediate and deterministic.
+  (await import("@plugin/handlers/session")).setPersistDebounce(0);
 
   const send = async (message: UiToPluginMessage) => {
     received.length = 0;

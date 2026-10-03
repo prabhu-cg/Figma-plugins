@@ -197,8 +197,7 @@
     });
     return run;
   }
-  function writeChunked(store, prefix, data, chunkSizeBytes) {
-    const serialized = JSON.stringify(data);
+  function writeChunkedSerialized(store, prefix, serialized, chunkSizeBytes) {
     return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
   }
   async function writeSerialized(store, prefix, serialized, chunkSizeBytes) {
@@ -208,10 +207,12 @@
     const previous = parseIndex(await store.get(`${prefix}:index`));
     const gen = (previous?.gen ?? 0) + 1;
     const newKeys = chunks.map((_, i) => chunkKey(prefix, gen, i));
+    let committedIndex = "";
     try {
       await Promise.all(chunks.map((chunk, i) => store.set(newKeys[i], chunk)));
       const index = { count: chunks.length, gen };
-      await store.set(`${prefix}:index`, JSON.stringify(index));
+      committedIndex = JSON.stringify(index);
+      await store.set(`${prefix}:index`, committedIndex);
     } catch (error) {
       await Promise.allSettled(newKeys.map((k) => store.delete(k)));
       throw error;
@@ -223,11 +224,21 @@
       await Promise.allSettled(stale.map((k) => store.delete(k)));
     } catch {
     }
+    return committedIndex;
   }
-  function readChunked(store, prefix) {
-    return withLock(store, prefix, () => readUnlocked(store, prefix));
+  async function readChunked(store, prefix) {
+    const raw = await readChunkedRaw(store, prefix);
+    if (raw === void 0) return void 0;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return void 0;
+    }
   }
-  async function readUnlocked(store, prefix) {
+  function readChunkedRaw(store, prefix) {
+    return withLock(store, prefix, () => readRawUnlocked(store, prefix));
+  }
+  async function readRawUnlocked(store, prefix) {
     const index = parseIndex(await store.get(`${prefix}:index`));
     if (!index) return void 0;
     const parts = [];
@@ -237,33 +248,118 @@
       parts.push(part);
     }
     const serialized = parts.join("");
-    if (serialized === "") return void 0;
-    try {
-      return JSON.parse(serialized);
-    } catch {
-      return void 0;
-    }
+    return serialized === "" ? void 0 : serialized;
+  }
+  function deleteChunked(store, prefix) {
+    return withLock(store, prefix, () => deleteUnlocked(store, prefix));
+  }
+  async function deleteUnlocked(store, prefix) {
+    const pattern = chunkKeyPattern(prefix);
+    const keys = await store.keys();
+    const toDelete = keys.filter((k) => k === `${prefix}:index` || pattern.test(k));
+    await Promise.all(toDelete.map((k) => store.delete(k)));
   }
   const META_PREFIX = "dslog:meta";
-  const HEAVY_PREFIX = "dslog:heavy";
+  const MANIFEST_PREFIX = "dslog:manifest";
+  const INSTANCES_PREFIX = "dslog:instances";
+  const LEGACY_HEAVY_PREFIX = "dslog:heavy";
+  const snapshotPrefix = (baselineId) => `dslog:snap:${baselineId}`;
+  const changeSetPrefix = (changeSetId) => `dslog:cs:${changeSetId}`;
+  const PART_INDEX_PATTERN = /^dslog:(snap|cs):(.+):index$/;
   function isStoredMeta(value) {
     if (typeof value !== "object" || value === null) return false;
     const v = value;
     return typeof v.schemaVersion === "number" && Array.isArray(v.baselines) && Array.isArray(v.releases) && typeof v.settings === "object" && v.settings !== null;
   }
-  function isHeavyData(value) {
+  function isManifest(value) {
+    if (typeof value !== "object" || value === null) return false;
+    const v = value;
+    return v.layout === 2 && Array.isArray(v.snapshots) && Array.isArray(v.changeSets);
+  }
+  function isLegacyHeavy(value) {
     if (typeof value !== "object" || value === null) return false;
     const v = value;
     return typeof v.snapshots === "object" && v.snapshots !== null && Array.isArray(v.changeSets);
   }
   const EMPTY_SNAPSHOT = { components: [], tokens: [], collections: [] };
+  const records = /* @__PURE__ */ new WeakMap();
+  function recordsFor(store) {
+    let map = records.get(store);
+    if (!map) {
+      map = /* @__PURE__ */ new Map();
+      records.set(store, map);
+    }
+    return map;
+  }
+  async function stillStored(store, prefix, record) {
+    return await store.get(`${prefix}:index`) === record.index;
+  }
+  let saveLogger;
+  function setSaveLogger(logger) {
+    saveLogger = logger;
+  }
+  async function savePart(store, prefix, chunkSize, part, stats) {
+    stats.partsChecked++;
+    const map = recordsFor(store);
+    const record = map.get(prefix);
+    if ("source" in part) {
+      if (record && record.source === part.source && await stillStored(store, prefix, record)) return false;
+      const serialized2 = JSON.stringify(part.source);
+      const index2 = await writeChunkedSerialized(store, prefix, serialized2, chunkSize);
+      map.set(prefix, { index: index2, source: part.source });
+      stats.partsWritten++;
+      stats.bytesWritten += serialized2.length;
+      return true;
+    }
+    const serialized = part.serialize();
+    if (record && record.serialized === serialized && await stillStored(store, prefix, record)) return false;
+    const index = await writeChunkedSerialized(store, prefix, serialized, chunkSize);
+    map.set(prefix, { index, serialized });
+    stats.partsWritten++;
+    stats.bytesWritten += serialized.length;
+    return true;
+  }
+  async function loadParts() {
+    const map = recordsFor(pluginDataAdapter);
+    const manifest = await readChunked(pluginDataAdapter, MANIFEST_PREFIX);
+    if (!isManifest(manifest)) {
+      const legacy = await readChunked(pluginDataAdapter, LEGACY_HEAVY_PREFIX);
+      return isLegacyHeavy(legacy) ? legacy : { snapshots: {}, changeSets: [] };
+    }
+    const snapshots = {};
+    for (const id of manifest.snapshots) {
+      const prefix = snapshotPrefix(id);
+      const raw = await readChunkedRaw(pluginDataAdapter, prefix);
+      if (raw === void 0) continue;
+      try {
+        const snapshot = JSON.parse(raw);
+        snapshots[id] = snapshot;
+        const index = await pluginDataAdapter.get(`${prefix}:index`);
+        if (index !== void 0) map.set(prefix, { index, source: snapshot });
+      } catch {
+      }
+    }
+    const changeSets = [];
+    for (const id of manifest.changeSets) {
+      const prefix = changeSetPrefix(id);
+      const raw = await readChunkedRaw(pluginDataAdapter, prefix);
+      if (raw === void 0) continue;
+      try {
+        changeSets.push(JSON.parse(raw));
+        const index = await pluginDataAdapter.get(`${prefix}:index`);
+        if (index !== void 0) map.set(prefix, { index, serialized: raw });
+      } catch {
+      }
+    }
+    const instanceIndex = manifest.instanceIndex ? await readChunked(pluginDataAdapter, INSTANCES_PREFIX) : void 0;
+    return { snapshots, changeSets, instanceIndex };
+  }
   async function loadProject() {
     const metaRaw = await readChunked(clientStorageAdapter, META_PREFIX);
-    const heavyRaw = await readChunked(pluginDataAdapter, HEAVY_PREFIX);
     if (!isStoredMeta(metaRaw)) {
       return createEmptyProject(STORAGE_SCHEMA_VERSION);
     }
-    const heavy = isHeavyData(heavyRaw) ? heavyRaw : { snapshots: {}, changeSets: [] };
+    const heavy = await loadParts();
     const baselines = metaRaw.baselines.map((b) => ({
       ...b,
       snapshot: heavy.snapshots[b.id] ?? EMPTY_SNAPSHOT
@@ -285,28 +381,98 @@
     saveTail = run.catch(() => void 0);
     return run;
   }
+  async function removeUnlistedParts(manifest, hadInstances) {
+    const keep = /* @__PURE__ */ new Set([
+      ...manifest.snapshots.map(snapshotPrefix),
+      ...manifest.changeSets.map(changeSetPrefix)
+    ]);
+    const map = recordsFor(pluginDataAdapter);
+    const stale = /* @__PURE__ */ new Set();
+    for (const prefix of map.keys()) {
+      if ((prefix.startsWith("dslog:snap:") || prefix.startsWith("dslog:cs:")) && !keep.has(prefix)) stale.add(prefix);
+    }
+    for (const key of await pluginDataAdapter.keys()) {
+      const match = PART_INDEX_PATTERN.exec(key);
+      if (match) {
+        const prefix = key.slice(0, -":index".length);
+        if (!keep.has(prefix)) stale.add(prefix);
+      }
+    }
+    if (!manifest.instanceIndex && hadInstances) stale.add(INSTANCES_PREFIX);
+    for (const prefix of stale) {
+      await deleteChunked(pluginDataAdapter, prefix);
+      map.delete(prefix);
+    }
+  }
   async function writeProject(project) {
-    const snapshots = {};
-    const baselinesWithoutSnapshot = project.baselines.map((baseline) => {
-      snapshots[baseline.id] = baseline.snapshot;
-      const { snapshot: _snapshot, ...rest } = baseline;
-      return rest;
-    });
+    const started = Date.now();
+    const stats = { partsWritten: 0, partsChecked: 0, bytesWritten: 0, ms: 0 };
+    for (const baseline of project.baselines) {
+      await savePart(pluginDataAdapter, snapshotPrefix(baseline.id), STORAGE_CHUNK_SIZE_PLUGIN_DATA, { source: baseline.snapshot }, stats);
+    }
+    for (const changeSet of project.changeSets) {
+      await savePart(
+        pluginDataAdapter,
+        changeSetPrefix(changeSet.id),
+        STORAGE_CHUNK_SIZE_PLUGIN_DATA,
+        { serialize: () => JSON.stringify(changeSet) },
+        stats
+      );
+    }
+    const hadInstances = recordsFor(pluginDataAdapter).has(INSTANCES_PREFIX);
+    if (project.instanceIndex) {
+      const instanceIndex = project.instanceIndex;
+      await savePart(pluginDataAdapter, INSTANCES_PREFIX, STORAGE_CHUNK_SIZE_PLUGIN_DATA, { serialize: () => JSON.stringify(instanceIndex) }, stats);
+    }
+    const manifest = {
+      layout: 2,
+      snapshots: project.baselines.map((b) => b.id),
+      changeSets: project.changeSets.map((cs) => cs.id),
+      instanceIndex: project.instanceIndex !== void 0
+    };
+    const manifestChanged = await savePart(
+      pluginDataAdapter,
+      MANIFEST_PREFIX,
+      STORAGE_CHUNK_SIZE_PLUGIN_DATA,
+      { serialize: () => JSON.stringify(manifest) },
+      stats
+    );
+    if (manifestChanged) {
+      try {
+        await removeUnlistedParts(manifest, hadInstances);
+        if (await pluginDataAdapter.get(`${LEGACY_HEAVY_PREFIX}:index`) !== void 0) {
+          await deleteChunked(pluginDataAdapter, LEGACY_HEAVY_PREFIX);
+        }
+      } catch {
+      }
+    }
     const meta = {
       schemaVersion: project.schemaVersion,
       currentBaselineId: project.currentBaselineId,
-      baselines: baselinesWithoutSnapshot,
+      baselines: project.baselines.map(({ snapshot: _snapshot, ...rest }) => rest),
       releases: project.releases,
       trackedEntities: project.trackedEntities,
       settings: project.settings
     };
-    const heavy = {
-      snapshots,
-      changeSets: project.changeSets,
-      instanceIndex: project.instanceIndex
-    };
-    await writeChunked(pluginDataAdapter, HEAVY_PREFIX, heavy, STORAGE_CHUNK_SIZE_PLUGIN_DATA);
-    await writeChunked(clientStorageAdapter, META_PREFIX, meta, STORAGE_CHUNK_SIZE_CLIENT);
+    await savePart(clientStorageAdapter, META_PREFIX, STORAGE_CHUNK_SIZE_CLIENT, { serialize: () => JSON.stringify(meta) }, stats);
+    stats.ms = Date.now() - started;
+    saveLogger?.(stats);
+  }
+  function postToUi(message) {
+    figma.ui.postMessage(message);
+  }
+  function getLatestChangeSetForBaseline(project, baselineId) {
+    const sets = project.changeSets.filter((cs) => cs.baselineId === baselineId);
+    if (sets.length === 0) return void 0;
+    return sets.reduce((latest, cs) => cs.createdAt > latest.createdAt ? cs : latest);
+  }
+  function pruneStaleChangeSets(project) {
+    const keep = /* @__PURE__ */ new Set();
+    for (const release of project.releases) keep.add(release.changeSetId);
+    const current = project.currentBaselineId ? getLatestChangeSetForBaseline(project, project.currentBaselineId) : void 0;
+    if (current) keep.add(current.id);
+    const changeSets = project.changeSets.filter((cs) => keep.has(cs.id));
+    return changeSets.length === project.changeSets.length ? project : { ...project, changeSets };
   }
   const session = {
     project: void 0,
@@ -315,19 +481,65 @@
   };
   async function ensureProject() {
     if (!session.project) {
-      session.project = await loadProject();
+      const loaded = await loadProject();
+      const pruned = pruneStaleChangeSets(loaded);
+      session.project = pruned;
+      if (pruned !== loaded) schedulePersist();
     }
     return session.project;
   }
-  async function persist() {
-    await saveProject(session.project);
+  let requested = 0;
+  let saved = 0;
+  let running;
+  async function drain() {
+    while (saved < requested) {
+      const target = requested;
+      await saveProject(session.project);
+      saved = target;
+    }
+  }
+  function persist() {
+    if (debounceTimer !== void 0) {
+      clearTimeout(debounceTimer);
+      debounceTimer = void 0;
+    }
+    requested++;
+    if (!running) {
+      running = drain().finally(() => {
+        running = void 0;
+      });
+    }
+    return running;
+  }
+  let debounceMs = 120;
+  const MAX_WAIT_MS = 1e3;
+  let debounceTimer;
+  let debounceStartedAt = 0;
+  function reportSaveFailure(error) {
+    postToUi({
+      type: "error",
+      message: `Couldn't save your latest changes (${error instanceof Error ? error.message : "unknown error"}). They're kept for now and will be saved with your next change.`
+    });
+  }
+  function schedulePersist() {
+    const now = Date.now();
+    if (debounceTimer === void 0) debounceStartedAt = now;
+    else clearTimeout(debounceTimer);
+    const wait = Math.max(0, Math.min(debounceMs, MAX_WAIT_MS - (now - debounceStartedAt)));
+    debounceTimer = setTimeout(() => {
+      debounceTimer = void 0;
+      persist().catch(reportSaveFailure);
+    }, wait);
+  }
+  function flushScheduledPersist() {
+    if (debounceTimer === void 0) return;
+    clearTimeout(debounceTimer);
+    debounceTimer = void 0;
+    persist().catch(reportSaveFailure);
   }
   function findCurrentBaseline() {
     const { project } = session;
     return project.baselines.find((b) => b.id === project.currentBaselineId);
-  }
-  function postToUi(message) {
-    figma.ui.postMessage(message);
   }
   async function handleGetState() {
     postToUi({ type: "state", project: session.project });
@@ -1786,9 +1998,10 @@
       scanSummary
     );
     project.changeSets.push(changeSet);
+    session.project = pruneStaleChangeSets(project);
     await persist();
     postToUi({ type: "baseline-created", baseline });
-    postToUi({ type: "state", project });
+    postToUi({ type: "state", project: session.project });
   }
   async function handleScan(message) {
     const { project } = session;
@@ -1806,9 +2019,10 @@
     project.changeSets.push(changeSet);
     session.latestScannedSnapshot = snapshot;
     session.latestScanSummary = scanSummary;
+    session.project = pruneStaleChangeSets(project);
     await persist();
     postToUi({ type: "scan-complete", changeSet });
-    postToUi({ type: "state", project });
+    postToUi({ type: "state", project: session.project });
   }
   function getEffectiveClassification(change) {
     const override = change.manualClassification;
@@ -1966,9 +2180,10 @@
     project.currentBaselineId = newBaseline.id;
     session.latestScannedSnapshot = void 0;
     session.latestScanSummary = void 0;
+    session.project = pruneStaleChangeSets(project);
     await persist();
     postToUi({ type: "release-created", release });
-    postToUi({ type: "state", project });
+    postToUi({ type: "state", project: session.project });
   }
   async function handleExport(message) {
     const { project } = session;
@@ -2004,36 +2219,59 @@
       changeSet
     });
   }
+  function applyPatch(change, patch) {
+    const next = { ...change };
+    if (patch.reviewState !== void 0) next.reviewState = patch.reviewState;
+    if (patch.reviewNote !== void 0) next.reviewNote = patch.reviewNote;
+    if (patch.migrationNote !== void 0) next.migrationNote = patch.migrationNote;
+    if (patch.manualClassification !== void 0) next.manualClassification = patch.manualClassification ?? void 0;
+    return next;
+  }
+  function applyChangePatches(project, changeSetId, patches) {
+    if (patches.length === 0) return project;
+    const index = project.changeSets.findIndex((cs) => cs.id === changeSetId);
+    const changeSet = project.changeSets[index];
+    if (index === -1 || !changeSet) return project;
+    const byId2 = new Map(patches.map((patch) => [patch.changeId, patch]));
+    let touched = false;
+    const changes = changeSet.changes.map((change) => {
+      const patch = byId2.get(change.id);
+      if (!patch) return change;
+      touched = true;
+      return applyPatch(change, patch);
+    });
+    if (!touched) return project;
+    const nextSet = { ...changeSet, changes };
+    const changeSets = project.changeSets.slice();
+    changeSets[index] = nextSet;
+    return { ...project, changeSets };
+  }
   async function handleUpdateChange(message) {
-    const { project } = session;
-    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
-    const change = changeSet?.changes.find((c) => c.id === message.changeId);
-    if (!change) {
+    const changeSet = session.project.changeSets.find((cs) => cs.id === message.changeSetId);
+    if (!changeSet?.changes.some((c) => c.id === message.changeId)) {
       postToUi({ type: "error", message: "Change not found." });
       return;
     }
-    if (message.reviewState !== void 0) change.reviewState = message.reviewState;
-    if (message.reviewNote !== void 0) change.reviewNote = message.reviewNote;
-    if (message.migrationNote !== void 0) change.migrationNote = message.migrationNote;
-    if (message.manualClassification !== void 0) {
-      change.manualClassification = message.manualClassification ?? void 0;
-    }
-    await persist();
-    postToUi({ type: "state", project });
+    const patch = { changeId: message.changeId };
+    if (message.reviewState !== void 0) patch.reviewState = message.reviewState;
+    if (message.reviewNote !== void 0) patch.reviewNote = message.reviewNote;
+    if (message.migrationNote !== void 0) patch.migrationNote = message.migrationNote;
+    if (message.manualClassification !== void 0) patch.manualClassification = message.manualClassification;
+    session.project = applyChangePatches(session.project, message.changeSetId, [patch]);
+    postToUi({ type: "changes-updated", changeSetId: message.changeSetId, patches: [patch] });
+    schedulePersist();
   }
   async function handleBulkUpdateReview(message) {
-    const { project } = session;
-    const changeSet = project.changeSets.find((cs) => cs.id === message.changeSetId);
+    const changeSet = session.project.changeSets.find((cs) => cs.id === message.changeSetId);
     if (!changeSet) {
       postToUi({ type: "error", message: "Change set not found." });
       return;
     }
     const ids = new Set(message.changeIds);
-    for (const change of changeSet.changes) {
-      if (ids.has(change.id)) change.reviewState = message.reviewState;
-    }
-    await persist();
-    postToUi({ type: "state", project });
+    const patches = changeSet.changes.filter((c) => ids.has(c.id)).map((c) => ({ changeId: c.id, reviewState: message.reviewState }));
+    session.project = applyChangePatches(session.project, message.changeSetId, patches);
+    postToUi({ type: "changes-updated", changeSetId: message.changeSetId, patches });
+    schedulePersist();
   }
   async function handleConfirmRename(message) {
     const { project } = session;
@@ -2090,11 +2328,6 @@
     removedChange.renameResolution = "dismissed";
     await persist();
     postToUi({ type: "state", project });
-  }
-  function getLatestChangeSetForBaseline(project, baselineId) {
-    const sets = project.changeSets.filter((cs) => cs.baselineId === baselineId);
-    if (sets.length === 0) return void 0;
-    return sets.reduce((latest, cs) => cs.createdAt > latest.createdAt ? cs : latest);
   }
   function appendSyntheticChange(baselineId, change) {
     let changeSet = getLatestChangeSetForBaseline(session.project, baselineId);
@@ -2257,6 +2490,12 @@
     }
   }
   figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
+  setSaveLogger((stats) => {
+    if (stats.partsWritten === 0) return;
+    console.debug(
+      `[DSLog] saved ${stats.partsWritten} of ${stats.partsChecked} parts (${Math.round(stats.bytesWritten / 1024)} KB) in ${stats.ms} ms`
+    );
+  });
   figma.ui.onmessage = (message) => {
     handleMessage(message).catch((error) => {
       postToUi({
@@ -2265,4 +2504,5 @@
       });
     });
   };
+  figma.on("close", flushScheduledPersist);
 })();

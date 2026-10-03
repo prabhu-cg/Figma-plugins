@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import type { Change } from "@shared/types/change";
 import { getEffectiveClassification } from "@shared/utils/classification";
 import { CategoryBadge, BreakingBadge, ReviewStateBadge } from "./Shared";
@@ -7,7 +7,11 @@ export function changeItemDomId(changeId: string): string {
   return `change-item-${changeId}`;
 }
 
-export function ChangeListItem({
+/**
+ * Memoised: a row re-renders only when its own change, selection or checkbox changes. That needs `onSelect` and
+ * `onToggleCheck` to be stable functions of the id (not fresh closures per row), which is why they take the id.
+ */
+export const ChangeListItem = memo(function ChangeListItem({
   change,
   selected,
   onSelect,
@@ -16,10 +20,10 @@ export function ChangeListItem({
 }: {
   change: Change;
   selected: boolean;
-  onSelect: () => void;
+  onSelect: (changeId: string) => void;
   /** When provided (with onToggleCheck), renders a bulk-selection checkbox (spec §14). */
   checked?: boolean;
-  onToggleCheck?: () => void;
+  onToggleCheck?: (changeId: string) => void;
 }) {
   const effective = getEffectiveClassification(change);
   return (
@@ -28,14 +32,14 @@ export function ChangeListItem({
         <input
           type="checkbox"
           checked={checked ?? false}
-          onChange={onToggleCheck}
+          onChange={() => onToggleCheck(change.id)}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Select ${change.entityName} change for bulk review`}
         />
       )}
       <button
         id={changeItemDomId(change.id)}
-        onClick={onSelect}
+        onClick={() => onSelect(change.id)}
         aria-current={selected ? "true" : undefined}
         className={`card change-item${selected ? " is-selected" : ""}${change.reviewState === "unreviewed" ? "" : " is-done"}`}
       >
@@ -53,4 +57,4 @@ export function ChangeListItem({
       </button>
     </div>
   );
-}
+});

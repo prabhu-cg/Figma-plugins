@@ -4,6 +4,18 @@ import type { DiscoveredComponent, ScanProgress, TrackingConfig } from "./scan";
 import type { EntityKind, ReviewState } from "./entity";
 import type { InstanceIndex, InstanceScanProgress } from "./instance";
 
+/**
+ * A small edit to one change, sent instead of the whole project when a review field changes. `null` for
+ * `manualClassification` means "clear the override".
+ */
+export interface ChangePatch {
+  changeId: string;
+  reviewState?: ReviewState;
+  reviewNote?: string;
+  migrationNote?: string;
+  manualClassification?: ManualClassification | null;
+}
+
 export type UiToPluginMessage =
   | { type: "ui-ready" }
   | { type: "get-state" }
@@ -58,6 +70,7 @@ export type UiToPluginMessage =
 
 export type PluginToUiMessage =
   | { type: "state"; project: Project }
+  | { type: "changes-updated"; changeSetId: string; patches: ChangePatch[] }
   | { type: "discovered-components"; components: DiscoveredComponent[] }
   | { type: "scan-progress"; progress: ScanProgress }
   | { type: "scan-complete"; changeSet: ChangeSet }

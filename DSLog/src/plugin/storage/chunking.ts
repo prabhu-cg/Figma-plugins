@@ -110,18 +110,31 @@ function withLock<T>(store: KVStore, prefix: string, task: () => Promise<T>): Pr
  * a good project into one that reads back as empty or corrupt. Leftover
  * chunks from a failed cleanup are collected by the next successful write.
  */
-export function writeChunked(
+export async function writeChunked(
   store: KVStore,
   prefix: string,
   data: unknown,
   chunkSizeBytes: number,
 ): Promise<void> {
   // Serialise now, so a save always stores the data as it was when it was requested.
-  const serialized = JSON.stringify(data);
+  await writeChunkedSerialized(store, prefix, JSON.stringify(data), chunkSizeBytes);
+}
+
+/**
+ * Like {@link writeChunked} for text that is already serialised (so the caller can compare it with what it last
+ * wrote without stringifying twice). Resolves to the exact index record that was committed, which callers can
+ * compare against the stored index later to confirm their copy is still what is on disk.
+ */
+export function writeChunkedSerialized(
+  store: KVStore,
+  prefix: string,
+  serialized: string,
+  chunkSizeBytes: number,
+): Promise<string> {
   return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
 }
 
-async function writeSerialized(store: KVStore, prefix: string, serialized: string, chunkSizeBytes: number): Promise<void> {
+async function writeSerialized(store: KVStore, prefix: string, serialized: string, chunkSizeBytes: number): Promise<string> {
   const bytes = utf8Encode(serialized);
   const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
   if (chunks.length === 0) chunks.push("");
@@ -129,11 +142,13 @@ async function writeSerialized(store: KVStore, prefix: string, serialized: strin
   const previous = parseIndex(await store.get(`${prefix}:index`));
   const gen = (previous?.gen ?? 0) + 1;
   const newKeys = chunks.map((_, i) => chunkKey(prefix, gen, i));
+  let committedIndex = "";
 
   try {
     await Promise.all(chunks.map((chunk, i) => store.set(newKeys[i]!, chunk)));
     const index: ChunkIndex = { count: chunks.length, gen };
-    await store.set(`${prefix}:index`, JSON.stringify(index));
+    committedIndex = JSON.stringify(index);
+    await store.set(`${prefix}:index`, committedIndex);
   } catch (error) {
     // The index still points at the previous generation; drop the half-written one.
     await Promise.allSettled(newKeys.map((k) => store.delete(k)));
@@ -149,14 +164,26 @@ async function writeSerialized(store: KVStore, prefix: string, serialized: strin
   } catch {
     // Orphans are harmless and get removed by the next write.
   }
+  return committedIndex;
 }
 
 /** Returns undefined when nothing is stored, or when stored data is corrupted/unparseable. */
-export function readChunked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
-  return withLock(store, prefix, () => readUnlocked<T>(store, prefix));
+export async function readChunked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
+  const raw = await readChunkedRaw(store, prefix);
+  if (raw === undefined) return undefined;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
 }
 
-async function readUnlocked<T>(store: KVStore, prefix: string): Promise<T | undefined> {
+/** The stored text exactly as it was written, or undefined when nothing usable is stored. */
+export function readChunkedRaw(store: KVStore, prefix: string): Promise<string | undefined> {
+  return withLock(store, prefix, () => readRawUnlocked(store, prefix));
+}
+
+async function readRawUnlocked(store: KVStore, prefix: string): Promise<string | undefined> {
   const index = parseIndex(await store.get(`${prefix}:index`));
   if (!index) return undefined;
 
@@ -168,13 +195,7 @@ async function readUnlocked<T>(store: KVStore, prefix: string): Promise<T | unde
   }
 
   const serialized = parts.join("");
-  if (serialized === "") return undefined;
-
-  try {
-    return JSON.parse(serialized) as T;
-  } catch {
-    return undefined;
-  }
+  return serialized === "" ? undefined : serialized;
 }
 
 export function deleteChunked(store: KVStore, prefix: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
 import { RenameSuggestionBanner } from "@ui/components/RenameSuggestionBanner";
@@ -24,6 +24,19 @@ export function ChangesPage({
   }, [project]);
 
   const view = useChangesView(changeSet, focusChangeId, onFocusConsumed);
+  const scrollRoot = useRef<HTMLDivElement>(null);
+
+  // One pass instead of four, and only when the change set itself changes (not on every selection or keystroke).
+  const counts = useMemo(() => {
+    const result = { components: 0, tokens: 0, unreviewed: 0, reviewed: 0 };
+    for (const c of changeSet?.changes ?? []) {
+      if (c.entityType === "component") result.components++;
+      else result.tokens++;
+      if (c.reviewState === "unreviewed") result.unreviewed++;
+      else result.reviewed++;
+    }
+    return result;
+  }, [changeSet]);
 
   if (!project) return null;
 
@@ -44,10 +57,10 @@ export function ChangesPage({
     );
   }
 
-  const componentCount = changeSet.changes.filter((c) => c.entityType === "component").length;
-  const tokenCount = changeSet.changes.filter((c) => c.entityType === "token").length;
-  const unreviewedCount = changeSet.changes.filter((c) => c.reviewState === "unreviewed").length;
-  const reviewedCount = changeSet.changes.length - unreviewedCount;
+  const componentCount = counts.components;
+  const tokenCount = counts.tokens;
+  const unreviewedCount = counts.unreviewed;
+  const reviewedCount = counts.reviewed;
 
   return (
     <div className="view" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -81,7 +94,7 @@ export function ChangesPage({
         )}
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 12 }}>
+      <div ref={scrollRoot} style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 12 }}>
         <RenameSuggestionBanner changeSetId={changeSet.id} changes={changeSet.changes} />
 
         <div className="sr-only" role="status" aria-live="polite">
@@ -99,7 +112,7 @@ export function ChangesPage({
           </div>
         ) : (
           <div className="split">
-            <ChangesList view={view} unreviewedCount={unreviewedCount} />
+            <ChangesList view={view} unreviewedCount={unreviewedCount} scrollRoot={scrollRoot} />
             <ChangeDetail change={view.selected} changeSetId={changeSet.id} onReview={view.reviewSelected} />
           </div>
         )}

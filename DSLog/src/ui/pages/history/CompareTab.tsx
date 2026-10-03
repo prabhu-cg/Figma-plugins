@@ -153,7 +153,7 @@ export function CompareTab() {
                     key={change.id}
                     change={change}
                     selected={selectedChangeId === change.id}
-                    onSelect={() => setSelectedChangeId(change.id)}
+                    onSelect={setSelectedChangeId}
                   />
                 ))}
               </div>

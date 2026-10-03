@@ -81,7 +81,7 @@ export function ReleasesTab({
                 key={change.id}
                 change={change}
                 selected={selectedChangeId === change.id}
-                onSelect={() => setSelectedChangeId(change.id)}
+                onSelect={setSelectedChangeId}
               />
             ))
           )}

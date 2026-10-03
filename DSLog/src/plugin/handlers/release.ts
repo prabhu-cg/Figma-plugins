@@ -3,6 +3,7 @@ import { generateId } from "@shared/utils/id";
 import { diffSnapshots } from "@plugin/diff";
 import { generateJson, generateMarkdown } from "@plugin/export";
 import { postToUi } from "@plugin/utils/postMessage";
+import { pruneStaleChangeSets } from "@shared/utils/changeSets";
 import { findCurrentBaseline, persist, session } from "./session";
 import { captureSnapshot, resolveComponentIds } from "./scanSupport";
 import type { Msg } from "./types";
@@ -76,10 +77,12 @@ export async function handleCreateRelease(message: Msg<"create-release">): Promi
   project.currentBaselineId = newBaseline.id;
   session.latestScannedSnapshot = undefined;
   session.latestScanSummary = undefined;
+  // The old baseline's scans are superseded; the release keeps its own change set as its permanent record.
+  session.project = pruneStaleChangeSets(project);
 
   await persist();
   postToUi({ type: "release-created", release });
-  postToUi({ type: "state", project });
+  postToUi({ type: "state", project: session.project });
 }
 
 export async function handleExport(message: Msg<"export">): Promise<void> {

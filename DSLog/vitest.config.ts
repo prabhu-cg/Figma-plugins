@@ -11,6 +11,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // The plugin logs one line per save; that is for the Figma console, not for test output.
+    onConsoleLog: (log) => (log.startsWith("[DSLog] saved") ? false : undefined),
     // UI tests opt in to jsdom per file with a `// @vitest-environment jsdom` docblock; everything else stays on node.
     include: ["tests/**/*.test.{ts,tsx}"],
   },

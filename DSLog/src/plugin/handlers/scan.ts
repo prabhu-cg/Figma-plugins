@@ -3,6 +3,7 @@ import { generateId } from "@shared/utils/id";
 import { discoverComponents } from "@plugin/scanner";
 import { diffSnapshots } from "@plugin/diff";
 import { postToUi } from "@plugin/utils/postMessage";
+import { pruneStaleChangeSets } from "@shared/utils/changeSets";
 import { findCurrentBaseline, persist, session } from "./session";
 import { captureSnapshot, resolveComponentIds } from "./scanSupport";
 import type { Msg } from "./types";
@@ -40,10 +41,11 @@ export async function handleCreateBaseline(message: Msg<"create-baseline">): Pro
     scanSummary,
   );
   project.changeSets.push(changeSet);
+  session.project = pruneStaleChangeSets(project);
 
   await persist();
   postToUi({ type: "baseline-created", baseline });
-  postToUi({ type: "state", project });
+  postToUi({ type: "state", project: session.project });
 }
 
 export async function handleScan(message: Msg<"scan">): Promise<void> {
@@ -67,8 +69,10 @@ export async function handleScan(message: Msg<"scan">): Promise<void> {
   // shadow copy so "create release" can promote it without re-scanning.
   session.latestScannedSnapshot = snapshot;
   session.latestScanSummary = scanSummary;
+  // Earlier scans of this baseline are superseded by this one.
+  session.project = pruneStaleChangeSets(project);
 
   await persist();
   postToUi({ type: "scan-complete", changeSet });
-  postToUi({ type: "state", project });
+  postToUi({ type: "state", project: session.project });
 }

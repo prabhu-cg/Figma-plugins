@@ -10,6 +10,10 @@ each other through `postMessage`:
 - **UI iframe** (`src/ui/`, built to `dist/ui.html`): a normal React app
   with a DOM, but no access to `figma`.
 
+Most plugin → UI updates send the whole project as a `state` message. Review edits are the exception: they send a
+small `changes-updated` patch (`ChangePatch[]`) instead, which both sides apply with the same pure function
+(`shared/utils/changePatches.ts`), so the UI can update a single row without re-rendering the list.
+
 `src/shared/types/messages.ts` defines the full `UiToPluginMessage` /
 `PluginToUiMessage` discriminated unions that cross that boundary, so both
 sides are typed against the same contract. `src/ui/state/bridge.ts` wraps
