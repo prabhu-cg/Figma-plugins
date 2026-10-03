@@ -141,191 +141,18 @@ function describeExisting(mode: string): {
   };
 }
 
-// ─── EXISTING GENERATION (unchanged) ─────────────────────────────
+// ─── STARTER + SMART CONVERT ─────────────────────────────────────
 
-async function createStarterSystem(): Promise<void> {
-  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', '3tier');
+type Tier = '2tier' | '3tier';
+
+async function createStarterSystem(tier: Tier): Promise<void> {
+  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', tier);
 }
 
-function convertStylesToTokens(): void {
-  const colorStyles = figma.getLocalPaintStyles();
-  const textStyles  = figma.getLocalTextStyles();
-  if (colorStyles.length === 0 && textStyles.length === 0) {
-    warn('No local styles found to convert'); figma.notify('⚠️ No styles found'); return;
-  }
-
-  const global    = figma.variables.createVariableCollection('01 Global');
-  const aliasCol  = figma.variables.createVariableCollection('02 Alias');
-  const component = figma.variables.createVariableCollection('03 Component');
-
-  const globalColors: Array<{ name: string; brightness: number; variable: Variable }> = [];
-  const modeId = global.modes[0].modeId;
-  const aliasModeId = aliasCol.modes[0].modeId;
-  const componentModeId = component.modes[0].modeId;
-
-  colorStyles.forEach(style => {
-    const paint = style.paints[0];
-    if (!paint || paint.type !== 'SOLID') return;
-    const name = style.name.replace(/\s+/g, '-').toLowerCase();
-    // Parse "color-50" into "color" and "50" to create "color/color/50"
-    const match = name.match(/^(.+?)(-\d+)$/);
-    const varName = match ? `color/${match[1]}/${match[2].substring(1)}` : `color/${name}`;
-    const v = figma.variables.createVariable(varName, global.id, 'COLOR');
-    v.setValueForMode(modeId, { r: paint.color.r, g: paint.color.g, b: paint.color.b, a: 1 });
-    globalColors.push({ name, brightness: paint.color.r + paint.color.g + paint.color.b, variable: v });
-  });
-
-  if (globalColors.length === 0) {
-    warn('No solid color styles found to convert'); figma.notify('⚠️ No paint styles found'); return;
-  }
-
-  globalColors.sort((a, b) => a.brightness - b.brightness);
-
-  const allGlobalVars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === global.id && v.name.startsWith('color/'));
-
-  // Extract base color names: group "color/red/50", "color/red/100", etc. → "red"
-  const colorFamilies = new Map<string, Variable[]>();
-  allGlobalVars.forEach(gVar => {
-    const parts = gVar.name.split('/');
-    if (parts.length >= 2) {
-      const baseColor = parts[1];
-      if (!colorFamilies.has(baseColor)) {
-        colorFamilies.set(baseColor, []);
-      }
-      colorFamilies.get(baseColor)!.push(gVar);
-    }
-  });
-
-  // Pick primary, secondary, tertiary, accent by sorted order
-  const sortedFamilies = Array.from(colorFamilies.entries()).sort((a, b) => {
-    const aBrightness = a[1].reduce((sum, v) => sum + (v.name.endsWith('-500') ? 1 : 0), 0);
-    const bBrightness = b[1].reduce((sum, v) => sum + (v.name.endsWith('-500') ? 1 : 0), 0);
-    return aBrightness - bBrightness;
-  });
-
-  const primaryFamily = sortedFamilies[Math.floor(sortedFamilies.length / 2)];
-  const secondaryFamily = sortedFamilies[Math.floor(sortedFamilies.length / 4)];
-  const tertiaryFamily = sortedFamilies[Math.floor(sortedFamilies.length * 3 / 4)];
-  const accentFamily = sortedFamilies[sortedFamilies.length - 1];
-
-  try {
-    // Primary
-    if (primaryFamily) {
-      primaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${primaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`colors/primary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Secondary
-    if (secondaryFamily) {
-      secondaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${secondaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`colors/secondary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Tertiary
-    if (tertiaryFamily) {
-      tertiaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${tertiaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`colors/tertiary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Accent
-    if (accentFamily) {
-      accentFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${accentFamily[0]}`.length);
-        const a = figma.variables.createVariable(`colors/accent${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Feedback: use darkest and lightest for semantic colors
-    const darkestFamily = sortedFamilies[0];
-    const lightestFamily = sortedFamilies[sortedFamilies.length - 1];
-    if (darkestFamily) {
-      darkestFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${darkestFamily[0]}`.length);
-        const info = figma.variables.createVariable(`colors/feedback/info${suffix}`, aliasCol.id, 'COLOR');
-        info.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-        const err = figma.variables.createVariable(`colors/feedback/error${suffix}`, aliasCol.id, 'COLOR');
-        err.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    if (lightestFamily && lightestFamily !== darkestFamily) {
-      lightestFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${lightestFamily[0]}`.length);
-        const succ = figma.variables.createVariable(`colors/feedback/success${suffix}`, aliasCol.id, 'COLOR');
-        succ.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    if (primaryFamily) {
-      primaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${primaryFamily[0]}`.length);
-        const warn = figma.variables.createVariable(`colors/feedback/warning${suffix}`, aliasCol.id, 'COLOR');
-        warn.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-  } catch (e) {
-    warn(`Color aliases were not fully created: ${e}`);
-    figma.notify(`❌ Color aliases: ${e}`);
-    return;
-  }
-
-  textStyles.forEach(style => {
-    const name = style.name.replace(/\s+/g, '-').toLowerCase();
-    const fs = createNumber(global, `typography/fontSize/${name}`, style.fontSize);
-    const lhVal = style.lineHeight.unit === 'AUTO'
-      ? style.fontSize * 1.4
-      : (style.lineHeight as { unit: string; value: number }).value;
-    const lh = createNumber(global, `typography/lineHeight/${name}`, lhVal);
-    const lsVal = style.letterSpacing.unit === 'PERCENT'
-      ? style.fontSize * (style.letterSpacing.value / 100)
-      : style.letterSpacing.value;
-    const ls = createNumber(global, `typography/letterSpacing/${name}`, lsVal);
-    const ps = createNumber(global, `typography/paragraphSpacing/${name}`, style.paragraphSpacing || 0);
-
-    alias(aliasCol, `text/${name}/fontSize`,        fs);
-    alias(aliasCol, `text/${name}/lineHeight`,       lh);
-    alias(aliasCol, `text/${name}/letterSpacing`,    ls);
-    alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
-  });
-
-  try {
-    const allAliasVars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === aliasCol.id);
-    const cp = allAliasVars.find(v => v.name === 'colors/primary/500');
-    const cs = allAliasVars.find(v => v.name === 'colors/secondary/500');
-    const ct = allAliasVars.find(v => v.name === 'colors/tertiary/500');
-    const ca = allAliasVars.find(v => v.name === 'colors/accent/500');
-
-    if (cp) {
-      const t1 = figma.variables.createVariable('text/primary', component.id, 'COLOR'); t1.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: cp.id });
-      const i1 = figma.variables.createVariable('icon/primary', component.id, 'COLOR'); i1.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: cp.id });
-      const s1 = figma.variables.createVariable('surface/primary', component.id, 'COLOR'); s1.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: cp.id });
-      const b1 = figma.variables.createVariable('border/default', component.id, 'COLOR'); b1.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: cp.id });
-    }
-    if (cs) { const s2 = figma.variables.createVariable('surface/secondary', component.id, 'COLOR'); s2.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: cs.id }); }
-    if (ct) { const s3 = figma.variables.createVariable('surface/tertiary', component.id, 'COLOR'); s3.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: ct.id }); }
-    if (ca) {
-      const s4 = figma.variables.createVariable('surface/accent', component.id, 'COLOR'); s4.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: ca.id });
-      const t2 = figma.variables.createVariable('text/inverse', component.id, 'COLOR'); t2.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: ca.id });
-      const i2 = figma.variables.createVariable('icon/inverse', component.id, 'COLOR'); i2.setValueForMode(componentModeId, { type: 'VARIABLE_ALIAS', id: ca.id });
-    }
-  } catch (e) {
-    warn(`Component variables were not fully created: ${e}`);
-    figma.notify(`❌ Component vars: ${e}`);
-    return;
-  }
-
-  figma.notify('✅ Typography + color tokens created!');
-}
-
-async function createStarterSystem2Tier(): Promise<void> {
-  return buildFromScratch(STARTER_COLORS, 4, 4, 1, 16, 'major-third', '2tier');
-}
-
-function convertStylesToTokens2Tier(): void {
+// Smart Convert reads the local paint/text styles and rebuilds them as variables.
+// 3-tier adds a Component collection and names the alias colors `colors/…`;
+// 2-tier names them `color/…`. Both names are kept so existing output doesn't change.
+function convertStylesToTokens(tier: Tier): void {
   const colorStyles = figma.getLocalPaintStyles();
   const textStyles  = figma.getLocalTextStyles();
   if (colorStyles.length === 0 && textStyles.length === 0) {
@@ -334,10 +161,12 @@ function convertStylesToTokens2Tier(): void {
 
   const global   = figma.variables.createVariableCollection('01 Global');
   const aliasCol = figma.variables.createVariableCollection('02 Alias');
-
-  const globalColors: Array<{ name: string; brightness: number; variable: Variable }> = [];
+  const component = tier === '3tier' ? figma.variables.createVariableCollection('03 Component') : undefined;
   const modeId = global.modes[0].modeId;
   const aliasModeId = aliasCol.modes[0].modeId;
+  const aliasColorRoot = tier === '3tier' ? 'colors' : 'color';
+
+  const globalColors: Array<{ name: string; brightness: number; variable: Variable }> = [];
 
   colorStyles.forEach(style => {
     const paint = style.paints[0];
@@ -355,94 +184,54 @@ function convertStylesToTokens2Tier(): void {
     warn('No solid color styles found to convert'); figma.notify('⚠️ No paint styles found'); return;
   }
 
-  globalColors.sort((a, b) => a.brightness - b.brightness);
+  const allGlobalVars = figma.variables.getLocalVariables()
+    .filter(v => v.variableCollectionId === global.id && v.name.startsWith('color/'));
 
-  const allGlobalVars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === global.id && v.name.startsWith('color/'));
-
-  // Extract base color names: group "color/red/50", "color/red/100", etc. → "red"
+  // Group "color/red/50", "color/red/100", … by family ("red")
   const colorFamilies = new Map<string, Variable[]>();
   allGlobalVars.forEach(gVar => {
     const parts = gVar.name.split('/');
     if (parts.length >= 2) {
       const baseColor = parts[1];
-      if (!colorFamilies.has(baseColor)) {
-        colorFamilies.set(baseColor, []);
-      }
+      if (!colorFamilies.has(baseColor)) colorFamilies.set(baseColor, []);
       colorFamilies.get(baseColor)!.push(gVar);
     }
   });
 
-  // Pick primary, secondary, tertiary, accent by sorted order
   const sortedFamilies = Array.from(colorFamilies.entries()).sort((a, b) => {
     const aBrightness = a[1].reduce((sum, v) => sum + (v.name.endsWith('-500') ? 1 : 0), 0);
     const bBrightness = b[1].reduce((sum, v) => sum + (v.name.endsWith('-500') ? 1 : 0), 0);
     return aBrightness - bBrightness;
   });
 
-  const primaryFamily = sortedFamilies[Math.floor(sortedFamilies.length / 2)];
+  type Family = [string, Variable[]];
+  const primaryFamily   = sortedFamilies[Math.floor(sortedFamilies.length / 2)];
   const secondaryFamily = sortedFamilies[Math.floor(sortedFamilies.length / 4)];
-  const tertiaryFamily = sortedFamilies[Math.floor(sortedFamilies.length * 3 / 4)];
-  const accentFamily = sortedFamilies[sortedFamilies.length - 1];
+  const tertiaryFamily  = sortedFamilies[Math.floor(sortedFamilies.length * 3 / 4)];
+  const accentFamily    = sortedFamilies[sortedFamilies.length - 1];
+  const darkestFamily   = sortedFamilies[0];
+  const lightestFamily  = sortedFamilies[sortedFamilies.length - 1];
+
+  // Alias every stop of a global color family under `<root>/<role>/<stop>`.
+  const aliasFamily = (family: Family | undefined, role: string): void => {
+    if (!family) return;
+    family[1].forEach(gVar => {
+      const suffix = gVar.name.substring(`color/${family[0]}`.length);
+      const a = figma.variables.createVariable(`${aliasColorRoot}/${role}${suffix}`, aliasCol.id, 'COLOR');
+      a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
+    });
+  };
 
   try {
-    // Primary
-    if (primaryFamily) {
-      primaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${primaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`color/primary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Secondary
-    if (secondaryFamily) {
-      secondaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${secondaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`color/secondary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Tertiary
-    if (tertiaryFamily) {
-      tertiaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${tertiaryFamily[0]}`.length);
-        const a = figma.variables.createVariable(`color/tertiary${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Accent
-    if (accentFamily) {
-      accentFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${accentFamily[0]}`.length);
-        const a = figma.variables.createVariable(`color/accent${suffix}`, aliasCol.id, 'COLOR');
-        a.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    // Feedback: use darkest and lightest for semantic colors
-    const darkestFamily = sortedFamilies[0];
-    const lightestFamily = sortedFamilies[sortedFamilies.length - 1];
-    if (darkestFamily) {
-      darkestFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${darkestFamily[0]}`.length);
-        const info = figma.variables.createVariable(`color/feedback/info${suffix}`, aliasCol.id, 'COLOR');
-        info.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-        const err = figma.variables.createVariable(`color/feedback/error${suffix}`, aliasCol.id, 'COLOR');
-        err.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    if (lightestFamily && lightestFamily !== darkestFamily) {
-      lightestFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${lightestFamily[0]}`.length);
-        const succ = figma.variables.createVariable(`color/feedback/success${suffix}`, aliasCol.id, 'COLOR');
-        succ.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
-    if (primaryFamily) {
-      primaryFamily[1].forEach(gVar => {
-        const suffix = gVar.name.substring(`color/${primaryFamily[0]}`.length);
-        const warn = figma.variables.createVariable(`color/feedback/warning${suffix}`, aliasCol.id, 'COLOR');
-        warn.setValueForMode(aliasModeId, { type: 'VARIABLE_ALIAS', id: gVar.id });
-      });
-    }
+    aliasFamily(primaryFamily,   'primary');
+    aliasFamily(secondaryFamily, 'secondary');
+    aliasFamily(tertiaryFamily,  'tertiary');
+    aliasFamily(accentFamily,    'accent');
+    // Feedback: darkest family stands in for info + error, lightest for success, primary for warning
+    aliasFamily(darkestFamily, 'feedback/info');
+    aliasFamily(darkestFamily, 'feedback/error');
+    if (lightestFamily !== darkestFamily) aliasFamily(lightestFamily, 'feedback/success');
+    aliasFamily(primaryFamily, 'feedback/warning');
   } catch (e) {
     warn(`Color aliases were not fully created: ${e}`);
     figma.notify(`❌ Color aliases: ${e}`);
@@ -467,7 +256,37 @@ function convertStylesToTokens2Tier(): void {
     alias(aliasCol, `text/${name}/letterSpacing`,    ls);
     alias(aliasCol, `text/${name}/paragraphSpacing`, ps);
   });
+
+  if (component) {
+    try {
+      createComponentColorTokens(aliasCol, component, aliasColorRoot);
+    } catch (e) {
+      warn(`Component variables were not fully created: ${e}`);
+      figma.notify(`❌ Component vars: ${e}`);
+      return;
+    }
+  }
+
   figma.notify('✅ Typography + color tokens created!');
+}
+
+// Component-tier color tokens that point at the 500 stop of each alias role.
+function createComponentColorTokens(aliasCol: VariableCollection, component: VariableCollection, root: string): void {
+  const modeId = component.modes[0].modeId;
+  const aliasVars = figma.variables.getLocalVariables().filter(v => v.variableCollectionId === aliasCol.id);
+  const stop500 = (role: string) => aliasVars.find(v => v.name === `${root}/${role}/500`);
+  const make = (name: string, target: Variable): void => {
+    const v = figma.variables.createVariable(name, component.id, 'COLOR');
+    v.setValueForMode(modeId, { type: 'VARIABLE_ALIAS', id: target.id });
+  };
+
+  const primary = stop500('primary'), secondary = stop500('secondary');
+  const tertiary = stop500('tertiary'), accent = stop500('accent');
+
+  if (primary) ['text/primary', 'icon/primary', 'surface/primary', 'border/default'].forEach(n => make(n, primary));
+  if (secondary) make('surface/secondary', secondary);
+  if (tertiary)  make('surface/tertiary', tertiary);
+  if (accent)    ['surface/accent', 'text/inverse', 'icon/inverse'].forEach(n => make(n, accent));
 }
 
 // ─── FROM SCRATCH ─────────────────────────────────────────────────
@@ -896,19 +715,18 @@ async function generate(
   if (mode !== 'convert') {
     deleteAllLocalStyles();
   }
+  const tier: Tier = approach === '3tier' ? '3tier' : '2tier';
   if (mode === 'scratch') {
     await buildFromScratch(
       colors!, spacingBase!, radiusBase!, widthBase ?? 1,
       fontBase ?? 16, ratioKey ?? 'major-third',
-      approach === '3tier' ? '3tier' : '2tier',
+      tier,
       fontFamily
     );
-  } else if (approach === '3tier') {
-    if (mode === 'starter') await createStarterSystem();
-    if (mode === 'convert') convertStylesToTokens();
-  } else {
-    if (mode === 'starter') await createStarterSystem2Tier();
-    if (mode === 'convert') convertStylesToTokens2Tier();
+  } else if (mode === 'starter') {
+    await createStarterSystem(tier);
+  } else if (mode === 'convert') {
+    convertStylesToTokens(tier);
   }
   const json  = exportVariablesToJSON();
   const total = figma.variables.getLocalVariables().length;
