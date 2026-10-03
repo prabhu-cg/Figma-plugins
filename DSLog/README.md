@@ -85,6 +85,7 @@ src/
 ├── ui/                # runs in the plugin iframe (React)
 │   ├── pages/            # Overview, Track, Changes, Releases, History, Settings
 │   │   └── history/      # one file per History tab (Releases, Components/Tokens, Deprecations, Compare)
+│   │   └── releases/     # Releases page parts: draft hook, create/past tabs, footer, cards
 │   ├── components/
 │   ├── state/            # postMessage bridge + React context
 │   └── styles/
