@@ -792,19 +792,26 @@
     const darker = Math.min(l1, l2);
     return (lighter + 0.05) / (darker + 0.05);
   }
-  function resolveVariableColor(variable, variablesById, depth = 0) {
+  function valueForMode(variable, modeName) {
+    if (modeName !== void 0) {
+      const match = variable.valuesByMode.find((m) => m.modeName === modeName);
+      if (match) return match.value;
+    }
+    return defaultModeValue(variable);
+  }
+  function resolveVariableColor(variable, variablesById, modeName, depth = 0) {
     if (depth > 10) return null;
-    const value = defaultModeValue(variable);
+    const value = valueForMode(variable, modeName);
     if (!value) return null;
     if (value.kind === "color") return value.color;
     if (value.kind === "alias") {
       const next = variablesById.get(value.variableId);
       if (!next) return null;
-      return resolveVariableColor(next, variablesById, depth + 1);
+      return resolveVariableColor(next, variablesById, modeName, depth + 1);
     }
     return null;
   }
-  function collectColorTokens(ds) {
+  function collectColorTokens(ds, modeName) {
     const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
     const tokens = [];
     let skippedTranslucentCount = 0;
@@ -812,7 +819,7 @@
     for (const v of ds.variables) {
       if (v.category !== "color" && v.category !== "semantic") continue;
       if (v.resolvedType !== "COLOR") continue;
-      const color = resolveVariableColor(v, variablesById);
+      const color = resolveVariableColor(v, variablesById, modeName);
       if (!color) continue;
       if (color.a < 0.999) {
         skippedTranslucentCount += 1;
@@ -844,8 +851,26 @@
     }
     return { tokens, skippedTranslucentCount };
   }
-  function computeContrastReport(ds) {
-    const { tokens, skippedTranslucentCount } = collectColorTokens(ds);
+  function colorModeNames(ds) {
+    const names = [];
+    for (const v of ds.variables) {
+      if (v.resolvedType !== "COLOR") continue;
+      if (v.category !== "color" && v.category !== "semantic") continue;
+      for (const m of v.valuesByMode) {
+        if (!names.includes(m.modeName)) names.push(m.modeName);
+      }
+    }
+    return names;
+  }
+  function computeContrastReportsByMode(ds) {
+    const modes = colorModeNames(ds);
+    if (modes.length <= 1) {
+      return [{ modeName: modes[0] ?? null, report: computeContrastReport(ds, modes[0]) }];
+    }
+    return modes.map((modeName) => ({ modeName, report: computeContrastReport(ds, modeName) }));
+  }
+  function computeContrastReport(ds, modeName) {
+    const { tokens, skippedTranslucentCount } = collectColorTokens(ds, modeName);
     const foregrounds = tokens.filter((t) => t.role === "foreground");
     const backgrounds = tokens.filter((t) => t.role === "background");
     if (foregrounds.length > 0 && backgrounds.length > 0) {
@@ -936,8 +961,7 @@
     ]);
     return mdTable(["Token", "CSS Variable", "On White", "On Black"], rows);
   }
-  function colorContrastSection(ds) {
-    const report = computeContrastReport(ds);
+  function contrastBody(report, level) {
     const notes = [];
     if (report.skippedTranslucentCount > 0) {
       notes.push(
@@ -945,10 +969,7 @@
       );
     }
     if (report.totalColorTokensChecked === 0) {
-      return joinSections([
-        mdHeading(3, "Color Contrast"),
-        "_No opaque color tokens available to check._\n"
-      ]);
+      return "_No opaque color tokens available to check._\n";
     }
     if (report.pairs.length > 0) {
       const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
@@ -961,9 +982,8 @@
         );
       }
       return joinSections([
-        mdHeading(3, "Color Contrast"),
         mdList(notes),
-        mdHeading(4, "Pairs Failing AA Large (below 3:1)"),
+        mdHeading(level, "Pairs Failing AA Large (below 3:1)"),
         failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n"
       ]);
     }
@@ -971,10 +991,24 @@
       `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
     );
     return joinSections([
-      mdHeading(3, "Color Contrast"),
       mdList(notes),
-      mdHeading(4, "All Tokens vs. White / Black"),
+      mdHeading(level, "All Tokens vs. White / Black"),
       fallbackChecksTable(report.fallbackChecks)
+    ]);
+  }
+  function colorContrastSection(ds) {
+    const reports = computeContrastReportsByMode(ds);
+    if (reports.length === 1) {
+      return joinSections([mdHeading(3, "Color Contrast"), contrastBody(reports[0].report, 4)]);
+    }
+    return joinSections([
+      mdHeading(3, "Color Contrast"),
+      `Checked separately for each of the ${reports.length} color modes: ${reports.map((r) => r.modeName).join(", ")}.
+`,
+      ...reports.flatMap(({ modeName, report }) => [
+        mdHeading(4, `Mode: ${modeName}`),
+        contrastBody(report, 5)
+      ])
     ]);
   }
   function accessibilitySection(ds) {

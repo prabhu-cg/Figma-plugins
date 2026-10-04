@@ -95,24 +95,40 @@ export function contrastRatio(a: ColorValue, b: ColorValue): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+/**
+ * The value a variable has in the named mode, falling back to its default mode when it has no
+ * mode of that name (e.g. a variable from a collection that only defines "Mode 1").
+ */
+function valueForMode(variable: VariableToken, modeName: string | undefined) {
+  if (modeName !== undefined) {
+    const match = variable.valuesByMode.find((m) => m.modeName === modeName);
+    if (match) return match.value;
+  }
+  return defaultModeValue(variable);
+}
+
 function resolveVariableColor(
   variable: VariableToken,
   variablesById: Map<string, VariableToken>,
+  modeName: string | undefined,
   depth = 0,
 ): ColorValue | null {
   if (depth > 10) return null;
-  const value = defaultModeValue(variable);
+  const value = valueForMode(variable, modeName);
   if (!value) return null;
   if (value.kind === 'color') return value.color;
   if (value.kind === 'alias') {
     const next = variablesById.get(value.variableId);
     if (!next) return null;
-    return resolveVariableColor(next, variablesById, depth + 1);
+    return resolveVariableColor(next, variablesById, modeName, depth + 1);
   }
   return null;
 }
 
-function collectColorTokens(ds: DesignSystem): {
+function collectColorTokens(
+  ds: DesignSystem,
+  modeName: string | undefined,
+): {
   tokens: Array<ContrastColorToken & { role: ColorRole }>;
   skippedTranslucentCount: number;
 } {
@@ -124,7 +140,7 @@ function collectColorTokens(ds: DesignSystem): {
   for (const v of ds.variables) {
     if (v.category !== 'color' && v.category !== 'semantic') continue;
     if (v.resolvedType !== 'COLOR') continue;
-    const color = resolveVariableColor(v, variablesById);
+    const color = resolveVariableColor(v, variablesById, modeName);
     if (!color) continue;
     if (color.a < 0.999) {
       skippedTranslucentCount += 1;
@@ -159,8 +175,40 @@ function collectColorTokens(ds: DesignSystem): {
   return { tokens, skippedTranslucentCount };
 }
 
-export function computeContrastReport(ds: DesignSystem): ContrastReport {
-  const { tokens, skippedTranslucentCount } = collectColorTokens(ds);
+/**
+ * Mode names that color variables define, default mode of the first collection first. Contrast
+ * can differ completely between e.g. Light and Dark, so each is checked on its own.
+ */
+export function colorModeNames(ds: DesignSystem): string[] {
+  const names: string[] = [];
+  for (const v of ds.variables) {
+    if (v.resolvedType !== 'COLOR') continue;
+    if (v.category !== 'color' && v.category !== 'semantic') continue;
+    for (const m of v.valuesByMode) {
+      if (!names.includes(m.modeName)) names.push(m.modeName);
+    }
+  }
+  return names;
+}
+
+export interface ModeContrastReport {
+  /** Null when the file has no color variables with modes (styles only). */
+  modeName: string | null;
+  report: ContrastReport;
+}
+
+/** One report per color mode; a single report when there is at most one mode. */
+export function computeContrastReportsByMode(ds: DesignSystem): ModeContrastReport[] {
+  const modes = colorModeNames(ds);
+  if (modes.length <= 1) {
+    return [{ modeName: modes[0] ?? null, report: computeContrastReport(ds, modes[0]) }];
+  }
+  return modes.map((modeName) => ({ modeName, report: computeContrastReport(ds, modeName) }));
+}
+
+/** Contrast report for one mode (the default mode when `modeName` is omitted). */
+export function computeContrastReport(ds: DesignSystem, modeName?: string): ContrastReport {
+  const { tokens, skippedTranslucentCount } = collectColorTokens(ds, modeName);
   const foregrounds = tokens.filter((t) => t.role === 'foreground');
   const backgrounds = tokens.filter((t) => t.role === 'background');
 

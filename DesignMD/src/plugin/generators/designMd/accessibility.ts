@@ -1,6 +1,11 @@
 import type { DesignSystem } from '@shared/types';
 import { joinSections, mdHeading, mdList, mdTable } from '../markdown';
-import { computeContrastReport, type ContrastPair, type FallbackContrastCheck } from '../contrast';
+import {
+  computeContrastReportsByMode,
+  type ContrastPair,
+  type ContrastReport,
+  type FallbackContrastCheck,
+} from '../contrast';
 
 const MAX_FAILING_ROWS = 100;
 
@@ -32,8 +37,7 @@ function fallbackChecksTable(checks: FallbackContrastCheck[]): string {
   return mdTable(['Token', 'CSS Variable', 'On White', 'On Black'], rows);
 }
 
-function colorContrastSection(ds: DesignSystem): string {
-  const report = computeContrastReport(ds);
+function contrastBody(report: ContrastReport, level: number): string {
   const notes: string[] = [];
   if (report.skippedTranslucentCount > 0) {
     notes.push(
@@ -43,10 +47,7 @@ function colorContrastSection(ds: DesignSystem): string {
   }
 
   if (report.totalColorTokensChecked === 0) {
-    return joinSections([
-      mdHeading(3, 'Color Contrast'),
-      '_No opaque color tokens available to check._\n',
-    ]);
+    return '_No opaque color tokens available to check._\n';
   }
 
   if (report.pairs.length > 0) {
@@ -63,9 +64,8 @@ function colorContrastSection(ds: DesignSystem): string {
       );
     }
     return joinSections([
-      mdHeading(3, 'Color Contrast'),
       mdList(notes),
-      mdHeading(4, 'Pairs Failing AA Large (below 3:1)'),
+      mdHeading(level, 'Pairs Failing AA Large (below 3:1)'),
       failing.length > 0
         ? contrastPairsTable(failing)
         : '_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n',
@@ -77,10 +77,29 @@ function colorContrastSection(ds: DesignSystem): string {
       `color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`,
   );
   return joinSections([
-    mdHeading(3, 'Color Contrast'),
     mdList(notes),
-    mdHeading(4, 'All Tokens vs. White / Black'),
+    mdHeading(level, 'All Tokens vs. White / Black'),
     fallbackChecksTable(report.fallbackChecks),
+  ]);
+}
+
+function colorContrastSection(ds: DesignSystem): string {
+  const reports = computeContrastReportsByMode(ds);
+
+  if (reports.length === 1) {
+    return joinSections([mdHeading(3, 'Color Contrast'), contrastBody(reports[0].report, 4)]);
+  }
+
+  // Each mode is checked on its own: a pair that passes in Light can fail in Dark.
+  return joinSections([
+    mdHeading(3, 'Color Contrast'),
+    `Checked separately for each of the ${reports.length} color modes: ${reports
+      .map((r) => r.modeName)
+      .join(', ')}.\n`,
+    ...reports.flatMap(({ modeName, report }) => [
+      mdHeading(4, `Mode: ${modeName}`),
+      contrastBody(report, 5),
+    ]),
   ]);
 }
 

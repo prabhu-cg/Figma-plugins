@@ -3,8 +3,11 @@ import {
   contrastRatio,
   relativeLuminance,
   MAX_REPORTED_PAIRS,
+  colorModeNames,
   computeContrastReport,
+  computeContrastReportsByMode,
 } from '../../src/plugin/generators/contrast';
+import { generateDesignMd } from '../../src/plugin/generators/designMd';
 import { makeDesignSystem } from './fixtures';
 import type { ColorValue } from '../../src/shared/types';
 
@@ -189,5 +192,101 @@ describe('contrast pair cap', () => {
     const ratios = report.pairs.map((p) => p.ratio);
     expect([...ratios].sort((a, b) => a - b)).toEqual(ratios);
     expect(report.failingLargeCount).toBeGreaterThan(0);
+  });
+});
+
+describe('mode-aware contrast', () => {
+  const color = (hex: string, v: number): ColorValue => ({ hex, r: v, g: v, b: v, a: 1 });
+
+  function dsWithModes() {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    const base = {
+      collectionId: 'c',
+      collectionName: 'Theme',
+      resolvedType: 'COLOR' as const,
+      category: 'color' as const,
+      description: '',
+      codeSyntax: {},
+      usedByComponents: [],
+    };
+    ds.variables.push(
+      {
+        ...base,
+        id: 'text',
+        name: 'Text/Primary',
+        path: ['Text', 'Primary'],
+        cssName: '--text-primary',
+        scopes: ['TEXT_FILL'],
+        valuesByMode: [
+          { modeId: 'l', modeName: 'Light', value: { kind: 'color', color: color('#111', 0.07) } },
+          { modeId: 'd', modeName: 'Dark', value: { kind: 'color', color: color('#222', 0.13) } },
+        ],
+      },
+      {
+        ...base,
+        id: 'bg',
+        name: 'Surface/Page',
+        path: ['Surface', 'Page'],
+        cssName: '--surface-page',
+        scopes: ['FRAME_FILL'],
+        valuesByMode: [
+          { modeId: 'l', modeName: 'Light', value: { kind: 'color', color: color('#fff', 1) } },
+          { modeId: 'd', modeName: 'Dark', value: { kind: 'color', color: color('#000', 0) } },
+        ],
+      },
+    );
+    ds.styles.color = [];
+    return ds;
+  }
+
+  it('lists the color modes in order of appearance', () => {
+    expect(colorModeNames(dsWithModes())).toEqual(['Light', 'Dark']);
+  });
+
+  it('computes a separate report per mode, so a pair can pass in Light and fail in Dark', () => {
+    const reports = computeContrastReportsByMode(dsWithModes());
+    expect(reports.map((r) => r.modeName)).toEqual(['Light', 'Dark']);
+    const [light, dark] = reports.map((r) => r.report.pairs[0]);
+    expect(light.passesAANormal).toBe(true);
+    expect(dark.passesAANormal).toBe(false);
+    expect(dark.ratio).toBeLessThan(light.ratio);
+  });
+
+  it('follows aliases within the same mode and falls back to the default for missing modes', () => {
+    const ds = dsWithModes();
+    ds.variables.push({
+      ...ds.variables[0],
+      id: 'alias',
+      name: 'Text/Link',
+      path: ['Text', 'Link'],
+      cssName: '--text-link',
+      valuesByMode: [
+        {
+          modeId: 'x',
+          modeName: 'Light',
+          value: { kind: 'alias', variableId: 'text', variableName: 'Text/Primary' },
+        },
+      ],
+    });
+    const dark = computeContrastReport(ds, 'Dark');
+    const link = dark.pairs.find((p) => p.foreground.name === 'Text/Link');
+    // No Dark value on the alias itself, so its default (Light) value is used, which points at
+    // Text/Primary resolved in Dark.
+    expect(link?.foreground.color.hex).toBe('#222');
+  });
+
+  it('returns a single report when there is at most one color mode', () => {
+    const ds = dsWithModes();
+    ds.variables.forEach((v) => (v.valuesByMode = v.valuesByMode.slice(0, 1)));
+    expect(computeContrastReportsByMode(ds)).toHaveLength(1);
+  });
+
+  it('renders one design.md subsection per mode', () => {
+    const ds = dsWithModes();
+    const { content } = generateDesignMd(ds);
+    expect(content).toContain('Checked separately for each of the 2 color modes: Light, Dark.');
+    expect(content).toContain('#### Mode: Light');
+    expect(content).toContain('#### Mode: Dark');
   });
 });
