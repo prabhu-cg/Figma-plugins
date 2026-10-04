@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  fontWeightFromStyle,
   kebabCase,
   rgbaToHex,
   toCssVarName,
@@ -71,5 +72,22 @@ describe('rgbaToHex', () => {
 
   it('clamps out-of-range values', () => {
     expect(rgbaToHex(2, -1, 0.5, 1)).toBe('#ff0080');
+  });
+});
+
+describe('fontWeightFromStyle', () => {
+  it.each([
+    ['Regular', 400],
+    ['Bold', 700],
+    ['Semi Bold Italic', 600],
+    ['SemiBold', 600],
+    ['Extra Bold', 800],
+    ['Light', 300],
+    ['Extra Light', 200],
+    ['Medium', 500],
+    ['Black', 900],
+    ['Thin', 100],
+  ])('maps "%s" to %i', (style, weight) => {
+    expect(fontWeightFromStyle(style)).toBe(weight);
   });
 });

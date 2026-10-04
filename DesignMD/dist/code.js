@@ -23,6 +23,43 @@
       return void 0;
     }
   }
+  function toPathSegments(name) {
+    return name.split("/").map((segment) => segment.trim()).filter(Boolean);
+  }
+  function kebabCase(input) {
+    return input.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[\s_]+/g, "-").replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+  }
+  function toCssVarName(pathSegments) {
+    const slug = pathSegments.map(kebabCase).filter(Boolean).join("-");
+    return `--${slug}`;
+  }
+  function toFileSafeName(name) {
+    const cleaned = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\s+/g, " ");
+    return cleaned.split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+  }
+  const FONT_WEIGHT_KEYWORDS = [
+    [/thin|hairline/, 100],
+    [/extra[\s-]?light|ultra[\s-]?light/, 200],
+    [/light/, 300],
+    [/medium/, 500],
+    [/semi[\s-]?bold|demi[\s-]?bold/, 600],
+    [/extra[\s-]?bold|ultra[\s-]?bold/, 800],
+    [/black|heavy/, 900],
+    [/bold/, 700]
+  ];
+  function fontWeightFromStyle(style) {
+    const lower = style.toLowerCase();
+    for (const [pattern, weight] of FONT_WEIGHT_KEYWORDS) {
+      if (pattern.test(lower)) return weight;
+    }
+    return 400;
+  }
+  function rgbaToHex(r, g, b, a) {
+    const toByte = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+    const toHexByte = (v) => toByte(v).toString(16).padStart(2, "0");
+    const base = `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
+    return a < 1 ? `${base}${toHexByte(a)}` : base;
+  }
   const STYLE_BATCH_SIZE = 200;
   function collectBoundVariableIds(boundVariables) {
     const ids = [];
@@ -62,14 +99,14 @@
       styles ?? [],
       STYLE_BATCH_SIZE,
       (s) => {
-        var _a, _b;
+        var _a, _b, _c;
         return {
           id: s.id,
           name: s.name,
           description: s.description ?? "",
           fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? "Unknown",
           fontStyle: ((_b = s.fontName) == null ? void 0 : _b.style) ?? "Regular",
-          fontWeight: s.fontWeight ?? 400,
+          fontWeight: fontWeightFromStyle(((_c = s.fontName) == null ? void 0 : _c.style) ?? "Regular"),
           fontSize: s.fontSize ?? 0,
           lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : "AUTO",
           letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : "0px",
@@ -422,26 +459,6 @@
       warnings
     };
   }
-  function toPathSegments(name) {
-    return name.split("/").map((segment) => segment.trim()).filter(Boolean);
-  }
-  function kebabCase(input) {
-    return input.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[\s_]+/g, "-").replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase();
-  }
-  function toCssVarName(pathSegments) {
-    const slug = pathSegments.map(kebabCase).filter(Boolean).join("-");
-    return `--${slug}`;
-  }
-  function toFileSafeName(name) {
-    const cleaned = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\s+/g, " ");
-    return cleaned.split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
-  }
-  function rgbaToHex(r, g, b, a) {
-    const toByte = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
-    const toHexByte = (v) => toByte(v).toString(16).padStart(2, "0");
-    const base = `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
-    return a < 1 ? `${base}${toHexByte(a)}` : base;
-  }
   function escapeCell(value) {
     return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
   }
@@ -591,11 +608,8 @@
         return value.value;
       case "boolean":
         return String(value.value);
-      case "alias": {
-        const segments = value.variableName.split("/").map((s) => s.trim()).filter(Boolean);
-        const cssName = `--${segments.map((s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-")).join("-")}`;
-        return `var(${cssName})`;
-      }
+      case "alias":
+        return `var(${toCssVarName(toPathSegments(value.variableName))})`;
       default:
         return null;
     }
@@ -693,13 +707,13 @@
   const AA_LARGE_MIN_RATIO = 3;
   const WHITE = { r: 1, g: 1, b: 1 };
   const BLACK = { r: 0, g: 0, b: 0 };
-  const FOREGROUND_HINTS = ["text", "content", "foreground", "label", "icon", "on-", "on_"];
+  const FOREGROUND_HINTS = ["text", "content", "foreground", "fg", "label", "icon", "on"];
   const BACKGROUND_HINTS = ["background", "surface", "bg", "fill", "container", "canvas", "backdrop"];
   const FOREGROUND_SCOPES = ["TEXT_FILL"];
   const BACKGROUND_SCOPES = ["FRAME_FILL", "SHAPE_FILL"];
   function nameHasHint$1(name, hints) {
-    const lower = name.toLowerCase();
-    return hints.some((hint) => lower.includes(hint));
+    const segments = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+    return hints.some((hint) => segments.includes(hint));
   }
   function classifyColorRole(name, scopes) {
     if (scopes.some((s) => FOREGROUND_SCOPES.includes(s)) || nameHasHint$1(name, FOREGROUND_HINTS)) {
@@ -1541,6 +1555,11 @@
         return { kind: "unknown" };
     }
   }
+  function orderDefaultModeFirst(values, defaultModeId) {
+    const index = values.findIndex((v) => v.modeId === defaultModeId);
+    if (index <= 0) return values;
+    return [values[index], ...values.slice(0, index), ...values.slice(index + 1)];
+  }
   function transformVariableCollections(raw) {
     return raw.map((c) => ({
       id: c.id,
@@ -1572,7 +1591,8 @@
         category: classifyVariable(v.name, resolvedType, v.scopes),
         description: v.description,
         scopes: v.scopes,
-        valuesByMode: v.valuesByMode.map((vbm) => ({
+        // Default mode first: generators treat valuesByMode[0] as the default value.
+        valuesByMode: orderDefaultModeFirst(v.valuesByMode, collection == null ? void 0 : collection.defaultModeId).map((vbm) => ({
           modeId: vbm.modeId,
           modeName: modeNames.get(vbm.modeId) ?? vbm.modeId,
           value: toTokenValue(vbm.value, variableNamesById)

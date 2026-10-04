@@ -39,3 +39,21 @@ describe('generateCssTokensJson', () => {
     expect(() => generateCssTokensJson(ds)).not.toThrow();
   });
 });
+
+describe('generateCssTokensJson alias naming', () => {
+  it('uses the same css name as the target variable for camelCase names', () => {
+    const ds = makeDesignSystem();
+    const target = ds.variables.find((v) => v.category === 'color')!;
+    target.name = 'fontSize/Base';
+    target.path = ['fontSize', 'Base'];
+    target.cssName = '--font-size-base';
+    const alias = ds.variables.find((v) => v.valuesByMode[0]?.value.kind === 'alias')!;
+    alias.valuesByMode[0].value = {
+      kind: 'alias',
+      variableId: target.id,
+      variableName: 'fontSize/Base',
+    };
+    const parsed = JSON.parse(generateCssTokensJson(ds).content);
+    expect(parsed.root[alias.cssName]).toBe('var(--font-size-base)');
+  });
+});

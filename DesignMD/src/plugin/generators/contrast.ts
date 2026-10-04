@@ -49,14 +49,19 @@ const AA_LARGE_MIN_RATIO = 3;
 const WHITE: ColorValue = { hex: '#ffffff', r: 1, g: 1, b: 1, a: 1 };
 const BLACK: ColorValue = { hex: '#000000', r: 0, g: 0, b: 0, a: 1 };
 
-const FOREGROUND_HINTS = ['text', 'content', 'foreground', 'label', 'icon', 'on-', 'on_'];
+const FOREGROUND_HINTS = ['text', 'content', 'foreground', 'fg', 'label', 'icon', 'on'];
 const BACKGROUND_HINTS = ['background', 'surface', 'bg', 'fill', 'container', 'canvas', 'backdrop'];
 const FOREGROUND_SCOPES = ['TEXT_FILL'];
 const BACKGROUND_SCOPES = ['FRAME_FILL', 'SHAPE_FILL'];
 
 function nameHasHint(name: string, hints: string[]): boolean {
-  const lower = name.toLowerCase();
-  return hints.some((hint) => lower.includes(hint));
+  // Match whole name segments, not substrings — "button-bg" must not hit the "on" hint.
+  const segments = name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+  return hints.some((hint) => segments.includes(hint));
 }
 
 type ColorRole = 'foreground' | 'background' | 'unknown';

@@ -42,6 +42,26 @@ export function toFileSafeName(name: string): string {
     .join('');
 }
 
+const FONT_WEIGHT_KEYWORDS: Array<[RegExp, number]> = [
+  [/thin|hairline/, 100],
+  [/extra[\s-]?light|ultra[\s-]?light/, 200],
+  [/light/, 300],
+  [/medium/, 500],
+  [/semi[\s-]?bold|demi[\s-]?bold/, 600],
+  [/extra[\s-]?bold|ultra[\s-]?bold/, 800],
+  [/black|heavy/, 900],
+  [/bold/, 700],
+];
+
+/** Infer a numeric CSS font-weight from a Figma font style name ("Semi Bold Italic" -> 600). Defaults to 400. */
+export function fontWeightFromStyle(style: string): number {
+  const lower = style.toLowerCase();
+  for (const [pattern, weight] of FONT_WEIGHT_KEYWORDS) {
+    if (pattern.test(lower)) return weight;
+  }
+  return 400;
+}
+
 /** Convert an sRGBA (0-1 floats) color to a #rrggbb / #rrggbbaa hex string. */
 export function rgbaToHex(r: number, g: number, b: number, a: number): string {
   const toByte = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255);

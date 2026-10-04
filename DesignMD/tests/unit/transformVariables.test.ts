@@ -64,3 +64,14 @@ describe('transformVariables', () => {
     expect(alias.category).toBe('semantic');
   });
 });
+
+describe('transformVariables default mode', () => {
+  it('orders the collection default mode first', () => {
+    const collections = transformVariableCollections([
+      makeCollection({ defaultModeId: 'mode:dark' }),
+    ]);
+    const [variable] = transformVariables([makeColorVariable()], collections);
+    expect(variable.valuesByMode[0].modeId).toBe('mode:dark');
+    expect(variable.valuesByMode).toHaveLength(2);
+  });
+});

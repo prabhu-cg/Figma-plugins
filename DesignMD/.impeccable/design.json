@@ -1,0 +1,222 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-04T15:12:54.768456+00:00",
+  "title": "Design System: DesignMD",
+  "extensions": {
+    "colorMeta": {
+      "burnt-orange": {
+        "role": "primary",
+        "displayName": "Burnt Orange",
+        "canonical": "#c74504",
+        "tonalRamp": [
+          "#4a0000",
+          "#6c0000",
+          "#8e0000",
+          "#b02e00",
+          "#d35019",
+          "#f6703f",
+          "#ff9160",
+          "#ffb887"
+        ]
+      },
+      "ink-muted": {
+        "role": "neutral",
+        "displayName": "Muted Ink",
+        "canonical": "#6b6b6b",
+        "tonalRamp": [
+          "#161616",
+          "#2e2e2e",
+          "#484848",
+          "#636363",
+          "#808080",
+          "#9e9e9e",
+          "#bebebe",
+          "#e4e4e4"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "#e5e5e5",
+        "tonalRamp": [
+          "#161616",
+          "#2e2e2e",
+          "#484848",
+          "#636363",
+          "#808080",
+          "#9e9e9e",
+          "#bebebe",
+          "#e4e4e4"
+        ]
+      },
+      "error-ink": {
+        "role": "feedback",
+        "displayName": "Error Ink",
+        "canonical": "#b3261e",
+        "tonalRamp": [
+          "#4a0000",
+          "#6c0000",
+          "#8e0000",
+          "#b02e00",
+          "#d35019",
+          "#f6703f",
+          "#ff9160",
+          "#ffb887"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Wordmark only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Section titles."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Primary action label."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Descriptions and subtitles."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Stat labels, counts, progress text."
+      },
+      "card-title": {
+        "displayName": "Card title",
+        "purpose": "Output option names."
+      },
+      "stat": {
+        "displayName": "Stat",
+        "purpose": "Summary tile values."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Counts, progress, warnings."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "0.12s ease",
+        "purpose": "Border and fill change on option cards."
+      },
+      {
+        "name": "progress",
+        "value": "width 0.2s ease",
+        "purpose": "Progress fill growth."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Full-width footer action: Scan, Generate, Download.",
+      "html": "<button class=\"ds-btn-primary\">Generate</button>",
+      "css": ".ds-btn-primary{width:100%;border:none;border-radius:12px;padding:14px 16px;background:#c74504;color:#fff;font:700 14px Inter,-apple-system,sans-serif;cursor:pointer}.ds-btn-primary:hover{background:#af3d04}.ds-btn-primary:focus-visible{outline:2px solid #c74504;outline-offset:2px}"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "button-text",
+      "description": "Quiet header action such as Rescan.",
+      "html": "<button class=\"ds-btn-text\">Rescan</button>",
+      "css": ".ds-btn-text{padding:6px 12px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b6b6b;font:600 12px Inter,-apple-system,sans-serif;cursor:pointer}.ds-btn-text:hover{color:#1a1a1a;border-color:#d8d8d8}.ds-btn-text:focus-visible{outline:2px solid #c74504;outline-offset:2px}"
+    },
+    {
+      "name": "Option Card (checked)",
+      "kind": "card",
+      "refersTo": "option-card-checked",
+      "description": "Selectable output type; checked state fills with Orange Wash.",
+      "html": "<label class=\"ds-option\"><span class=\"ds-option-body\"><span class=\"ds-option-title\">design.md</span><span class=\"ds-option-desc\">Overview, tokens, and component index in one Markdown file</span></span><span class=\"ds-check\"></span></label>",
+      "css": ".ds-option{display:flex;align-items:flex-start;gap:12px;padding:14px;border-radius:14px;border:1.5px solid #c74504;background:#faeee8;font-family:Inter,-apple-system,sans-serif;cursor:pointer}.ds-option-body{display:flex;flex-direction:column;gap:3px;flex:1}.ds-option-title{font-size:13px;font-weight:700;color:#1a1a1a}.ds-option-desc{font-size:12px;line-height:1.45;color:#6b6b6b}.ds-check{width:22px;height:22px;border-radius:50%;background:#c74504 url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5 9.5 17 19 6.5'/%3E%3C/svg%3E\") center/12px no-repeat}"
+    },
+    {
+      "name": "Stat Tile",
+      "kind": "card",
+      "refersTo": "stat-tile",
+      "description": "Summary count in a 2-column grid.",
+      "html": "<div class=\"ds-stat\"><span class=\"ds-stat-value\">128</span><span class=\"ds-stat-label\">Variables</span></div>",
+      "css": ".ds-stat{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border-radius:10px;background:#f7f7f7;border:1px solid #e5e5e5;font-family:Inter,-apple-system,sans-serif}.ds-stat-value{font-size:18px;font-weight:700;color:#1a1a1a}.ds-stat-label{font-size:10px;color:#6b6b6b}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "text-field",
+      "description": "File base-name input.",
+      "html": "<input class=\"ds-input\" type=\"text\" value=\"designmd-export\" />",
+      "css": ".ds-input{padding:9px 10px;border-radius:10px;border:1px solid #e5e5e5;background:#fff;color:#1a1a1a;font:13px Inter,-apple-system,sans-serif}.ds-input:focus-visible{outline:2px solid #c74504;outline-offset:1px;border-color:#c74504}"
+    },
+    {
+      "name": "Error Banner",
+      "kind": "custom",
+      "refersTo": "error-banner",
+      "description": "Dismissible error with role=alert.",
+      "html": "<div class=\"ds-error\" role=\"alert\"><span>Failed to extract the design system.</span><button class=\"ds-error-x\" aria-label=\"Dismiss\">×</button></div>",
+      "css": ".ds-error{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-radius:10px;background:#fdecea;color:#b3261e;font:12px Inter,-apple-system,sans-serif}.ds-error-x{background:none;border:none;color:inherit;font-size:15px;line-height:1;cursor:pointer}.ds-error-x:focus-visible{outline:2px solid #c74504;outline-offset:2px}"
+    },
+    {
+      "name": "Progress",
+      "kind": "custom",
+      "refersTo": "progress",
+      "description": "Scan progress track and fill.",
+      "html": "<div class=\"ds-progress\"><div class=\"ds-progress-label\">Reading variables… 60%</div><div class=\"ds-progress-track\"><div class=\"ds-progress-fill\" style=\"width:60%\"></div></div></div>",
+      "css": ".ds-progress{display:flex;flex-direction:column;gap:6px;font-family:Inter,-apple-system,sans-serif}.ds-progress-label{font-size:11px;color:#6b6b6b}.ds-progress-track{height:6px;border-radius:3px;background:#f7f7f7;overflow:hidden}.ds-progress-fill{height:100%;background:#c74504}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Field Notebook",
+    "overview": "DesignMD lives in a 480×700 Figma plugin panel and does one job: read a file's variables, styles and components, then hand back plain files. The interface behaves like a page in a notebook: white paper, hairline rules, small honest type, and a single ink color, burnt orange, that marks the one thing to do next.",
+    "keyCharacteristics": [
+      "One accent (burnt orange) for the primary action, selection and progress.",
+      "Hairline borders and tonal fills do the structural work; there are no shadows.",
+      "12px Inter throughout, with weight carrying hierarchy.",
+      "Fixed header and footer, scrolling single-column body, 24px side gutters.",
+      "Native controls get themed, not replaced."
+    ],
+    "rules": [
+      {
+        "name": "The One Ink Rule",
+        "body": "Burnt orange appears on the single next action, the current selection and the progress fill. If two orange things compete on one screen, one of them is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tint, Don't Gray Rule",
+        "body": "Secondary text on a tinted surface keeps the surface's hue; it is never the neutral Muted Ink.",
+        "section": "colors"
+      },
+      {
+        "name": "The Weight Step Rule",
+        "body": "Hierarchy comes from 400 versus 700, not from many sizes. Stay on the documented ramp (10, 11, 12, 13, 14, 15, 18, 20px) and do not add steps.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Paper Rule",
+        "body": "Surfaces are flat at rest and flat on hover. State changes the border color or fill.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the primary action in the footer and make it the only filled Burnt Orange element on screen.",
+      "Do theme native controls and browser surfaces (focus rings, selection, scrollbar) from the palette.",
+      "Do carry every neutral through the light/dark pair via prefers-color-scheme.",
+      "Do use role=status for the footer line and role=progressbar for scan progress.",
+      "Do keep copy plain and specific: controls name their action, errors name the problem."
+    ],
+    "donts": [
+      "Don't add shadows, gradients or glass; depth is tone and hairlines.",
+      "Don't add a second accent color or a success green.",
+      "Don't put icon-heading-text cards in a repeating grid as page structure; the summary tiles are the one exception and stay data-only.",
+      "Don't add a colored side-stripe border to cards or banners.",
+      "Don't introduce a font size off the documented ramp or a second typeface."
+    ]
+  }
+}

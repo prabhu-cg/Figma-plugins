@@ -1,3 +1,4 @@
+import { fontWeightFromStyle } from '@shared/naming';
 import { processInBatches, safely } from '../utils/async';
 import type {
   RawEffect,
@@ -60,7 +61,7 @@ export async function extractTextStyles(
       description: s.description ?? '',
       fontFamily: s.fontName?.family ?? 'Unknown',
       fontStyle: s.fontName?.style ?? 'Regular',
-      fontWeight: (s as unknown as { fontWeight?: number }).fontWeight ?? 400,
+      fontWeight: fontWeightFromStyle(s.fontName?.style ?? 'Regular'),
       fontSize: s.fontSize ?? 0,
       lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : 'AUTO',
       letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : '0px',

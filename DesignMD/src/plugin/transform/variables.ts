@@ -24,6 +24,15 @@ function toTokenValue(raw: RawVariableValue, variableNamesById: Map<string, stri
   }
 }
 
+function orderDefaultModeFirst<T extends { modeId: string }>(
+  values: T[],
+  defaultModeId: string | undefined,
+): T[] {
+  const index = values.findIndex((v) => v.modeId === defaultModeId);
+  if (index <= 0) return values;
+  return [values[index], ...values.slice(0, index), ...values.slice(index + 1)];
+}
+
 export function transformVariableCollections(raw: RawVariableCollection[]): VariableCollection[] {
   return raw.map((c) => ({
     id: c.id,
@@ -61,7 +70,8 @@ export function transformVariables(
       category: classifyVariable(v.name, resolvedType, v.scopes),
       description: v.description,
       scopes: v.scopes,
-      valuesByMode: v.valuesByMode.map((vbm) => ({
+      // Default mode first: generators treat valuesByMode[0] as the default value.
+      valuesByMode: orderDefaultModeFirst(v.valuesByMode, collection?.defaultModeId).map((vbm) => ({
         modeId: vbm.modeId,
         modeName: modeNames.get(vbm.modeId) ?? vbm.modeId,
         value: toTokenValue(vbm.value, variableNamesById),

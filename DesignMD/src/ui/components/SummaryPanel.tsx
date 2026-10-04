@@ -11,6 +11,8 @@ const STAT_LABELS: Array<[keyof DesignSystemSummary, string]> = [
   ['componentSetsCount', 'Component Sets'],
   ['textStylesCount', 'Text Styles'],
   ['colorStylesCount', 'Color Styles'],
+  ['effectStylesCount', 'Effect Styles'],
+  ['gridStylesCount', 'Grid Styles'],
   ['modesCount', 'Modes'],
 ];
 

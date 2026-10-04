@@ -36,6 +36,7 @@ export default function App() {
   const [excludedPages, setExcludedPages] = useState<Set<string>>(new Set());
   const [baseName, setBaseName] = useState('designmd-export');
   const [error, setError] = useState<string | null>(null);
+  const [outdated, setOutdated] = useState(false);
 
   usePluginMessages((message) => {
     switch (message.type) {
@@ -66,13 +67,40 @@ export default function App() {
   const handleScan = useCallback(() => {
     setError(null);
     setStatus('extracting');
+    setOutdated(false);
     setProgress({ stage: 'variables', percent: 0 });
     postToPlugin({ type: 'extract' });
   }, []);
 
+  // Outputs were generated from the previous settings; changing them invalidates the result.
+  const invalidateGenerated = useCallback(() => {
+    if (!files) return;
+    setStatus((current) => (current === 'done' ? 'ready' : current));
+    setFiles(null);
+    setOutdated(true);
+  }, [files]);
+
+  const handleOptionsChange = useCallback(
+    (next: ExportOptions) => {
+      setOptions(next);
+      // `zip` only affects how files are downloaded, not what is generated.
+      if (SELECTABLE_KEYS.some((key) => next[key] !== options[key])) invalidateGenerated();
+    },
+    [invalidateGenerated, options],
+  );
+
+  const handleExcludedPagesChange = useCallback(
+    (next: Set<string>) => {
+      setExcludedPages(next);
+      invalidateGenerated();
+    },
+    [invalidateGenerated],
+  );
+
   const handleGenerate = useCallback(() => {
     setError(null);
     setStatus('generating');
+    setOutdated(false);
     postToPlugin({ type: 'generate', options, excludedPages: Array.from(excludedPages) });
   }, [options, excludedPages]);
 
@@ -118,10 +146,10 @@ export default function App() {
             <PageFilter
               components={designSystem.components}
               excludedPages={excludedPages}
-              onChange={setExcludedPages}
+              onChange={handleExcludedPagesChange}
             />
             <ExportSettings baseName={baseName} onBaseNameChange={setBaseName} />
-            <OutputSelection options={options} onChange={setOptions} />
+            <OutputSelection options={options} onChange={handleOptionsChange} />
           </>
         )}
       </div>
@@ -141,8 +169,10 @@ export default function App() {
 
         {(status === 'ready' || status === 'generating') && (
           <>
-            <div className="dmd-footer-status">
-              {selectedCount} output{selectedCount === 1 ? '' : 's'} selected
+            <div className={`dmd-footer-status${outdated ? ' is-outdated' : ''}`} role="status">
+              {outdated
+                ? 'Settings changed — generate again to refresh your files'
+                : `${selectedCount} output${selectedCount === 1 ? '' : 's'} selected`}
             </div>
             <GenerateButton
               onClick={handleGenerate}

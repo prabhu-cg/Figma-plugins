@@ -1,3 +1,4 @@
+import { toCssVarName, toPathSegments } from '@shared/naming';
 import type {
   DesignSystem,
   EffectValue,
@@ -21,14 +22,9 @@ function valueToCss(value: TokenValue, category: VariableToken['category']): str
       return value.value;
     case 'boolean':
       return String(value.value);
-    case 'alias': {
-      const segments = value.variableName
-        .split('/')
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const cssName = `--${segments.map((s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-')).join('-')}`;
-      return `var(${cssName})`;
-    }
+    case 'alias':
+      // Must match how the target variable's own cssName is built (transformVariables).
+      return `var(${toCssVarName(toPathSegments(value.variableName))})`;
     default:
       return null;
   }

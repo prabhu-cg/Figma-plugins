@@ -149,3 +149,18 @@ describe('computeContrastReport', () => {
     expect(report.fallbackChecks.some((c) => c.token.name === 'Color/Overlay')).toBe(false);
   });
 });
+
+describe('contrast role inference', () => {
+  it('does not treat "button-*" names as foreground via a substring match on "on-"', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = [
+      { ...ds.styles.color[0], id: 's1', name: 'button-bg', cssName: '--button-bg' },
+      { ...ds.styles.color[0], id: 's2', name: 'on-primary', cssName: '--on-primary' },
+    ];
+    const report = computeContrastReport(ds);
+    expect(report.pairs).toHaveLength(1);
+    expect(report.pairs[0].foreground.name).toBe('on-primary');
+    expect(report.pairs[0].background.name).toBe('button-bg');
+  });
+});
