@@ -11,6 +11,7 @@ import { SettingsView } from "./components/Views/SettingsView";
 import { ProgressBar } from "./components/Shared";
 import { useScan } from "./state/useScan";
 import { useTheme } from "./state/useTheme";
+import { useAuditState } from "./state/useAuditState";
 
 export type View = "dashboard" | "audit" | "components" | "variables" | "documentation" | "reports" | "settings";
 
@@ -18,6 +19,7 @@ export function App() {
   const scan = useScan();
   const { theme, setTheme } = useTheme();
   const [view, setView] = useState<View>("dashboard");
+  const audit = useAuditState();
 
   const hasResult = !!scan.result;
 
@@ -66,7 +68,12 @@ export function App() {
               />
             )}
             {view === "audit" && (
-              <AuditView result={scan.result} onSelectNode={scan.selectNode} onSetIssueStatus={scan.setIssueStatus} />
+              <AuditView
+                result={scan.result}
+                audit={audit}
+                onSelectNode={scan.selectNode}
+                onSetIssueStatuses={scan.setIssueStatuses}
+              />
             )}
             {view === "components" && <ComponentsView result={scan.result} onSelectNode={scan.selectNode} />}
             {view === "variables" && <VariablesView result={scan.result} />}

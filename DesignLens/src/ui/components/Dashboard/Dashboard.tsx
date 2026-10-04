@@ -131,16 +131,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
         </div>
       </div>
 
-      <div
-        className="card"
-        style={{
-          display: "grid",
-          gridTemplateColumns: "auto 1fr auto auto",
-          alignItems: "center",
-          gap: 24,
-          marginBottom: "var(--space-3)"
-        }}
-      >
+      <div className="card health-card">
         <div className="flex" style={{ flexDirection: "column", alignItems: "center", gap: 6 }}>
           <Gauge score={health.overall} label="Health Score" size={150} />
           <TrendBadge delta={overallDelta} />
@@ -151,8 +142,8 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
           <span className="badge badge-suggestion">{health.totalSuggestions} suggestions</span>
           <span className="badge badge-success">{health.totalSuccesses} passing</span>
         </div>
-        <div style={{ width: 1, height: 64, background: "var(--color-border)" }} />
-        <div style={{ width: 220 }}>
+        <div className="health-divider" />
+        <div className="health-trend">
           <div className="card-title" style={{ marginBottom: 8 }}>
             Health Trend
           </div>

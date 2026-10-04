@@ -6,32 +6,21 @@ interface IssueDetailProps {
   issue: Issue | null;
   onSelectNode: (id: string) => void;
   onSetStatus: (issue: Issue, status: IssueStatus) => void;
-  /** Pixels reserved above this panel for a sticky header, so its own sticky position doesn't sit underneath it. */
-  stickyTop?: number;
+  /** Narrow windows show the panel as a bottom sheet, which needs a way to dismiss it. */
+  onClose: () => void;
 }
 
-export function IssueDetail({ issue, onSelectNode, onSetStatus, stickyTop = 0 }: IssueDetailProps) {
+export function IssueDetail({ issue, onSelectNode, onSetStatus, onClose }: IssueDetailProps) {
   if (!issue) {
     return (
-      <div className="card state-card" style={{ position: "sticky", top: stickyTop }}>
+      <div className="card state-card detail-panel detail-empty">
         <div className="text-secondary">Select an issue to see the full recommendation.</div>
       </div>
     );
   }
 
   return (
-    <div
-      className="card"
-      style={{
-        padding: 0,
-        overflow: "hidden",
-        position: "sticky",
-        top: stickyTop,
-        maxHeight: `calc(100vh - ${stickyTop + 40}px)`,
-        display: "flex",
-        flexDirection: "column"
-      }}
-    >
+    <div className="card detail-panel" role="region" aria-label="Issue details">
       {/*
         Three layers on purpose: this middle one owns overflow-y:auto with zero padding, so the
         scrollbar renders flush at the card's own edge instead of eating into the content's
@@ -51,10 +40,13 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, stickyTop = 0 }:
             <div className="flex items-center gap-2">
               <SeverityBadge severity={issue.severity} />
               <span className="badge badge-neutral">{CATEGORY_LABELS[issue.category]}</span>
+              {issue.status !== "open" && (
+                <span className="badge badge-success">{issue.status === "resolved" ? "Resolved" : "Ignored"}</span>
+              )}
             </div>
-            {issue.status !== "open" && (
-              <span className="badge badge-success">{issue.status === "resolved" ? "Resolved" : "Ignored"}</span>
-            )}
+            <button className="btn btn-ghost btn-sm detail-close" onClick={onClose}>
+              Close
+            </button>
           </div>
           <div>
             <div style={{ fontWeight: 800, fontSize: 15 }}>{issue.title}</div>

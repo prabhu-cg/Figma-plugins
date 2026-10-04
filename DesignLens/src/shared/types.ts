@@ -208,7 +208,9 @@ export type UIToPluginMessage =
   | { type: "cancel-scan" }
   | { type: "select-node"; nodeId: string }
   | { type: "set-wcag-level"; level: WcagLevel }
-  | { type: "set-issue-status"; issueKey: string; status: IssueStatus };
+  | { type: "set-issue-status"; issueKey: string; status: IssueStatus }
+  /** Many status changes in one message (bulk resolve/ignore, undo), applied as a single storage write. */
+  | { type: "set-issue-statuses"; updates: { issueKey: string; status: IssueStatus }[] };
 
 export type PluginToUIMessage =
   | { type: "init"; settings: DesignLensSettings; result: ScanResult | null; trend: TrendEntry[] }

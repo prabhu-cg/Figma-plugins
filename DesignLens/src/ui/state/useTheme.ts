@@ -26,14 +26,23 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    // Resolve "system" to a concrete light/dark so the stylesheet needs only one dark token block.
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => root.setAttribute("data-theme", theme === "system" ? (media.matches ? "dark" : "light") : theme);
+    // "Match Figma": figma.showUI({ themeColors: true }) puts figma-light / figma-dark on <html>
+    // and updates it when the user switches Figma's theme. That's the real signal; the OS
+    // color scheme is only a fallback (e.g. opening the built page outside Figma).
+    const systemIsDark = () =>
+      root.classList.contains("figma-dark") ? true : root.classList.contains("figma-light") ? false : media.matches;
+    const apply = () => root.setAttribute("data-theme", theme === "system" ? (systemIsDark() ? "dark" : "light") : theme);
     apply();
     writeStoredTheme(theme);
     if (theme !== "system") return;
     media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
+    const observer = new MutationObserver(apply);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => {
+      media.removeEventListener("change", apply);
+      observer.disconnect();
+    };
   }, [theme]);
 
   return { theme, setTheme };

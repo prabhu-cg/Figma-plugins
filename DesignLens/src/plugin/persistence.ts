@@ -107,15 +107,31 @@ export async function getIssueStatusMap(fileKey: string): Promise<Record<string,
   return stored ?? {};
 }
 
-export async function setIssueStatus(fileKey: string, key: string, status: IssueStatus): Promise<Record<string, IssueStatus>> {
-  const map = await getIssueStatusMap(fileKey);
-  if (status === "open") {
-    delete map[key];
-  } else {
-    map[key] = status;
-  }
-  await safeSet(scopedKey(fileKey, "issue-status"), map);
-  return map;
+// Status updates are read-modify-write on one storage key. Messages arrive concurrently, so
+// without serializing them two quick updates would both read the old map and the second write
+// would drop the first. Chain them instead.
+let statusWriteChain: Promise<unknown> = Promise.resolve();
+
+export function setIssueStatuses(
+  fileKey: string,
+  updates: { issueKey: string; status: IssueStatus }[]
+): Promise<Record<string, IssueStatus>> {
+  const run = async (): Promise<Record<string, IssueStatus>> => {
+    const map = await getIssueStatusMap(fileKey);
+    for (const { issueKey: key, status } of updates) {
+      if (status === "open") delete map[key];
+      else map[key] = status;
+    }
+    await safeSet(scopedKey(fileKey, "issue-status"), map);
+    return map;
+  };
+  const result = statusWriteChain.then(run, run);
+  statusWriteChain = result.catch(() => undefined);
+  return result;
+}
+
+export function setIssueStatus(fileKey: string, key: string, status: IssueStatus): Promise<Record<string, IssueStatus>> {
+  return setIssueStatuses(fileKey, [{ issueKey: key, status }]);
 }
 
 /** Applies persisted resolved/ignored status onto a fresh (or reloaded) issue list, in place. */

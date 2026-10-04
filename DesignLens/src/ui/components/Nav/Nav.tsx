@@ -40,10 +40,10 @@ export function Nav({ active, onSelect, disabled }: NavProps) {
         onClick={() => onSelect(item.id)}
         disabled={isDisabled}
         aria-current={active === item.id ? "page" : undefined}
-        title={isDisabled ? "Run an audit first" : undefined}
+        title={isDisabled ? "Run an audit first" : item.label}
       >
         <Icon className="icon" />
-        {item.label}
+        <span className="nav-label">{item.label}</span>
       </button>
     );
   }

@@ -78,12 +78,18 @@ export function useScan() {
     postToPlugin({ type: "set-wcag-level", level });
   }, []);
 
-  const setIssueStatus = useCallback((issue: Issue, next: IssueStatus) => {
+  /** Applies many status changes with one state update and one plugin message (bulk actions and undo). */
+  const setIssueStatuses = useCallback((updates: { issue: Issue; status: IssueStatus }[]) => {
+    if (updates.length === 0) return;
+    const nextById = new Map(updates.map((u) => [u.issue.id, u.status] as const));
     setResult((prev) => {
       if (!prev) return prev;
-      return { ...prev, issues: prev.issues.map((i) => (i.id === issue.id ? { ...i, status: next } : i)) };
+      return { ...prev, issues: prev.issues.map((i) => (nextById.has(i.id) ? { ...i, status: nextById.get(i.id)! } : i)) };
     });
-    postToPlugin({ type: "set-issue-status", issueKey: issueKey(issue), status: next });
+    postToPlugin({
+      type: "set-issue-statuses",
+      updates: updates.map((u) => ({ issueKey: issueKey(u.issue), status: u.status }))
+    });
   }, []);
 
   return {
@@ -97,6 +103,6 @@ export function useScan() {
     cancelScan,
     selectNode,
     setWcagLevel,
-    setIssueStatus
+    setIssueStatuses
   };
 }

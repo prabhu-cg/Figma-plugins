@@ -2379,15 +2379,23 @@
     const stored = await safeGet(scopedKey(fileKey2, "issue-status"));
     return stored != null ? stored : {};
   }
-  async function setIssueStatus(fileKey2, key, status) {
-    const map = await getIssueStatusMap(fileKey2);
-    if (status === "open") {
-      delete map[key];
-    } else {
-      map[key] = status;
-    }
-    await safeSet(scopedKey(fileKey2, "issue-status"), map);
-    return map;
+  var statusWriteChain = Promise.resolve();
+  function setIssueStatuses(fileKey2, updates) {
+    const run = async () => {
+      const map = await getIssueStatusMap(fileKey2);
+      for (const { issueKey: key, status } of updates) {
+        if (status === "open") delete map[key];
+        else map[key] = status;
+      }
+      await safeSet(scopedKey(fileKey2, "issue-status"), map);
+      return map;
+    };
+    const result = statusWriteChain.then(run, run);
+    statusWriteChain = result.catch(() => void 0);
+    return result;
+  }
+  function setIssueStatus(fileKey2, key, status) {
+    return setIssueStatuses(fileKey2, [{ issueKey: key, status }]);
   }
   function applyIssueStatuses(issues, statusMap) {
     var _a;
@@ -2480,6 +2488,9 @@
         break;
       case "set-issue-status":
         await setIssueStatus(fileKey, message.issueKey, message.status);
+        break;
+      case "set-issue-statuses":
+        await setIssueStatuses(fileKey, message.updates);
         break;
     }
   };

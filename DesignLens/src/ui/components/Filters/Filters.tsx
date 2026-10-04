@@ -1,32 +1,18 @@
 import { AUDIT_CATEGORIES, CATEGORY_LABELS, type AuditCategory, type IssueStatus, type Severity } from "@shared/types";
 import { SearchIcon } from "../Icons";
-
-export interface FiltersState {
-  search: string;
-  category: AuditCategory | "all";
-  severity: Severity | "all";
-  componentId: string | "all";
-  status: IssueStatus | "all";
-  collection: string | "all";
-}
-
-export const DEFAULT_FILTERS: FiltersState = {
-  search: "",
-  category: "all",
-  severity: "all",
-  componentId: "all",
-  status: "all",
-  collection: "all"
-};
+import { DEFAULT_FILTERS, SORT_OPTIONS, type countFacets, type FiltersState, type SortKey } from "../../lib/issueView";
 
 interface FiltersProps {
   value: FiltersState;
   onChange: (next: FiltersState) => void;
   componentOptions: { id: string; name: string }[];
   collectionOptions: string[];
+  facets: ReturnType<typeof countFacets>;
+  sort: SortKey;
+  onSortChange: (sort: SortKey) => void;
 }
 
-export function Filters({ value, onChange, componentOptions, collectionOptions }: FiltersProps) {
+export function Filters({ value, onChange, componentOptions, collectionOptions, facets, sort, onSortChange }: FiltersProps) {
   const isDirty =
     value.search ||
     value.category !== "all" ||
@@ -74,9 +60,9 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
           onChange={(e) => onChange({ ...value, severity: e.target.value as Severity | "all" })}
         >
           <option value="all">All severities</option>
-          <option value="critical">Critical</option>
-          <option value="warning">Warning</option>
-          <option value="suggestion">Suggestion</option>
+          <option value="critical">Critical ({facets.severity.critical})</option>
+          <option value="warning">Warning ({facets.severity.warning})</option>
+          <option value="suggestion">Suggestion ({facets.severity.suggestion})</option>
         </select>
       </div>
       <div className="select-wrapper">
@@ -87,9 +73,9 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
           onChange={(e) => onChange({ ...value, status: e.target.value as IssueStatus | "all" })}
         >
           <option value="all">All statuses</option>
-          <option value="open">Open</option>
-          <option value="resolved">Resolved</option>
-          <option value="ignored">Ignored</option>
+          <option value="open">Open ({facets.status.open})</option>
+          <option value="resolved">Resolved ({facets.status.resolved})</option>
+          <option value="ignored">Ignored ({facets.status.ignored})</option>
         </select>
       </div>
       <div className="select-wrapper">
@@ -114,6 +100,20 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
           </select>
         </div>
       )}
+      <div className="select-wrapper">
+        <select
+          className="select"
+          aria-label="Sort issues by"
+          value={sort}
+          onChange={(e) => onSortChange(e.target.value as SortKey)}
+        >
+          {SORT_OPTIONS.map((o) => (
+            <option key={o.id} value={o.id}>
+              Sort: {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
       {isDirty && (
         <button className="btn btn-ghost btn-sm" onClick={() => onChange(DEFAULT_FILTERS)}>
           Clear

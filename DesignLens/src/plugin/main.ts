@@ -13,6 +13,7 @@ import {
   getTrend,
   saveLastResult,
   setIssueStatus,
+  setIssueStatuses,
   setWcagLevel
 } from "./persistence";
 
@@ -96,6 +97,9 @@ figma.ui.onmessage = async (message: UIToPluginMessage) => {
       break;
     case "set-issue-status":
       await setIssueStatus(fileKey, message.issueKey, message.status);
+      break;
+    case "set-issue-statuses":
+      await setIssueStatuses(fileKey, message.updates);
       break;
   }
 };
