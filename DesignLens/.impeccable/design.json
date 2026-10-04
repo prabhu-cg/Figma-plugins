@@ -1,0 +1,439 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-04T19:29:10.106Z",
+  "title": "Design System: DesignLens",
+  "extensions": {
+    "colorMeta": {
+      "lens-orange": {
+        "role": "primary",
+        "displayName": "Lens Orange",
+        "canonical": "oklch(67.1% 0.185 43.7)",
+        "hex": "#ee661d",
+        "tonalRamp": [
+          "#2f0500",
+          "#571000",
+          "#831e00",
+          "#b22c00",
+          "#d54f00",
+          "#f86f2a",
+          "#ff9757",
+          "#ffdcc4"
+        ]
+      },
+      "ember-fill": {
+        "role": "primary",
+        "displayName": "Ember Fill",
+        "canonical": "oklch(56.3% 0.167 41.5)",
+        "hex": "#c2490a",
+        "tonalRamp": [
+          "#2d0700",
+          "#541500",
+          "#7f2400",
+          "#ac3400",
+          "#cf551e",
+          "#f27542",
+          "#ff9b69",
+          "#ffddc9"
+        ]
+      },
+      "ember-text": {
+        "role": "primary",
+        "displayName": "Ember Text",
+        "canonical": "oklch(53.4% 0.166 39.6)",
+        "hex": "#b83f06",
+        "tonalRamp": [
+          "#2d0700",
+          "#541500",
+          "#7f2400",
+          "#ac3400",
+          "#cf5426",
+          "#f27448",
+          "#ff9b6e",
+          "#ffddca"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(100.0% 0.000 89.9)",
+        "hex": "#ffffff",
+        "tonalRamp": [
+          "#161616",
+          "#2e2e2e",
+          "#484848",
+          "#636363",
+          "#808080",
+          "#9e9e9e",
+          "#c4c4c4",
+          "#ebebeb"
+        ]
+      },
+      "fog": {
+        "role": "neutral",
+        "displayName": "Fog",
+        "canonical": "oklch(97.6% 0.001 -73.6)",
+        "hex": "#f7f7f8",
+        "tonalRamp": [
+          "#161616",
+          "#2e2e2e",
+          "#474748",
+          "#636364",
+          "#808081",
+          "#9e9e9f",
+          "#c4c4c5",
+          "#ebebeb"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "oklch(92.2% 0.003 -73.7)",
+        "hex": "#e5e5e7",
+        "tonalRamp": [
+          "#161616",
+          "#2e2e2f",
+          "#474749",
+          "#636365",
+          "#808082",
+          "#9e9ea0",
+          "#c4c4c6",
+          "#ebebec"
+        ]
+      },
+      "graphite": {
+        "role": "neutral",
+        "displayName": "Graphite",
+        "canonical": "oklch(20.9% 0.004 -95.5)",
+        "hex": "#17181a",
+        "tonalRamp": [
+          "#161617",
+          "#2d2e2f",
+          "#47484a",
+          "#626366",
+          "#7f8083",
+          "#9d9ea1",
+          "#c3c4c7",
+          "#eaebec"
+        ]
+      },
+      "slate": {
+        "role": "neutral",
+        "displayName": "Slate",
+        "canonical": "oklch(46.2% 0.006 -73.9)",
+        "hex": "#58585c",
+        "tonalRamp": [
+          "#161617",
+          "#2d2d30",
+          "#47474a",
+          "#636367",
+          "#808084",
+          "#9e9ea2",
+          "#c3c3c8",
+          "#ebebed"
+        ]
+      },
+      "ash": {
+        "role": "neutral",
+        "displayName": "Ash",
+        "canonical": "oklch(52.9% 0.008 -73.9)",
+        "hex": "#6b6b70",
+        "tonalRamp": [
+          "#161617",
+          "#2d2d30",
+          "#47474b",
+          "#636368",
+          "#808085",
+          "#9e9ea3",
+          "#c3c3c9",
+          "#ebebed"
+        ]
+      },
+      "alarm": {
+        "role": "status",
+        "displayName": "Alarm",
+        "canonical": "oklch(57.6% 0.209 29.5)",
+        "hex": "#d92d20",
+        "tonalRamp": [
+          "#320100",
+          "#5c0301",
+          "#8a0702",
+          "#ba0d05",
+          "#de3d2f",
+          "#ff614e",
+          "#ff8974",
+          "#ffd8cc"
+        ]
+      },
+      "amber": {
+        "role": "status",
+        "displayName": "Amber",
+        "canonical": "oklch(73.8% 0.165 64.3)",
+        "hex": "#f0900a",
+        "tonalRamp": [
+          "#290d00",
+          "#4e1e00",
+          "#763200",
+          "#a04600",
+          "#c16500",
+          "#e38400",
+          "#ffaa3b",
+          "#ffe3be"
+        ]
+      },
+      "cobalt": {
+        "role": "status",
+        "displayName": "Cobalt",
+        "canonical": "oklch(58.8% 0.224 -97.8)",
+        "hex": "#2970ff",
+        "tonalRamp": [
+          "#021239",
+          "#072769",
+          "#103f9c",
+          "#1a57d2",
+          "#3877f5",
+          "#5698ff",
+          "#7abfff",
+          "#ceecff"
+        ]
+      },
+      "verdigris": {
+        "role": "status",
+        "displayName": "Verdigris",
+        "canonical": "oklch(68.6% 0.167 154.9)",
+        "hex": "#12b76a",
+        "tonalRamp": [
+          "#001e07",
+          "#003b15",
+          "#005b24",
+          "#007d34",
+          "#009c51",
+          "#1ebc6e",
+          "#57e393",
+          "#c9f9d8"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Stat values and large numerals."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "View titles and priority-strip scores."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Detail-panel issue titles, state-screen titles, wordmark."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Default text, issue titles in cards, buttons."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Secondary copy, controls, uppercase card titles."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Badges, legends, metadata, shortcut hints."
+      }
+    },
+    "shadows": [
+      {
+        "name": "hairline-lift",
+        "value": "0 1px 2px rgba(20, 20, 24, 0.06)",
+        "purpose": "Active tab segment only."
+      },
+      {
+        "name": "floating",
+        "value": "0 4px 16px rgba(20, 20, 24, 0.08)",
+        "purpose": "Undo toast and the narrow-window bottom sheet (dark: 0 4px 20px rgba(0,0,0,0.5))."
+      },
+      {
+        "name": "selected-ring",
+        "value": "inset 0 0 0 1px #b83f06",
+        "purpose": "Selected issue row, with a matching 1px border, over Orange Tint."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "0.08s ease",
+        "purpose": "Button :active nudge (translateY 1px)."
+      },
+      {
+        "name": "state",
+        "value": "0.12s ease",
+        "purpose": "Background and border color changes on hover/selection."
+      },
+      {
+        "name": "progress",
+        "value": "0.2s ease",
+        "purpose": "Progress-bar fill scale (transform, not width)."
+      },
+      {
+        "name": "gauge",
+        "value": "0.6s ease",
+        "purpose": "Gauge stroke-dashoffset when a score appears; the one slow, deliberate motion."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms",
+        "purpose": "prefers-reduced-motion collapses all animation and transition durations."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "health-card-reflow",
+        "value": "980px"
+      },
+      {
+        "name": "nav-collapse",
+        "value": "900px"
+      },
+      {
+        "name": "detail-bottom-sheet",
+        "value": "820px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled orange action per view (Start audit, Rescan, Mark resolved).",
+      "html": "<button class=\"ds-btn-primary\">Mark resolved</button>",
+      "css": ".ds-btn-primary{font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;border:1px solid transparent;background:var(--color-primary-strong,#c2490a);color:#fff;cursor:pointer;transition:background .12s ease,transform .08s ease}.ds-btn-primary:hover{background:var(--color-primary-strong-hover,#a83d08)}.ds-btn-primary:active{transform:translateY(1px)}.ds-btn-primary:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:2px}.ds-btn-primary:disabled{opacity:.5;cursor:not-allowed}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Bordered neutral action (Ignore, Go to layer, Clear filters).",
+      "html": "<button class=\"ds-btn-secondary\">Ignore</button>",
+      "css": ".ds-btn-secondary{font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;font-weight:700;padding:9px 16px;border-radius:8px;border:1px solid var(--color-border,#e5e5e7);background:var(--color-surface,#fff);color:var(--color-text,#17181a);cursor:pointer;transition:background .12s ease}.ds-btn-secondary:hover{background:var(--color-surface-alt,#f7f7f8)}.ds-btn-secondary:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:2px}"
+    },
+    {
+      "name": "Severity Badge",
+      "kind": "chip",
+      "refersTo": "badge-critical",
+      "description": "Pill that pairs a status hue with its label; text uses the AA step, background the tint.",
+      "html": "<span class=\"ds-badge ds-badge-critical\">Critical</span> <span class=\"ds-badge ds-badge-warning\">Warning</span> <span class=\"ds-badge ds-badge-suggestion\">Suggestion</span> <span class=\"ds-badge ds-badge-success\">Passing</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:11px;font-weight:700}.ds-badge-critical{background:var(--color-critical-soft,#fef1f0);color:var(--color-critical-text,#c4271b)}.ds-badge-warning{background:var(--color-warning-soft,#fef1de);color:var(--color-warning-text,#8a5a04)}.ds-badge-suggestion{background:var(--color-suggestion-soft,#eef4ff);color:var(--color-suggestion-text,#1d5fe0)}.ds-badge-success{background:var(--color-success-soft,#ecfdf3);color:var(--color-success-text,#0a7a45)}"
+    },
+    {
+      "name": "Search Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Hairline-bordered field; focus draws the global inset ring.",
+      "html": "<input class=\"ds-input\" type=\"search\" placeholder=\"Search issues…\" aria-label=\"Search issues\">",
+      "css": ".ds-input{font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;padding:8px 12px;border-radius:8px;border:1px solid var(--color-border,#e5e5e7);background:var(--color-surface,#fff);color:var(--color-text,#17181a);width:260px}.ds-input::placeholder{color:var(--color-text-tertiary,#6b6b70)}.ds-input:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:-1px}"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Rail item; active uses Orange Tint with Ember Text and aria-current.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main\"><button class=\"ds-nav-item ds-active\" aria-current=\"page\">Audit</button><button class=\"ds-nav-item\">Components</button><button class=\"ds-nav-item\" disabled>Reports</button></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:4px;width:176px;padding:16px 8px;background:var(--color-surface-alt,#f7f7f8);border-radius:8px}.ds-nav-item{font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;font-weight:600;text-align:left;padding:9px 8px;border:none;border-radius:8px;background:transparent;color:var(--color-text-secondary,#58585c);cursor:pointer}.ds-nav-item:hover:not(:disabled){background:var(--color-surface,#fff);color:var(--color-text,#17181a)}.ds-nav-item.ds-active{background:var(--color-primary-soft,#fdeee3);color:var(--color-primary-text,#b83f06)}.ds-nav-item:disabled{opacity:.55;cursor:not-allowed}.ds-nav-item:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:-2px}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "custom",
+      "refersTo": "tab-active",
+      "description": "Segmented control on a Fog track; the active segment is Paper with a hairline lift.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab ds-active\" role=\"tab\" aria-selected=\"true\">Category Scores</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Coverage</button></div>",
+      "css": ".ds-tabs{display:inline-flex;gap:2px;padding:3px;background:var(--color-surface-alt,#f7f7f8);border:1px solid var(--color-border,#e5e5e7);border-radius:8px}.ds-tab{font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;font-weight:700;padding:7px 14px;border:none;border-radius:6px;background:transparent;color:var(--color-text-secondary,#58585c);cursor:pointer}.ds-tab:hover{color:var(--color-text,#17181a)}.ds-tab.ds-active{background:var(--color-surface,#fff);color:var(--color-text,#17181a);box-shadow:0 1px 2px rgba(20,20,24,.06)}.ds-tab:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:-2px}"
+    },
+    {
+      "name": "Issue Row",
+      "kind": "card",
+      "refersTo": "issue-card-selected",
+      "description": "Checkbox plus card button; selected is Orange Tint with a full ring, never a side stripe.",
+      "html": "<div class=\"ds-row\"><input type=\"checkbox\" aria-label=\"Select issue\"><button class=\"ds-issue ds-selected\" aria-pressed=\"true\"><span class=\"ds-line\"><span class=\"ds-badge-c\">Critical</span><span class=\"ds-meta\">Accessibility</span></span><span class=\"ds-title\">Text contrast below WCAG minimum</span><span class=\"ds-desc\">\"Label\" in Button has a contrast ratio of 3.1:1.</span><span class=\"ds-meta\">Button</span></button></div>",
+      "css": ".ds-row{display:flex;gap:8px;align-items:flex-start;width:420px}.ds-row input{margin:14px 0 0;width:16px;height:16px;accent-color:var(--color-primary-strong,#c2490a)}.ds-issue{flex:1;display:flex;flex-direction:column;gap:6px;text-align:left;padding:16px;border-radius:12px;border:1px solid var(--color-border,#e5e5e7);background:var(--color-surface,#fff);color:var(--color-text,#17181a);font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);cursor:pointer}.ds-issue:hover{background:var(--color-surface-alt,#f7f7f8)}.ds-issue.ds-selected{background:var(--color-primary-soft,#fdeee3);border-color:var(--color-primary-text,#b83f06);box-shadow:inset 0 0 0 1px var(--color-primary-text,#b83f06)}.ds-line{display:flex;justify-content:space-between;align-items:center}.ds-badge-c{padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;background:var(--color-critical-soft,#fef1f0);color:var(--color-critical-text,#c4271b)}.ds-title{font-size:13px;font-weight:700}.ds-desc{font-size:12px;color:var(--color-text-secondary,#58585c)}.ds-meta{font-size:11px;color:var(--color-text-tertiary,#6b6b70)}.ds-issue:focus-visible{outline:2px solid var(--color-focus,#c2490a);outline-offset:2px}"
+    },
+    {
+      "name": "Score Bar",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Labelled 8px progress track; fill is scaled with transform and takes the shared score band color.",
+      "html": "<div class=\"ds-score\"><div class=\"ds-score-head\"><span>Token Coverage</span><span class=\"ds-num\">72</span></div><div class=\"ds-track\"><div class=\"ds-fill\"></div></div></div>",
+      "css": ".ds-score{width:280px;display:flex;flex-direction:column;gap:6px;font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif)}.ds-score-head{display:flex;justify-content:space-between;font-size:13px;font-weight:700}.ds-num{font-weight:800;color:var(--color-warning-text,#8a5a04)}.ds-track{height:8px;border-radius:999px;background:var(--color-surface-alt,#f7f7f8);overflow:hidden}.ds-fill{width:100%;height:100%;background:var(--color-warning,#f0900a);transform-origin:left center;transform:scaleX(.72);transition:transform .2s ease}"
+    },
+    {
+      "name": "Undo Toast",
+      "kind": "custom",
+      "refersTo": "toast",
+      "description": "The one floating surface: inverted Graphite pill with an inline Undo.",
+      "html": "<div class=\"ds-toast\" role=\"status\"><span>12 issues ignored</span><button class=\"ds-toast-undo\">Undo</button></div>",
+      "css": ".ds-toast{display:inline-flex;align-items:center;gap:16px;padding:8px 8px 8px 16px;border-radius:8px;background:var(--color-text,#17181a);color:var(--color-bg,#fff);font-family:var(--font-family, Manrope, -apple-system, 'Segoe UI', Roboto, sans-serif);font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(20,20,24,.08)}.ds-toast-undo{font:inherit;font-size:12px;font-weight:700;padding:6px 10px;border:none;border-radius:6px;background:transparent;color:inherit;text-decoration:underline;cursor:pointer}.ds-toast-undo:focus-visible{outline:2px solid currentColor;outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Inspector",
+    "overview": "DesignLens is a measuring instrument that lives inside someone else's file. It looks the way a good inspection report reads: neutral surfaces, plain bordered containers, small precise type, and numbers and statuses doing the talking. The interface is deliberately quiet so that the findings are the loudest thing on screen.\n\nColor is rationed and each hue has one job. Orange is the brand and the action; status never borrows it. Critical, warning, suggestion and success each have their own hue, a soft tint, and a darker text step that clears AA. Depth is almost absent: surfaces are flat and separated by hairlines, and only things that genuinely float leave the page.\n\nThe system is precise, calm and trustworthy. It rejects loud SaaS marketing-dashboard energy, gamified scoring, and decorative gradients or glass.",
+    "keyCharacteristics": [
+      "Flat, bordered, softly rounded surfaces; one filled orange button marks the primary action.",
+      "Orange means brand and action only; severity and score use their own hues.",
+      "Every text color has an AA-passing step; vivid fills are for graphics and large marks.",
+      "Six-step type scale in a single variable face (Manrope), heavy weights for hierarchy, tabular numerals for data.",
+      "Light and dark themes share one token set; dark is defined in exactly one block.",
+      "Fully keyboard-operable with a single visible focus ring."
+    ],
+    "rules": [
+      {
+        "name": "The One Voice Rule",
+        "body": "Orange means brand and action. It never encodes status, severity or score; a score that needs work is Amber, not orange, so it can never be mistaken for a button.",
+        "section": "colors"
+      },
+      {
+        "name": "The AA-or-It-Doesn't-Ship Rule",
+        "body": "Any color used as text comes from a -text step (or Graphite/Slate/Ash). Vivid fills are for bars, dots, rings and large marks only. A contrast auditor cannot fail contrast.",
+        "section": "colors"
+      },
+      {
+        "name": "The Not-By-Color-Alone Rule",
+        "body": "Status is always paired with a word or glyph, never hue alone.",
+        "section": "colors"
+      },
+      {
+        "name": "The Six-Step Rule",
+        "body": "Font sizes come from --text-xs/sm/base/md/lg/xl (11/12/13/15/18/24). There are no half-pixel or one-off sizes; a test fails the build if a raw size appears.",
+        "section": "typography"
+      },
+      {
+        "name": "The Weight-Over-Size Rule",
+        "body": "Hierarchy is made with weight before size. Resolved and ignored items recede by color, never by opacity, so their text keeps its contrast.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. A shadow appears only on elements that float above the page or in direct response to state, never as decoration on a card.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use Ember Fill (#c2490a) for any filled orange surface that carries white text, and Ember Text (#b83f06) for orange type.",
+      "Do keep orange to brand and action: one primary button per view, the wordmark, the selected row, the active nav item.",
+      "Do pair every status color with a label or glyph, and use the -text step whenever the color is read as type.",
+      "Do size type from the six --text-* tokens and build hierarchy with weight first.",
+      "Do separate surfaces with 1px Hairline borders; lift only what floats.",
+      "Do give every interactive element the global 2px focus ring, keep full keyboard operation, and honor prefers-reduced-motion.",
+      "Do keep Paper/Fog/Hairline/Graphite relationships identical in both themes by remapping tokens, never by adding per-component dark overrides.",
+      "Do animate progress with transform, not width, and keep transitions to 80–200ms."
+    ],
+    "donts": [
+      "Don't use Lens Orange (#ee661d) as text or for score, severity or \"needs attention\" meaning.",
+      "Don't put shadows on cards or nest cards inside cards.",
+      "Don't mark selection with a one-sided colored stripe; use the full ring over Orange Tint.",
+      "Don't dim resolved or ignored content with opacity; change its color and weight instead.",
+      "Don't introduce gradients, glass or blur, decorative illustrations, or gamified celebration.",
+      "Don't add a new font size, radius, or text color outside the scales above.",
+      "Don't convey status by hue alone, and don't use the vivid status fills for small text.",
+      "Don't fetch anything at runtime: fonts, icons and scripts are inlined, because the plugin has no network access."
+    ]
+  }
+}
