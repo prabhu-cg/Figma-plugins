@@ -5,8 +5,7 @@ interface ExportSettingsProps {
 
 export function ExportSettings({ baseName, onBaseNameChange }: ExportSettingsProps) {
   return (
-    <section className="dmd-section">
-      <h2 className="dmd-section-title">Export settings</h2>
+    <section className="dmd-section" aria-label="Export settings">
       <label className="dmd-field">
         <span>Export file name</span>
         <input
