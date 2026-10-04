@@ -27,7 +27,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical-text)" }}>
           !
         </div>
-        <div className="state-title">DesignLens hit an unexpected error</div>
+        <h1 className="state-title">DesignLens hit an unexpected error</h1>
         <div className="state-body">
           Open Plugins → Development → Open Console in Figma to see the full stack trace. The message below is a
           starting point.

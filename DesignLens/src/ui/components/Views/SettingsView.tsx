@@ -27,16 +27,16 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
     <div className="view">
       <div className="view-header">
         <div>
-          <div className="view-title">Settings</div>
+          <h1 className="view-title">Settings</h1>
           <div className="view-subtitle">Appearance, scanning, and about DesignLens</div>
         </div>
       </div>
 
       <div className="grid grid-cols-2">
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 12 }}>
+          <h2 className="card-title" style={{ marginBottom: 12 }}>
             Appearance
-          </div>
+          </h2>
           <div className="flex gap-2">
             {THEME_OPTIONS.map((opt) => (
               <button
@@ -52,9 +52,9 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
         </div>
 
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 12 }}>
+          <h2 className="card-title" style={{ marginBottom: 12 }}>
             Scan
-          </div>
+          </h2>
           <div className="text-secondary" style={{ fontSize: "var(--text-base)", marginBottom: 12 }}>
             Re-scan this file to refresh the audit after making changes to components, variants, or variables.
           </div>
@@ -65,9 +65,9 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
         </div>
 
         <div className="card" style={{ gridColumn: "1 / -1" }}>
-          <div className="card-title" style={{ marginBottom: 12 }}>
+          <h2 className="card-title" style={{ marginBottom: 12 }}>
             Contrast standard
-          </div>
+          </h2>
           <div className="flex gap-3 wrap">
             {WCAG_OPTIONS.map((opt) => (
               <button
@@ -98,9 +98,9 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
         </div>
 
         <div className="card" style={{ gridColumn: "1 / -1" }}>
-          <div className="card-title" style={{ marginBottom: 12 }}>
+          <h2 className="card-title" style={{ marginBottom: 12 }}>
             About DesignLens
-          </div>
+          </h2>
           <div className="text-secondary" style={{ fontSize: "var(--text-base)", lineHeight: 1.8 }}>
             DesignLens is a free, local design system auditor. Every scan and every audit rule runs entirely inside
             this Figma plugin sandbox — no data leaves your file, no network requests are made, and no AI or paid

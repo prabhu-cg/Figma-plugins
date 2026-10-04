@@ -49,7 +49,7 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, onClose }: Issue
             </button>
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: "var(--text-md)" }}>{issue.title}</div>
+            <h2 style={{ fontWeight: 800, fontSize: "var(--text-md)" }}>{issue.title}</h2>
             <div className="text-secondary" style={{ marginTop: 4, fontSize: "var(--text-base)" }}>
               {issue.description}
             </div>

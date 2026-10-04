@@ -32,7 +32,13 @@ export function Sparkline({ values, width = 200, height = 48, color = "var(--col
   const lastPoint = points[points.length - 1].split(",").map(Number);
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-label={`Health score over the last ${values.length} scans: ${values.join(", ")}`}
+    >
       <polygon points={areaPoints} fill={color} opacity={0.1} stroke="none" />
       <polyline points={points.join(" ")} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       <circle cx={lastPoint[0]} cy={lastPoint[1]} r={3} fill={color} />

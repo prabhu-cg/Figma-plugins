@@ -25,7 +25,7 @@ export function Donut({ segments, size = 132, thickness = 16, centerLabel, cente
 
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
         <circle cx={cx} cy={cy} r={radius} fill="none" stroke="var(--color-surface-alt)" strokeWidth={thickness} />
         {total > 0 &&
           segments

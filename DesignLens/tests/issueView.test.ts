@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Issue } from "../src/shared/types";
-import { countFacets, DEFAULT_FILTERS, filterIssues, sortIssues, stepSelection } from "../src/ui/lib/issueView";
+import { countFacets, DEFAULT_FILTERS, filterIssues, issueLabel, sortIssues, stepSelection } from "../src/ui/lib/issueView";
 
 let n = 0;
 function issue(over: Partial<Issue> = {}): Issue {
@@ -92,5 +92,19 @@ describe("stepSelection", () => {
   });
   it("returns null for an empty list", () => {
     expect(stepSelection([], "a", 1)).toBeNull();
+  });
+});
+
+describe("issueLabel", () => {
+  it("tells identical titles apart by where they occur", () => {
+    const node = (name: string) => ({ id: name, name, type: "FRAME", pageId: "", pageName: "", componentName: name });
+    const a = issue({ title: "Hardcoded fill", node: node("Button") });
+    const b = issue({ title: "Hardcoded fill", node: node("Card") });
+    expect(issueLabel(a)).toBe("Hardcoded fill in Button");
+    expect(issueLabel(a)).not.toBe(issueLabel(b));
+  });
+
+  it("falls back to the module for file-level issues", () => {
+    expect(issueLabel(issue({ title: "Unused variable", category: "tokens" }))).toMatch(/^Unused variable in /);
   });
 });

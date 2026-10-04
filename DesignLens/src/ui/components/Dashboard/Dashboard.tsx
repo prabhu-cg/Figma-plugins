@@ -135,7 +135,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
     <div className="view">
       <div className="view-header">
         <div>
-          <div className="view-title">Design System Health</div>
+          <h1 className="view-title">Design System Health</h1>
           <div className="view-subtitle">
             {result.fileName} · scanned {scannedAt.toLocaleString()} · {(stats.scanDurationMs / 1000).toFixed(1)}s
           </div>
@@ -164,9 +164,9 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
         </div>
         <div className="health-divider" />
         <div className="health-trend">
-          <div className="card-title" style={{ marginBottom: 8 }}>
+          <h2 className="card-title" style={{ marginBottom: 8 }}>
             Health Trend
-          </div>
+          </h2>
           <Sparkline values={trend.map((t) => t.overall)} width={220} height={56} color={scoreColors(health.overall).fill} />
           <div className="text-tertiary" style={{ fontSize: "var(--text-xs)", marginTop: 6 }}>
             {trend.length > 0
@@ -215,9 +215,9 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
                 centerSub="issues"
               />
               <div style={{ width: "100%", maxWidth: 280 }}>
-                <div className="card-title" style={{ marginBottom: 10, textAlign: "center" }}>
+                <h2 className="card-title" style={{ marginBottom: 10, textAlign: "center" }}>
                   Severity Distribution
-                </div>
+                </h2>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <LegendRow color="var(--color-critical)" label="Critical" value={health.totalCritical} />
                   <LegendRow color="var(--color-warning)" label="Warning" value={health.totalWarnings} />
@@ -228,7 +228,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
             </div>
             <div className="card">
               <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-                <div className="card-title">Issues by Module</div>
+                <h2 className="card-title">Issues by Module</h2>
                 <SeverityLegend />
               </div>
               <StackedBarList items={moduleBreakdown} />
@@ -237,7 +237,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
 
           <div className="card">
             <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
-              <div className="card-title">Top 10 Components by Issue Count</div>
+              <h2 className="card-title">Top 10 Components by Issue Count</h2>
               <SeverityLegend />
             </div>
             {topComponents.length > 0 ? (
@@ -255,7 +255,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategor
         <div className="coverage-grid" {...tabPanelProps("dash", "coverage")}>
           {coverageGroups.map((group) => (
             <div key={group.title} className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              <div className="card-title">{group.title}</div>
+              <h2 className="card-title">{group.title}</h2>
               {group.items.map((item) => (
                 <ScoreBar
                   key={item.label}

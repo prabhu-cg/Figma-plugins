@@ -30,6 +30,7 @@ export function Gauge({ score, size = 190, thickness = 18, label }: GaugeProps) 
           strokeLinecap="round"
           strokeDasharray={pathLength}
           strokeDashoffset={dashoffset}
+          className="gauge-arc"
           style={{ transition: "stroke-dashoffset 0.6s ease" }}
         />
       </svg>

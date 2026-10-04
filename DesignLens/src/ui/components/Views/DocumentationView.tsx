@@ -37,7 +37,7 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
     <div className="view" style={{ display: "flex", flexDirection: "column" }}>
       <div className="view-header">
         <div>
-          <div className="view-title">Documentation</div>
+          <h1 className="view-title">Documentation</h1>
           <div className="view-subtitle">{metrics.documentationCoverage}% of components have a description</div>
         </div>
       </div>
@@ -53,9 +53,9 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
             centerSub="coverage"
           />
           <div style={{ flex: 1 }}>
-            <div className="card-title" style={{ marginBottom: 8 }}>
+            <h2 className="card-title" style={{ marginBottom: 8 }}>
               Coverage
-            </div>
+            </h2>
             <div style={{ fontSize: "var(--text-base)" }}>
               {documented.length} of {result.components.length} components have a description set. Each should cover
               usage, do/don't guidance, accessibility notes, and what each property means.
@@ -63,9 +63,9 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
           </div>
         </div>
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 8 }}>
+          <h2 className="card-title" style={{ marginBottom: 8 }}>
             Expected sections
-          </div>
+          </h2>
           <div className="text-secondary" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
             Usage · Do · Don't · Accessibility · Properties · Token references
           </div>
@@ -80,6 +80,7 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
           Components needing documentation work
         </div>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
@@ -112,6 +113,7 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
               ))}
             </tbody>
           </table>
+</div>
           {hasMore && (
             <button className="btn btn-secondary btn-sm" style={{ width: "100%", margin: "8px 0" }} onClick={loadMore}>
               Load {Math.min(PAGE_SIZE, remaining)} more ({remaining} remaining)

@@ -43,7 +43,7 @@ export function ComponentsView({ result, onSelectNode }: ComponentsViewProps) {
     <div className="view" style={{ display: "flex", flexDirection: "column" }}>
       <div className="view-header">
         <div>
-          <div className="view-title">Components</div>
+          <h1 className="view-title">Components</h1>
           <div className="view-subtitle">
             {filtered.length} of {result.components.length} components and component sets shown
           </div>
@@ -77,6 +77,7 @@ export function ComponentsView({ result, onSelectNode }: ComponentsViewProps) {
 
       <div className="card" style={{ padding: 0, overflow: "hidden", flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+          <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
@@ -138,6 +139,7 @@ export function ComponentsView({ result, onSelectNode }: ComponentsViewProps) {
               })}
             </tbody>
           </table>
+</div>
           {hasMore && (
             <button className="btn btn-secondary btn-sm" style={{ width: "100%", margin: "8px 0" }} onClick={loadMore}>
               Load {Math.min(PAGE_SIZE, remaining)} more ({remaining} remaining)

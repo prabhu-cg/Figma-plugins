@@ -43,7 +43,7 @@ export function VariablesView({ result }: VariablesViewProps) {
     <div className="view">
       <div className="view-header">
         <div>
-          <div className="view-title">Variables</div>
+          <h1 className="view-title">Variables</h1>
           <div className="view-subtitle">
             {result.variables.length} variables across {result.tokenStats.totalCollections} collections
           </div>
@@ -80,6 +80,7 @@ export function VariablesView({ result }: VariablesViewProps) {
                 {vars.length} variables
               </span>
             </div>
+            <div className="table-scroll">
             <table className="table">
               <thead>
                 <tr>
@@ -106,6 +107,7 @@ export function VariablesView({ result }: VariablesViewProps) {
                 ))}
               </tbody>
             </table>
+</div>
             {remaining > 0 && (
               <button
                 className="btn btn-secondary btn-sm"

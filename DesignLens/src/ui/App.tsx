@@ -27,7 +27,7 @@ export function App() {
   return (
     <div className="app-shell">
       <Nav active={view} onSelect={setView} disabled={!hasResult} />
-      <div style={{ height: "100%", overflow: "hidden" }}>
+      <main style={{ height: "100%", overflow: "hidden" }}>
         {!hasResult && view !== "settings" && (
           <ScanGate
             status={scan.status}
@@ -51,6 +51,10 @@ export function App() {
 
         {hasResult && scan.result && (
           <>
+            {/* Announce start/finish only; the visible banner carries per-phase detail without chattering at screen readers. */}
+            <div className="visually-hidden" role="status" aria-live="polite">
+              {scan.status === "scanning" ? "Rescanning" : ""}
+            </div>
             {scan.status === "scanning" && (
               <RescanBanner
                 processed={scan.progress.processed}
@@ -99,7 +103,7 @@ export function App() {
             )}
           </>
         )}
-      </div>
+      </main>
     </div>
   );
 }
@@ -119,8 +123,6 @@ function RescanBanner({
   return (
     <div
       className="flex items-center gap-3"
-      role="status"
-      aria-live="polite"
       style={{
         padding: "8px 24px",
         background: "var(--color-primary-soft)",

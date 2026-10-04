@@ -2,6 +2,7 @@ import type { Issue } from "@shared/types";
 import { CATEGORY_LABELS } from "@shared/types";
 import { SeverityBadge } from "../Shared";
 import { CheckCircleIcon } from "../Icons";
+import { issueLabel } from "../../lib/issueView";
 
 interface IssueListProps {
   issues: Issue[];
@@ -40,13 +41,15 @@ export function IssueList({ issues, totalIssues, selectedId, checked, onSelect, 
     <div className="issue-list">
       {issues.map((issue) => (
         <div key={issue.id} className="issue-row" data-issue-id={issue.id}>
-          <input
-            type="checkbox"
-            className="issue-check"
-            checked={checked.has(issue.id)}
-            onChange={() => onToggleChecked(issue.id)}
-            aria-label={`Select: ${issue.title}`}
-          />
+          <label className="issue-check-wrap">
+            <input
+              type="checkbox"
+              className="issue-check"
+              checked={checked.has(issue.id)}
+              onChange={() => onToggleChecked(issue.id)}
+              aria-label={`Select: ${issueLabel(issue)}`}
+            />
+          </label>
           <button
             onClick={() => onSelect(issue.id)}
             aria-pressed={selectedId === issue.id}

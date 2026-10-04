@@ -15,7 +15,7 @@ export function PriorityStrip({ result, onReview }: PriorityStripProps) {
   if (items.length === 0) {
     return (
       <div className="card priority-strip">
-        <div className="card-title">Start here</div>
+        <h2 className="card-title">Start here</h2>
         <div className="text-secondary" style={{ fontSize: "var(--text-base)" }}>
           Nothing critical or warning-level needs attention. Suggestions are listed in Audit.
         </div>
@@ -25,7 +25,7 @@ export function PriorityStrip({ result, onReview }: PriorityStripProps) {
 
   return (
     <div className="card priority-strip">
-      <div className="card-title">Start here — biggest score gains</div>
+      <h2 className="card-title">Start here — biggest score gains</h2>
       <ol className="priority-list">
         {items.map((item) => (
           <li key={item.category}>

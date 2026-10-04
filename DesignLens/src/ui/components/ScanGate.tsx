@@ -18,10 +18,11 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
         <div className="state-icon">
           <AuditIcon className="icon" style={{ width: 24, height: 24 }} />
         </div>
-        <div className="state-title">Auditing your design system…</div>
-        <div className="state-body" role="status" aria-live="polite">
-          {progress.phase || "Scanning components, variants, and variables"}
+        <h1 className="state-title">Auditing your design system…</h1>
+        <div className="visually-hidden" role="status" aria-live="polite">
+          Audit in progress
         </div>
+        <div className="state-body">{progress.phase || "Scanning components, variants, and variables"}</div>
         <div style={{ width: 320 }}>
           <ProgressBar value={pct} label="Audit progress" />
           <div className="flex items-center justify-between" style={{ marginTop: 8 }}>
@@ -46,7 +47,7 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
         <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical-text)" }}>
           <AlertIcon style={{ width: 24, height: 24 }} />
         </div>
-        <div className="state-title">Scan failed</div>
+        <h1 className="state-title">Scan failed</h1>
         <div className="state-body">{errorMessage ?? "Something went wrong while auditing this file."}</div>
         <button className="btn btn-primary" onClick={onStart}>
           Try again
@@ -61,7 +62,7 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
         <div className="state-icon">
           <AuditIcon style={{ width: 24, height: 24 }} />
         </div>
-        <div className="state-title">Scan cancelled</div>
+        <h1 className="state-title">Scan cancelled</h1>
         <div className="state-body">No changes were made. Start a new audit whenever you're ready.</div>
         <button className="btn btn-primary" onClick={onStart}>
           Start audit
@@ -75,7 +76,7 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
       <div className="state-icon">
         <AuditIcon style={{ width: 24, height: 24 }} />
       </div>
-      <div className="state-title">Audit this file</div>
+      <h1 className="state-title">Audit this file</h1>
       <div className="state-body">
         Scan this file's components, variants, variables, and styles to generate a full design system health
         report — contrast, tokens, documentation, governance, and more.

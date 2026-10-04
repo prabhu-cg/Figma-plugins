@@ -39,6 +39,7 @@ export function Nav({ active, onSelect, disabled }: NavProps) {
         className={`nav-item${active === item.id ? " active" : ""}`}
         onClick={() => onSelect(item.id)}
         disabled={isDisabled}
+        aria-label={item.label}
         aria-current={active === item.id ? "page" : undefined}
         title={isDisabled ? "Run an audit first" : item.label}
       >

@@ -86,3 +86,9 @@ export function stepSelection(ids: string[], currentId: string | null, delta: 1 
   if (index === -1) return ids[delta === 1 ? 0 : ids.length - 1];
   return ids[Math.max(0, Math.min(ids.length - 1, index + delta))];
 }
+
+/** Accessible name for an issue's row checkbox. Titles repeat across hundreds of rows, so add where it is. */
+export function issueLabel(issue: Issue): string {
+  const where = issue.node?.componentName ?? issue.node?.name ?? CATEGORY_LABELS[issue.category];
+  return `${issue.title} in ${where}`;
+}

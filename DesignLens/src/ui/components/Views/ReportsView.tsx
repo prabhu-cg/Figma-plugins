@@ -33,7 +33,7 @@ export function ReportsView({ result }: ReportsViewProps) {
     <div className="view">
       <div className="view-header">
         <div>
-          <div className="view-title">Reports</div>
+          <h1 className="view-title">Reports</h1>
           <div className="view-subtitle">Export the full audit as a shareable report</div>
         </div>
       </div>
@@ -56,10 +56,10 @@ export function ReportsView({ result }: ReportsViewProps) {
       </div>
 
       <div className="card">
-        <div className="card-title" style={{ marginBottom: 16 }}>
+        <h2 className="card-title" style={{ marginBottom: 16 }}>
           Executive Summary Preview
-        </div>
-        <div className="grid" style={{ gridTemplateColumns: "240px 1fr", alignItems: "start", gap: 24 }}>
+        </h2>
+        <div className="report-summary">
           <div className="flex" style={{ flexDirection: "column", alignItems: "center", gap: 20 }}>
             <Gauge score={result.health.overall} label="Health Score" size={220} />
             <Donut
@@ -76,9 +76,9 @@ export function ReportsView({ result }: ReportsViewProps) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <div>
-              <div className="card-title" style={{ marginBottom: 10 }}>
+              <h2 className="card-title" style={{ marginBottom: 10 }}>
                 Severity Distribution
-              </div>
+              </h2>
               <div className="grid grid-cols-4" style={{ rowGap: 8, columnGap: 24 }}>
                 <LegendRow color="var(--color-critical)" label="Critical" value={result.health.totalCritical} />
                 <LegendRow color="var(--color-warning)" label="Warning" value={result.health.totalWarnings} />
