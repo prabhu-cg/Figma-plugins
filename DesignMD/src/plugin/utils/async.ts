@@ -11,7 +11,9 @@ export function yieldToEventLoop(): Promise<void> {
 
 /**
  * Run `fn` over `items` in batches, yielding between batches so the plugin
- * stays responsive and progress callbacks can flush to the UI.
+ * stays responsive and progress callbacks can flush to the UI. Items within a
+ * batch run concurrently (so async work like Figma API lookups overlaps); results
+ * keep the input order.
  */
 export async function processInBatches<T, R>(
   items: T[],
@@ -22,9 +24,12 @@ export async function processInBatches<T, R>(
   const results: R[] = new Array(items.length);
   for (let start = 0; start < items.length; start += batchSize) {
     const end = Math.min(start + batchSize, items.length);
-    for (let i = start; i < end; i++) {
-      results[i] = await fn(items[i], i);
-    }
+    const batch = await Promise.all(
+      items.slice(start, end).map((item, offset) => fn(item, start + offset)),
+    );
+    batch.forEach((result, offset) => {
+      results[start + offset] = result;
+    });
     onBatch?.(end, items.length);
     await yieldToEventLoop();
   }

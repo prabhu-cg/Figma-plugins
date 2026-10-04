@@ -1,5 +1,5 @@
 import { processInBatches, safely } from '../utils/async';
-import { collectBoundVariableIds } from './styles';
+import { boundVariablesOf } from './styles';
 import type { RawComponent, RawComponentProperty, RawComponentVariant } from './rawTypes';
 
 const COMPONENT_BATCH_SIZE = 100;
@@ -80,8 +80,7 @@ function scanNodeBindings(node: SceneNode): NodeBindings {
       return;
     }
     scanned++;
-    const bound = (n as unknown as { boundVariables?: unknown }).boundVariables;
-    collectBoundVariableIds(bound).forEach((id) => variableIds.add(id));
+    boundVariablesOf(n).forEach((id) => variableIds.add(id));
     readStyleIds(n, styleIds);
     if ('children' in n) {
       for (const child of (n as unknown as { children: SceneNode[] }).children) {

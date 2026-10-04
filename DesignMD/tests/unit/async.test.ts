@@ -16,6 +16,21 @@ describe('processInBatches', () => {
     expect(onBatch).toHaveBeenLastCalledWith(10, 10);
   });
 
+  it('runs items within a batch concurrently but batches sequentially', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const items = Array.from({ length: 8 }, (_, i) => i);
+    const results = await processInBatches(items, 4, async (n) => {
+      inFlight++;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight--;
+      return n;
+    });
+    expect(results).toEqual(items);
+    expect(maxInFlight).toBe(4);
+  });
+
   it('handles an empty list without invoking the callback', async () => {
     const onBatch = vi.fn();
     const results = await processInBatches([], 10, (n) => n, onBatch);

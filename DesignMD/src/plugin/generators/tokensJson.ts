@@ -8,6 +8,7 @@ import type {
   VariableToken,
 } from '@shared/types';
 import type { GeneratedFile } from '@shared/messages';
+import { defaultModeValue, primitiveValue } from './tokenValue';
 import { buildTokenTree, stripRedundantCategoryPrefix, type TokenTreeEntry } from './tokenTree';
 
 const CATEGORIES: TokenCategory[] = [
@@ -90,21 +91,15 @@ interface ValueContext {
 
 function valueToJson(value: TokenValue, type: string, ctx: ValueContext): JsonValue {
   switch (value.kind) {
-    case 'color':
-      return value.color.hex;
     case 'float':
       return type === 'dimension' ? `${value.value}px` : value.value;
-    case 'string':
-      return value.value;
-    case 'boolean':
-      return value.value;
     case 'alias': {
       const path =
         ctx.pathsById.get(value.variableId) ?? toPathSegments(value.variableName).map(safeSegment);
       return `{${path.join('.')}}`;
     }
     default:
-      return null;
+      return primitiveValue(value);
   }
 }
 
@@ -118,7 +113,7 @@ function variableTreePath(variable: VariableToken): string[] {
 
 function variableToLeaf(variable: VariableToken, ctx: ValueContext): TokenTreeEntry<JsonLeaf> {
   const type = dtcgTypeForVariable(variable);
-  const defaultValue = variable.valuesByMode[0];
+  const defaultValue = defaultModeValue(variable);
   const modes: Record<string, JsonValue> = {};
   for (const vbm of variable.valuesByMode) {
     modes[vbm.modeName] = valueToJson(vbm.value, type, ctx);
@@ -128,7 +123,7 @@ function variableToLeaf(variable: VariableToken, ctx: ValueContext): TokenTreeEn
     path: variableTreePath(variable),
     leaf: {
       $type: type,
-      $value: defaultValue ? valueToJson(defaultValue.value, type, ctx) : null,
+      $value: defaultValue ? valueToJson(defaultValue, type, ctx) : null,
       $description: variable.description || undefined,
       $extensions: {
         figma: {

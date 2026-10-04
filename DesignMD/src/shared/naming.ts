@@ -24,6 +24,35 @@ export function kebabCase(input: string): string {
     .toLowerCase();
 }
 
+/** Lowercase word segments of a name, splitting on separators and camelCase: "fontSize/Base_2" -> font, size, base, 2. */
+export function nameSegments(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * True when any hint appears in `name` as whole word segments (an optional plural "s" is allowed).
+ * Multi-word hints like "line-height" must match consecutive segments. Matching on segments rather
+ * than substrings keeps "on" from hitting "button" and "type" from hitting "prototype".
+ */
+export function nameHasHint(name: string, hints: readonly string[]): boolean {
+  const segments = nameSegments(name);
+  return hints.some((hint) => {
+    const words = nameSegments(hint);
+    for (let start = 0; start + words.length <= segments.length; start++) {
+      const matches = words.every((word, i) => {
+        const segment = segments[start + i];
+        return segment === word || (i === words.length - 1 && segment === `${word}s`);
+      });
+      if (matches) return true;
+    }
+    return false;
+  });
+}
+
 /** Build a CSS custom property name from path segments, e.g. ["color","primary","500"] -> "--color-primary-500" */
 export function toCssVarName(pathSegments: string[]): string {
   const slug = pathSegments.map(kebabCase).filter(Boolean).join('-');

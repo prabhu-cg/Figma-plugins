@@ -1,14 +1,10 @@
+import { nameHasHint } from '@shared/naming';
 import type { TokenCategory, VariableResolvedType } from '@shared/types';
 
 const SPACING_HINTS = ['spacing', 'space', 'gap', 'padding', 'margin', 'radius', 'size', 'sizing'];
 const TYPOGRAPHY_HINTS = ['font', 'typography', 'type', 'line-height', 'letter-spacing', 'text'];
 const SEMANTIC_HINTS = ['semantic'];
 const COMPONENT_HINTS = ['component'];
-
-function nameHasHint(name: string, hints: string[]): boolean {
-  const lower = name.toLowerCase();
-  return hints.some((hint) => lower.includes(hint));
-}
 
 /**
  * Infers a TokenCategory bucket from a variable's name/path and resolved

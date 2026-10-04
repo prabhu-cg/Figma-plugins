@@ -11,6 +11,8 @@
  * against pure white and pure black so the report still produces something
  * actionable.
  */
+import { nameHasHint } from '@shared/naming';
+import { defaultModeValue } from './tokenValue';
 import type { ColorValue, DesignSystem, VariableToken } from '@shared/types';
 
 export interface ContrastColorToken {
@@ -62,16 +64,6 @@ const BACKGROUND_HINTS = ['background', 'surface', 'bg', 'fill', 'container', 'c
 const FOREGROUND_SCOPES = ['TEXT_FILL'];
 const BACKGROUND_SCOPES = ['FRAME_FILL', 'SHAPE_FILL'];
 
-function nameHasHint(name: string, hints: string[]): boolean {
-  // Match whole name segments, not substrings — "button-bg" must not hit the "on" hint.
-  const segments = name
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
-  return hints.some((hint) => segments.includes(hint));
-}
-
 type ColorRole = 'foreground' | 'background' | 'unknown';
 
 function classifyColorRole(name: string, scopes: string[]): ColorRole {
@@ -109,7 +101,7 @@ function resolveVariableColor(
   depth = 0,
 ): ColorValue | null {
   if (depth > 10) return null;
-  const value = variable.valuesByMode[0]?.value;
+  const value = defaultModeValue(variable);
   if (!value) return null;
   if (value.kind === 'color') return value.color;
   if (value.kind === 'alias') {

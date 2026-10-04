@@ -7,9 +7,12 @@
     const results = new Array(items.length);
     for (let start = 0; start < items.length; start += batchSize) {
       const end = Math.min(start + batchSize, items.length);
-      for (let i = start; i < end; i++) {
-        results[i] = await fn(items[i], i);
-      }
+      const batch = await Promise.all(
+        items.slice(start, end).map((item, offset) => fn(item, start + offset))
+      );
+      batch.forEach((result, offset) => {
+        results[start + offset] = result;
+      });
       onBatch == null ? void 0 : onBatch(end, items.length);
       await yieldToEventLoop();
     }
@@ -28,6 +31,23 @@
   }
   function kebabCase(input) {
     return input.replace(/([a-z0-9])([A-Z])/g, "$1-$2").replace(/[\s_]+/g, "-").replace(/[^a-zA-Z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+  }
+  function nameSegments(name) {
+    return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  }
+  function nameHasHint(name, hints) {
+    const segments = nameSegments(name);
+    return hints.some((hint) => {
+      const words = nameSegments(hint);
+      for (let start = 0; start + words.length <= segments.length; start++) {
+        const matches = words.every((word, i) => {
+          const segment = segments[start + i];
+          return segment === word || i === words.length - 1 && segment === `${word}s`;
+        });
+        if (matches) return true;
+      }
+      return false;
+    });
   }
   function toCssVarName(pathSegments) {
     const slug = pathSegments.map(kebabCase).filter(Boolean).join("-");
@@ -62,6 +82,9 @@
     return a < 1 ? `${base}${toHexByte(a)}` : base;
   }
   const STYLE_BATCH_SIZE = 200;
+  function boundVariablesOf(node) {
+    return collectBoundVariableIds(node.boundVariables);
+  }
   function collectBoundVariableIds(boundVariables) {
     const ids = [];
     const visit = (value) => {
@@ -89,16 +112,18 @@
   function formatLetterSpacing(letterSpacing) {
     return `${letterSpacing.value}${letterSpacing.unit === "PERCENT" ? "%" : "px"}`;
   }
-  async function extractTextStyles(onProgress, onWarning) {
-    const warn = onWarning ?? (() => {
-    });
+  async function extractStyles(label, load, map, onProgress, onWarning) {
     const styles = await safely(
-      () => figma.getLocalTextStylesAsync(),
-      (err) => warn(`Failed to load text styles: ${String(err)}`)
+      load,
+      (err) => (onWarning ?? (() => {
+      }))(`Failed to load ${label}: ${String(err)}`)
     );
-    return processInBatches(
-      styles ?? [],
-      STYLE_BATCH_SIZE,
+    return processInBatches(styles ?? [], STYLE_BATCH_SIZE, map, onProgress);
+  }
+  function extractTextStyles(onProgress, onWarning) {
+    return extractStyles(
+      "text styles",
+      () => figma.getLocalTextStylesAsync(),
       (s) => {
         var _a, _b, _c;
         return {
@@ -114,24 +139,17 @@
           textCase: s.textCase ?? "ORIGINAL",
           textDecoration: s.textDecoration ?? "NONE",
           paragraphSpacing: s.paragraphSpacing ?? 0,
-          boundVariableIds: collectBoundVariableIds(
-            s.boundVariables
-          )
+          boundVariableIds: boundVariablesOf(s)
         };
       },
-      onProgress
+      onProgress,
+      onWarning
     );
   }
-  async function extractPaintStyles(onProgress, onWarning) {
-    const warn = onWarning ?? (() => {
-    });
-    const styles = await safely(
+  function extractPaintStyles(onProgress, onWarning) {
+    return extractStyles(
+      "color styles",
       () => figma.getLocalPaintStylesAsync(),
-      (err) => warn(`Failed to load color styles: ${String(err)}`)
-    );
-    return processInBatches(
-      styles ?? [],
-      STYLE_BATCH_SIZE,
       (s) => {
         const paints = s.paints ?? [];
         const solid = paints.find((p) => p.type === "SOLID" && p.visible !== false);
@@ -140,19 +158,13 @@
           id: s.id,
           name: s.name,
           description: s.description ?? "",
-          color: solid ? {
-            r: solid.color.r,
-            g: solid.color.g,
-            b: solid.color.b,
-            a: solid.opacity ?? 1
-          } : null,
+          color: solid ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 } : null,
           isGradientOrImage: hasNonSolid || !solid,
-          boundVariableIds: collectBoundVariableIds(
-            s.boundVariables
-          )
+          boundVariableIds: boundVariablesOf(s)
         };
       },
-      onProgress
+      onProgress,
+      onWarning
     );
   }
   function mapEffect(e) {
@@ -168,26 +180,19 @@
     }
     return base;
   }
-  async function extractEffectStyles(onProgress, onWarning) {
-    const warn = onWarning ?? (() => {
-    });
-    const styles = await safely(
+  function extractEffectStyles(onProgress, onWarning) {
+    return extractStyles(
+      "effect styles",
       () => figma.getLocalEffectStylesAsync(),
-      (err) => warn(`Failed to load effect styles: ${String(err)}`)
-    );
-    return processInBatches(
-      styles ?? [],
-      STYLE_BATCH_SIZE,
       (s) => ({
         id: s.id,
         name: s.name,
         description: s.description ?? "",
         effects: (s.effects ?? []).map(mapEffect),
-        boundVariableIds: collectBoundVariableIds(
-          s.boundVariables
-        )
+        boundVariableIds: boundVariablesOf(s)
       }),
-      onProgress
+      onProgress,
+      onWarning
     );
   }
   function mapGrid(g) {
@@ -200,23 +205,18 @@
       alignment: "alignment" in g ? g.alignment : void 0
     };
   }
-  async function extractGridStyles(onProgress, onWarning) {
-    const warn = onWarning ?? (() => {
-    });
-    const styles = await safely(
+  function extractGridStyles(onProgress, onWarning) {
+    return extractStyles(
+      "grid styles",
       () => figma.getLocalGridStylesAsync(),
-      (err) => warn(`Failed to load grid styles: ${String(err)}`)
-    );
-    return processInBatches(
-      styles ?? [],
-      STYLE_BATCH_SIZE,
       (s) => ({
         id: s.id,
         name: s.name,
         description: s.description ?? "",
         grids: (s.layoutGrids ?? []).map(mapGrid)
       }),
-      onProgress
+      onProgress,
+      onWarning
     );
   }
   const COMPONENT_BATCH_SIZE = 100;
@@ -266,8 +266,7 @@
         return;
       }
       scanned++;
-      const bound = n.boundVariables;
-      collectBoundVariableIds(bound).forEach((id) => variableIds.add(id));
+      boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
       if ("children" in n) {
         for (const child of n.children) {
@@ -642,24 +641,36 @@
     const paths = assignComponentDocPaths(ds.components);
     return ds.components.map((c) => generateComponentMd(c, ds, paths.get(c.id)));
   }
-  function unitFor(category) {
-    return category === "spacing" || category === "typography" ? "px" : "";
+  function defaultModeEntry(variable) {
+    return variable.valuesByMode[0];
   }
-  function valueToCss(value, category) {
+  function defaultModeValue(variable) {
+    var _a;
+    return (_a = defaultModeEntry(variable)) == null ? void 0 : _a.value;
+  }
+  function primitiveValue(value) {
     switch (value.kind) {
       case "color":
         return value.color.hex;
       case "float":
-        return `${value.value}${unitFor(category)}`;
       case "string":
-        return value.value;
       case "boolean":
-        return String(value.value);
-      case "alias":
-        return `var(${toCssVarName(toPathSegments(value.variableName))})`;
+        return value.value;
       default:
         return null;
     }
+  }
+  function aliasCssName(variableName) {
+    return toCssVarName(toPathSegments(variableName));
+  }
+  function unitFor(category) {
+    return category === "spacing" || category === "typography" ? "px" : "";
+  }
+  function valueToCss(value, category) {
+    if (value.kind === "alias") return `var(${aliasCssName(value.variableName)})`;
+    const primitive = primitiveValue(value);
+    if (primitive === null) return null;
+    return value.kind === "float" ? `${primitive}${unitFor(category)}` : String(primitive);
   }
   function effectToBoxShadowSegment(e) {
     var _a;
@@ -698,9 +709,9 @@
   }
   function addVariableVars(target, variables) {
     for (const v of variables) {
-      const defaultValue = v.valuesByMode[0];
+      const defaultValue = defaultModeValue(v);
       if (!defaultValue) continue;
-      const css = valueToCss(defaultValue.value, v.category);
+      const css = valueToCss(defaultValue, v.category);
       if (css !== null) target[v.cssName] = css;
     }
   }
@@ -758,15 +769,11 @@
   const BACKGROUND_HINTS = ["background", "surface", "bg", "fill", "container", "canvas", "backdrop"];
   const FOREGROUND_SCOPES = ["TEXT_FILL"];
   const BACKGROUND_SCOPES = ["FRAME_FILL", "SHAPE_FILL"];
-  function nameHasHint$1(name, hints) {
-    const segments = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-    return hints.some((hint) => segments.includes(hint));
-  }
   function classifyColorRole(name, scopes) {
-    if (scopes.some((s) => FOREGROUND_SCOPES.includes(s)) || nameHasHint$1(name, FOREGROUND_HINTS)) {
+    if (scopes.some((s) => FOREGROUND_SCOPES.includes(s)) || nameHasHint(name, FOREGROUND_HINTS)) {
       return "foreground";
     }
-    if (scopes.some((s) => BACKGROUND_SCOPES.includes(s)) || nameHasHint$1(name, BACKGROUND_HINTS)) {
+    if (scopes.some((s) => BACKGROUND_SCOPES.includes(s)) || nameHasHint(name, BACKGROUND_HINTS)) {
       return "background";
     }
     return "unknown";
@@ -786,9 +793,8 @@
     return (lighter + 0.05) / (darker + 0.05);
   }
   function resolveVariableColor(variable, variablesById, depth = 0) {
-    var _a;
     if (depth > 10) return null;
-    const value = (_a = variable.valuesByMode[0]) == null ? void 0 : _a.value;
+    const value = defaultModeValue(variable);
     if (!value) return null;
     if (value.kind === "color") return value.color;
     if (value.kind === "alias") {
@@ -904,24 +910,171 @@
       skippedTranslucentCount
     };
   }
-  function defaultValueLabel(v) {
-    var _a;
-    const first = (_a = v.valuesByMode[0]) == null ? void 0 : _a.value;
-    if (!first) return "—";
-    switch (first.kind) {
-      case "color":
-        return first.color.hex;
-      case "float":
-        return String(first.value);
-      case "string":
-        return first.value;
-      case "boolean":
-        return String(first.value);
-      case "alias":
-        return `→ ${first.variableName}`;
-      default:
-        return "—";
+  const MAX_FAILING_ROWS = 100;
+  function formatRatio(ratio) {
+    return `${ratio.toFixed(2)}:1`;
+  }
+  function contrastPairsTable(pairs) {
+    const rows = pairs.map((p) => [
+      p.foreground.name,
+      p.background.name,
+      formatRatio(p.ratio),
+      p.passesAANormal ? "Pass" : "Fail",
+      p.passesAALarge ? "Pass" : "Fail"
+    ]);
+    return mdTable(
+      ["Foreground", "Background", "Ratio", "AA Normal (4.5:1)", "AA Large (3:1)"],
+      rows
+    );
+  }
+  function fallbackChecksTable(checks) {
+    const rows = checks.map((c) => [
+      c.token.name,
+      c.token.cssName,
+      `${formatRatio(c.ratioOnWhite)} (${c.passesOnWhite ? "Pass" : "Fail"})`,
+      `${formatRatio(c.ratioOnBlack)} (${c.passesOnBlack ? "Pass" : "Fail"})`
+    ]);
+    return mdTable(["Token", "CSS Variable", "On White", "On Black"], rows);
+  }
+  function colorContrastSection(ds) {
+    const report = computeContrastReport(ds);
+    const notes = [];
+    if (report.skippedTranslucentCount > 0) {
+      notes.push(
+        `${report.skippedTranslucentCount} color token(s) were skipped — partial opacity makes their effective contrast depend on whatever they end up composited over.`
+      );
     }
+    if (report.totalColorTokensChecked === 0) {
+      return joinSections([
+        mdHeading(3, "Color Contrast"),
+        "_No opaque color tokens available to check._\n"
+      ]);
+    }
+    if (report.pairs.length > 0) {
+      const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
+      notes.unshift(
+        `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${report.passingNormalCount} of ${report.totalPairs} pair(s) meet WCAG AA for normal text (4.5:1).`
+      );
+      if (report.failingLargeCount > failing.length) {
+        notes.push(
+          `Showing the ${failing.length} lowest-contrast of ${report.failingLargeCount} failing pairs.`
+        );
+      }
+      return joinSections([
+        mdHeading(3, "Color Contrast"),
+        mdList(notes),
+        mdHeading(4, "Pairs Failing AA Large (below 3:1)"),
+        failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n"
+      ]);
+    }
+    notes.unshift(
+      `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
+    );
+    return joinSections([
+      mdHeading(3, "Color Contrast"),
+      mdList(notes),
+      mdHeading(4, "All Tokens vs. White / Black"),
+      fallbackChecksTable(report.fallbackChecks)
+    ]);
+  }
+  function accessibilitySection(ds) {
+    const smallTextStyles = ds.styles.text.filter(
+      (s) => {
+        var _a, _b;
+        return (((_a = s.textProperties) == null ? void 0 : _a.fontSize) ?? 0) > 0 && (((_b = s.textProperties) == null ? void 0 : _b.fontSize) ?? 100) < 12;
+      }
+    );
+    const undocumentedColors = [
+      ...ds.variables.filter((v) => v.category === "color" && !v.description),
+      ...ds.styles.color.filter((s) => !s.description)
+    ];
+    const notes = [
+      "This section lists deterministic, rule-based checks only — no AI is involved. The Color Contrast subsection below computes real WCAG 2.1 contrast ratios from token color values."
+    ];
+    if (smallTextStyles.length > 0) {
+      notes.push(
+        `${smallTextStyles.length} text style(s) are set below 12px, which may fail legibility guidelines: ${smallTextStyles.map((s) => s.name).join(", ")}.`
+      );
+    }
+    if (undocumentedColors.length > 0) {
+      notes.push(
+        `${undocumentedColors.length} color token(s) have no description — consider documenting intended usage and contrast pairing.`
+      );
+    }
+    notes.push(
+      "Contrast ratios are computed only for token pairs (or white/black substitutes) inferred from naming — always confirm against the actual foreground/background combinations used in your UI before shipping."
+    );
+    return joinSections([
+      mdHeading(2, "Accessibility Notes"),
+      mdList(notes),
+      colorContrastSection(ds)
+    ]);
+  }
+  function componentsByPageSection(ds) {
+    const countsByPage = /* @__PURE__ */ new Map();
+    for (const c of ds.components) {
+      const count = c.isComponentSet ? c.variants.length : 1;
+      countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
+    }
+    const rows = Array.from(countsByPage.entries()).sort((a, b) => b[1] - a[1]).map(([page, count]) => [page, String(count)]);
+    return joinSections([
+      mdHeading(3, "Components by Page"),
+      "Full document scan, including any draft, playground, or example pages — not just pages intended for publishing. Compare against Figma's own library/publish count if this total looks higher than expected.\n",
+      mdTable(["Page", "Component Count"], rows)
+    ]);
+  }
+  function markdownLinkTarget(path) {
+    return encodeURI(path).replace(/\(/g, "%28").replace(/\)/g, "%29");
+  }
+  function componentsSection(ds) {
+    if (ds.components.length === 0) {
+      return joinSections([
+        mdHeading(2, "Components"),
+        "_No components or component sets found in this file._\n"
+      ]);
+    }
+    const docPaths = assignComponentDocPaths(ds.components);
+    const rows = ds.components.map((c) => {
+      var _a;
+      return [
+        c.name,
+        c.isComponentSet ? "Component Set" : "Component",
+        c.pageName,
+        String(c.variants.length),
+        c.states.join(", ") || "—",
+        c.sizes.join(", ") || "—",
+        `[${(_a = docPaths.get(c.id)) == null ? void 0 : _a.replace(/^components\//, "")}](./${markdownLinkTarget(docPaths.get(c.id) ?? "")})`
+      ];
+    });
+    return joinSections([
+      mdHeading(2, "Components"),
+      "Full per-component documentation lives in `/components`. See individual files for variants, properties, and token references.\n",
+      componentsByPageSection(ds),
+      mdHeading(3, "All Components"),
+      mdTable(["Component", "Type", "Page", "Variants", "States", "Sizes", "Docs"], rows)
+    ]);
+  }
+  function namingConventionsSection(ds) {
+    const allNames = [
+      ...ds.variables.map((v) => v.name),
+      ...Object.values(ds.styles).flat().map((s) => s.name)
+    ];
+    const slashDelimited = allNames.filter((n) => n.includes("/")).length;
+    const dashDelimited = allNames.filter((n) => n.includes("-")).length;
+    const camelCase = allNames.filter((n) => /[a-z][A-Z]/.test(n)).length;
+    const dominant = slashDelimited >= dashDelimited && slashDelimited >= camelCase ? "slash-delimited hierarchical naming (e.g. `Color/Primary/500`)" : dashDelimited >= camelCase ? "kebab-case naming (e.g. `color-primary-500`)" : "camelCase naming (e.g. `colorPrimary500`)";
+    return joinSections([
+      mdHeading(2, "Naming Conventions"),
+      `Detected source naming pattern: **${dominant}** (${allNames.length} names scanned).
+`,
+      "All generated CSS custom properties are normalized to kebab-case with a `--` prefix (e.g. `--color-primary-500`), regardless of the source naming style, so downstream code has one consistent convention.\n"
+    ]);
+  }
+  function designPrinciplesSection() {
+    return joinSections([
+      mdHeading(2, "Design Principles"),
+      "_DesignMD does not invent design principles — this file only documents what already exists in Figma. Add your team's principles here (e.g. consistency, accessibility, clarity, scalability) so this file stays the single source of truth for both design intent and tokens._\n"
+    ]);
   }
   function overviewSection(ds) {
     const { summary, metadata } = ds;
@@ -954,6 +1107,13 @@
       mdHeading(2, "Variable Collections"),
       mdTable(["Collection", "Modes", "Variable Count"], rows)
     ]);
+  }
+  function defaultValueLabel(v) {
+    const first = defaultModeValue(v);
+    if (!first) return "—";
+    if (first.kind === "alias") return `→ ${first.variableName}`;
+    const primitive = primitiveValue(first);
+    return primitive === null ? "—" : String(primitive);
   }
   function tokenSection(title, ds, category, fallbackNote) {
     const variables = ds.variables.filter((v) => v.category === category);
@@ -1071,50 +1231,6 @@
       mdTable(["Style", "CSS Variable", "Pattern", "Description"], rows)
     ]);
   }
-  function componentsByPageSection(ds) {
-    const countsByPage = /* @__PURE__ */ new Map();
-    for (const c of ds.components) {
-      const count = c.isComponentSet ? c.variants.length : 1;
-      countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
-    }
-    const rows = Array.from(countsByPage.entries()).sort((a, b) => b[1] - a[1]).map(([page, count]) => [page, String(count)]);
-    return joinSections([
-      mdHeading(3, "Components by Page"),
-      "Full document scan, including any draft, playground, or example pages — not just pages intended for publishing. Compare against Figma's own library/publish count if this total looks higher than expected.\n",
-      mdTable(["Page", "Component Count"], rows)
-    ]);
-  }
-  function componentsSection(ds) {
-    if (ds.components.length === 0) {
-      return joinSections([
-        mdHeading(2, "Components"),
-        "_No components or component sets found in this file._\n"
-      ]);
-    }
-    const docPaths = assignComponentDocPaths(ds.components);
-    const rows = ds.components.map((c) => {
-      var _a;
-      return [
-        c.name,
-        c.isComponentSet ? "Component Set" : "Component",
-        c.pageName,
-        String(c.variants.length),
-        c.states.join(", ") || "—",
-        c.sizes.join(", ") || "—",
-        `[${(_a = docPaths.get(c.id)) == null ? void 0 : _a.replace(/^components\//, "")}](./${markdownLinkTarget(docPaths.get(c.id) ?? "")})`
-      ];
-    });
-    return joinSections([
-      mdHeading(2, "Components"),
-      "Full per-component documentation lives in `/components`. See individual files for variants, properties, and token references.\n",
-      componentsByPageSection(ds),
-      mdHeading(3, "All Components"),
-      mdTable(["Component", "Type", "Page", "Variants", "States", "Sizes", "Docs"], rows)
-    ]);
-  }
-  function markdownLinkTarget(path) {
-    return encodeURI(path).replace(/\(/g, "%28").replace(/\)/g, "%29");
-  }
   function formatUsedBy(names, max = 5) {
     if (names.length === 0) return "—";
     if (names.length <= max) return names.join(", ");
@@ -1148,128 +1264,6 @@
       mdTable(["Token", "CSS Variable", "Used By", "Components"], usedRows),
       mdHeading(3, "Unused Variables"),
       unusedTable
-    ]);
-  }
-  const MAX_FAILING_ROWS = 100;
-  function formatRatio(ratio) {
-    return `${ratio.toFixed(2)}:1`;
-  }
-  function contrastPairsTable(pairs) {
-    const rows = pairs.map((p) => [
-      p.foreground.name,
-      p.background.name,
-      formatRatio(p.ratio),
-      p.passesAANormal ? "Pass" : "Fail",
-      p.passesAALarge ? "Pass" : "Fail"
-    ]);
-    return mdTable(
-      ["Foreground", "Background", "Ratio", "AA Normal (4.5:1)", "AA Large (3:1)"],
-      rows
-    );
-  }
-  function fallbackChecksTable(checks) {
-    const rows = checks.map((c) => [
-      c.token.name,
-      c.token.cssName,
-      `${formatRatio(c.ratioOnWhite)} (${c.passesOnWhite ? "Pass" : "Fail"})`,
-      `${formatRatio(c.ratioOnBlack)} (${c.passesOnBlack ? "Pass" : "Fail"})`
-    ]);
-    return mdTable(["Token", "CSS Variable", "On White", "On Black"], rows);
-  }
-  function colorContrastSection(ds) {
-    const report = computeContrastReport(ds);
-    const notes = [];
-    if (report.skippedTranslucentCount > 0) {
-      notes.push(
-        `${report.skippedTranslucentCount} color token(s) were skipped — partial opacity makes their effective contrast depend on whatever they end up composited over.`
-      );
-    }
-    if (report.totalColorTokensChecked === 0) {
-      return joinSections([
-        mdHeading(3, "Color Contrast"),
-        "_No opaque color tokens available to check._\n"
-      ]);
-    }
-    if (report.pairs.length > 0) {
-      const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
-      notes.unshift(
-        `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${report.passingNormalCount} of ${report.totalPairs} pair(s) meet WCAG AA for normal text (4.5:1).`
-      );
-      if (report.failingLargeCount > failing.length) {
-        notes.push(
-          `Showing the ${failing.length} lowest-contrast of ${report.failingLargeCount} failing pairs.`
-        );
-      }
-      return joinSections([
-        mdHeading(3, "Color Contrast"),
-        mdList(notes),
-        mdHeading(4, "Pairs Failing AA Large (below 3:1)"),
-        failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n"
-      ]);
-    }
-    notes.unshift(
-      `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
-    );
-    return joinSections([
-      mdHeading(3, "Color Contrast"),
-      mdList(notes),
-      mdHeading(4, "All Tokens vs. White / Black"),
-      fallbackChecksTable(report.fallbackChecks)
-    ]);
-  }
-  function accessibilitySection(ds) {
-    const smallTextStyles = ds.styles.text.filter(
-      (s) => {
-        var _a, _b;
-        return (((_a = s.textProperties) == null ? void 0 : _a.fontSize) ?? 0) > 0 && (((_b = s.textProperties) == null ? void 0 : _b.fontSize) ?? 100) < 12;
-      }
-    );
-    const undocumentedColors = [
-      ...ds.variables.filter((v) => v.category === "color" && !v.description),
-      ...ds.styles.color.filter((s) => !s.description)
-    ];
-    const notes = [
-      "This section lists deterministic, rule-based checks only — no AI is involved. The Color Contrast subsection below computes real WCAG 2.1 contrast ratios from token color values."
-    ];
-    if (smallTextStyles.length > 0) {
-      notes.push(
-        `${smallTextStyles.length} text style(s) are set below 12px, which may fail legibility guidelines: ${smallTextStyles.map((s) => s.name).join(", ")}.`
-      );
-    }
-    if (undocumentedColors.length > 0) {
-      notes.push(
-        `${undocumentedColors.length} color token(s) have no description — consider documenting intended usage and contrast pairing.`
-      );
-    }
-    notes.push(
-      "Contrast ratios are computed only for token pairs (or white/black substitutes) inferred from naming — always confirm against the actual foreground/background combinations used in your UI before shipping."
-    );
-    return joinSections([
-      mdHeading(2, "Accessibility Notes"),
-      mdList(notes),
-      colorContrastSection(ds)
-    ]);
-  }
-  function namingConventionsSection(ds) {
-    const allNames = [
-      ...ds.variables.map((v) => v.name),
-      ...Object.values(ds.styles).flat().map((s) => s.name)
-    ];
-    const slashDelimited = allNames.filter((n) => n.includes("/")).length;
-    const dashDelimited = allNames.filter((n) => n.includes("-")).length;
-    const camelCase = allNames.filter((n) => /[a-z][A-Z]/.test(n)).length;
-    const dominant = slashDelimited >= dashDelimited && slashDelimited >= camelCase ? "slash-delimited hierarchical naming (e.g. `Color/Primary/500`)" : dashDelimited >= camelCase ? "kebab-case naming (e.g. `color-primary-500`)" : "camelCase naming (e.g. `colorPrimary500`)";
-    return joinSections([
-      mdHeading(2, "Naming Conventions"),
-      `Detected source naming pattern: **${dominant}** (${allNames.length} names scanned).
-`,
-      "All generated CSS custom properties are normalized to kebab-case with a `--` prefix (e.g. `--color-primary-500`), regardless of the source naming style, so downstream code has one consistent convention.\n"
-    ]);
-  }
-  function designPrinciplesSection() {
-    return joinSections([
-      mdHeading(2, "Design Principles"),
-      "_DesignMD does not invent design principles — this file only documents what already exists in Figma. Add your team's principles here (e.g. consistency, accessibility, clarity, scalability) so this file stays the single source of truth for both design intent and tokens._\n"
     ]);
   }
   function generateDesignMd(ds) {
@@ -1376,20 +1370,14 @@
   }
   function valueToJson(value, type, ctx) {
     switch (value.kind) {
-      case "color":
-        return value.color.hex;
       case "float":
         return type === "dimension" ? `${value.value}px` : value.value;
-      case "string":
-        return value.value;
-      case "boolean":
-        return value.value;
       case "alias": {
         const path = ctx.pathsById.get(value.variableId) ?? toPathSegments(value.variableName).map(safeSegment);
         return `{${path.join(".")}}`;
       }
       default:
-        return null;
+        return primitiveValue(value);
     }
   }
   function variableSection(category) {
@@ -1400,7 +1388,7 @@
   }
   function variableToLeaf(variable, ctx) {
     const type = dtcgTypeForVariable(variable);
-    const defaultValue = variable.valuesByMode[0];
+    const defaultValue = defaultModeValue(variable);
     const modes = {};
     for (const vbm of variable.valuesByMode) {
       modes[vbm.modeName] = valueToJson(vbm.value, type, ctx);
@@ -1409,7 +1397,7 @@
       path: variableTreePath(variable),
       leaf: {
         $type: type,
-        $value: defaultValue ? valueToJson(defaultValue.value, type, ctx) : null,
+        $value: defaultValue ? valueToJson(defaultValue, type, ctx) : null,
         $description: variable.description || void 0,
         $extensions: {
           figma: {
@@ -1709,10 +1697,6 @@
   const TYPOGRAPHY_HINTS = ["font", "typography", "type", "line-height", "letter-spacing", "text"];
   const SEMANTIC_HINTS = ["semantic"];
   const COMPONENT_HINTS = ["component"];
-  function nameHasHint(name, hints) {
-    const lower = name.toLowerCase();
-    return hints.some((hint) => lower.includes(hint));
-  }
   function classifyVariable(fullName, resolvedType, scopes) {
     if (nameHasHint(fullName, SEMANTIC_HINTS)) return "semantic";
     if (nameHasHint(fullName, COMPONENT_HINTS)) return "component";

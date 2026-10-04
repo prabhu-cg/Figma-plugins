@@ -40,3 +40,16 @@ describe('classifyVariable', () => {
     expect(classifyVariable('Component/Button/Radius', 'FLOAT', [])).toBe('component');
   });
 });
+
+describe('classifyVariable name matching', () => {
+  it('does not treat substrings as hints', () => {
+    expect(classifyVariable('Prototype/value', 'FLOAT', [])).toBe('number');
+    expect(classifyVariable('Misc/subtext-ish', 'STRING', [])).toBe('string');
+  });
+
+  it('recognizes camelCase and plural names', () => {
+    expect(classifyVariable('fontFamily', 'STRING', [])).toBe('typography');
+    expect(classifyVariable('lineHeight/tight', 'FLOAT', [])).toBe('typography');
+    expect(classifyVariable('Spacings/md', 'FLOAT', [])).toBe('spacing');
+  });
+});

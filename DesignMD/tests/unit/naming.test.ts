@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   fontWeightFromStyle,
   kebabCase,
+  nameHasHint,
+  nameSegments,
   rgbaToHex,
   toCssVarName,
   toFileSafeName,
@@ -97,5 +99,23 @@ describe('toFileSafeName edge cases', () => {
     expect(toFileSafeName('???')).toBe('Component');
     expect(toFileSafeName('..')).toBe('Component');
     expect(toFileSafeName('.hidden')).toBe('Hidden');
+  });
+});
+
+describe('nameSegments / nameHasHint', () => {
+  it('splits on separators and camelCase', () => {
+    expect(nameSegments('fontSize/Base_2')).toEqual(['font', 'size', 'base', '2']);
+  });
+
+  it('matches whole segments, not substrings', () => {
+    expect(nameHasHint('button-bg', ['on'])).toBe(false);
+    expect(nameHasHint('on-primary', ['on'])).toBe(true);
+    expect(nameHasHint('prototype/value', ['type'])).toBe(false);
+  });
+
+  it('allows a plural and matches multi-word hints on consecutive segments', () => {
+    expect(nameHasHint('Sizes/md', ['size'])).toBe(true);
+    expect(nameHasHint('lineHeight/tight', ['line-height'])).toBe(true);
+    expect(nameHasHint('line/other-height', ['line-height'])).toBe(false);
   });
 });

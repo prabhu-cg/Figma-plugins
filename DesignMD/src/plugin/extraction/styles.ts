@@ -11,6 +11,11 @@ import type {
 
 const STYLE_BATCH_SIZE = 200;
 
+/** Variable ids bound on a node or style (typings don't expose `boundVariables` on every type). */
+export function boundVariablesOf(node: unknown): string[] {
+  return collectBoundVariableIds((node as { boundVariables?: unknown }).boundVariables);
+}
+
 /** Recursively collect VARIABLE_ALIAS ids out of a node/style's boundVariables map. */
 export function collectBoundVariableIds(boundVariables: unknown): string[] {
   const ids: string[] = [];
@@ -42,19 +47,30 @@ function formatLetterSpacing(letterSpacing: LetterSpacing): string {
   return `${letterSpacing.value}${letterSpacing.unit === 'PERCENT' ? '%' : 'px'}`;
 }
 
-export async function extractTextStyles(
+/**
+ * Shared shape of every style extractor: load the local styles (a failure becomes a warning, not
+ * an abort), then map each one in yielding batches.
+ */
+async function extractStyles<TStyle, TRaw>(
+  label: string,
+  load: () => Promise<TStyle[]>,
+  map: (style: TStyle) => TRaw,
   onProgress?: (done: number, total: number) => void,
   onWarning?: (message: string) => void,
-): Promise<RawTextStyle[]> {
-  const warn = onWarning ?? (() => {});
-  const styles = await safely(
-    () => figma.getLocalTextStylesAsync(),
-    (err) => warn(`Failed to load text styles: ${String(err)}`),
+): Promise<TRaw[]> {
+  const styles = await safely(load, (err) =>
+    (onWarning ?? (() => {}))(`Failed to load ${label}: ${String(err)}`),
   );
+  return processInBatches(styles ?? [], STYLE_BATCH_SIZE, map, onProgress);
+}
 
-  return processInBatches(
-    styles ?? [],
-    STYLE_BATCH_SIZE,
+type ProgressFn = (done: number, total: number) => void;
+type WarnFn = (message: string) => void;
+
+export function extractTextStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
+  return extractStyles<TextStyle, RawTextStyle>(
+    'text styles',
+    () => figma.getLocalTextStylesAsync(),
     (s) => ({
       id: s.id,
       name: s.name,
@@ -68,27 +84,17 @@ export async function extractTextStyles(
       textCase: s.textCase ?? 'ORIGINAL',
       textDecoration: s.textDecoration ?? 'NONE',
       paragraphSpacing: s.paragraphSpacing ?? 0,
-      boundVariableIds: collectBoundVariableIds(
-        (s as unknown as { boundVariables?: unknown }).boundVariables,
-      ),
+      boundVariableIds: boundVariablesOf(s),
     }),
     onProgress,
+    onWarning,
   );
 }
 
-export async function extractPaintStyles(
-  onProgress?: (done: number, total: number) => void,
-  onWarning?: (message: string) => void,
-): Promise<RawPaintStyle[]> {
-  const warn = onWarning ?? (() => {});
-  const styles = await safely(
+export function extractPaintStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
+  return extractStyles<PaintStyle, RawPaintStyle>(
+    'color styles',
     () => figma.getLocalPaintStylesAsync(),
-    (err) => warn(`Failed to load color styles: ${String(err)}`),
-  );
-
-  return processInBatches(
-    styles ?? [],
-    STYLE_BATCH_SIZE,
     (s) => {
       const paints = s.paints ?? [];
       const solid = paints.find((p): p is SolidPaint => p.type === 'SOLID' && p.visible !== false);
@@ -99,20 +105,14 @@ export async function extractPaintStyles(
         name: s.name,
         description: s.description ?? '',
         color: solid
-          ? {
-              r: solid.color.r,
-              g: solid.color.g,
-              b: solid.color.b,
-              a: solid.opacity ?? 1,
-            }
+          ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 }
           : null,
         isGradientOrImage: hasNonSolid || !solid,
-        boundVariableIds: collectBoundVariableIds(
-          (s as unknown as { boundVariables?: unknown }).boundVariables,
-        ),
+        boundVariableIds: boundVariablesOf(s),
       };
     },
     onProgress,
+    onWarning,
   );
 }
 
@@ -130,29 +130,19 @@ function mapEffect(e: Effect): RawEffect {
   return base;
 }
 
-export async function extractEffectStyles(
-  onProgress?: (done: number, total: number) => void,
-  onWarning?: (message: string) => void,
-): Promise<RawEffectStyle[]> {
-  const warn = onWarning ?? (() => {});
-  const styles = await safely(
+export function extractEffectStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
+  return extractStyles<EffectStyle, RawEffectStyle>(
+    'effect styles',
     () => figma.getLocalEffectStylesAsync(),
-    (err) => warn(`Failed to load effect styles: ${String(err)}`),
-  );
-
-  return processInBatches(
-    styles ?? [],
-    STYLE_BATCH_SIZE,
     (s) => ({
       id: s.id,
       name: s.name,
       description: s.description ?? '',
       effects: (s.effects ?? []).map(mapEffect),
-      boundVariableIds: collectBoundVariableIds(
-        (s as unknown as { boundVariables?: unknown }).boundVariables,
-      ),
+      boundVariableIds: boundVariablesOf(s),
     }),
     onProgress,
+    onWarning,
   );
 }
 
@@ -167,19 +157,10 @@ function mapGrid(g: LayoutGrid): RawGrid {
   };
 }
 
-export async function extractGridStyles(
-  onProgress?: (done: number, total: number) => void,
-  onWarning?: (message: string) => void,
-): Promise<RawGridStyle[]> {
-  const warn = onWarning ?? (() => {});
-  const styles = await safely(
+export function extractGridStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
+  return extractStyles<GridStyle, RawGridStyle>(
+    'grid styles',
     () => figma.getLocalGridStylesAsync(),
-    (err) => warn(`Failed to load grid styles: ${String(err)}`),
-  );
-
-  return processInBatches(
-    styles ?? [],
-    STYLE_BATCH_SIZE,
     (s) => ({
       id: s.id,
       name: s.name,
@@ -187,5 +168,6 @@ export async function extractGridStyles(
       grids: (s.layoutGrids ?? []).map(mapGrid),
     }),
     onProgress,
+    onWarning,
   );
 }

@@ -1,4 +1,3 @@
-import { toCssVarName, toPathSegments } from '@shared/naming';
 import type {
   DesignSystem,
   EffectValue,
@@ -7,27 +6,17 @@ import type {
   VariableToken,
 } from '@shared/types';
 import type { GeneratedFile } from '@shared/messages';
+import { aliasCssName, defaultModeValue, primitiveValue } from './tokenValue';
 
 function unitFor(category: VariableToken['category']): string {
   return category === 'spacing' || category === 'typography' ? 'px' : '';
 }
 
 function valueToCss(value: TokenValue, category: VariableToken['category']): string | null {
-  switch (value.kind) {
-    case 'color':
-      return value.color.hex;
-    case 'float':
-      return `${value.value}${unitFor(category)}`;
-    case 'string':
-      return value.value;
-    case 'boolean':
-      return String(value.value);
-    case 'alias':
-      // Must match how the target variable's own cssName is built (transformVariables).
-      return `var(${toCssVarName(toPathSegments(value.variableName))})`;
-    default:
-      return null;
-  }
+  if (value.kind === 'alias') return `var(${aliasCssName(value.variableName)})`;
+  const primitive = primitiveValue(value);
+  if (primitive === null) return null;
+  return value.kind === 'float' ? `${primitive}${unitFor(category)}` : String(primitive);
 }
 
 function effectToBoxShadowSegment(e: EffectValue): string | null {
@@ -69,9 +58,9 @@ function gridStyleToCssVars(style: StyleToken): Record<string, string> {
 
 function addVariableVars(target: Record<string, string>, variables: VariableToken[]) {
   for (const v of variables) {
-    const defaultValue = v.valuesByMode[0];
+    const defaultValue = defaultModeValue(v);
     if (!defaultValue) continue;
-    const css = valueToCss(defaultValue.value, v.category);
+    const css = valueToCss(defaultValue, v.category);
     if (css !== null) target[v.cssName] = css;
   }
 }
