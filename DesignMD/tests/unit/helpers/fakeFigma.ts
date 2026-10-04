@@ -33,6 +33,20 @@ export function node(
   children?: FakeNode[],
 ): FakeNode {
   const n: FakeNode = {
+    appendChild(child: FakeNode) {
+      child.parent?.children?.splice(child.parent.children.indexOf(child), 1);
+      (n.children ??= []).push(child);
+      child.parent = n;
+    },
+    remove() {
+      const siblings = n.parent?.children;
+      if (siblings) siblings.splice(siblings.indexOf(n), 1);
+      n.parent = null;
+    },
+    resize(width: number, height: number) {
+      n.width = width;
+      n.height = height;
+    },
     id: (props.id as string | undefined) ?? newId(type.toLowerCase()),
     name,
     type,
@@ -163,17 +177,38 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
   const posted: unknown[] = [];
   const calls = { loadAllPages: 0, variableLookups: [] as string[] };
   const storage = { ...(options.storage ?? {}) };
-  let selection = options.selection ?? [];
+  const currentPage = page('Page 1', []);
+  currentPage.selection = options.selection ?? [];
   const listeners = new Map<string, Array<() => void>>();
 
   const figma: Props & { ui: Props } = {
     root,
     mixed: Symbol('figma.mixed'),
     showUI: vi.fn(),
-    currentPage: {
-      get selection() {
-        return selection;
-      },
+    currentPage,
+    createPage: () => {
+      const created = page('Page', []);
+      created.selection = [];
+      root.appendChild(created);
+      return created;
+    },
+    createFrame: () => frame('Frame'),
+    createRectangle: () => node('RECTANGLE', 'Rectangle'),
+    createComponent: () => component('Component'),
+    combineAsVariants: (variants: FakeNode[], parent: FakeNode) => {
+      const set = node('COMPONENT_SET', 'Component set', { description: '', key: 'set-key' }, []);
+      for (const variant of variants) {
+        variant.variantProperties = Object.fromEntries(
+          variant.name.split(',').map((pair) => pair.trim().split('=') as [string, string]),
+        );
+        set.appendChild(variant);
+      }
+      parent.appendChild(set);
+      return set;
+    },
+    setCurrentPageAsync: (next: FakeNode) => {
+      figma.currentPage = next;
+      return Promise.resolve();
     },
     on: (event: string, handler: () => void) => {
       listeners.set(event, [...(listeners.get(event) ?? []), handler]);
@@ -239,7 +274,7 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
     calls,
     storage,
     setSelection: (nodes) => {
-      selection = nodes;
+      (figma.currentPage as FakeNode).selection = nodes;
     },
     emit: (event) => listeners.get(event)?.forEach((handler) => handler()),
     send: async (message) => {

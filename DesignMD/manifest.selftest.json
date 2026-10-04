@@ -1,0 +1,11 @@
+{
+  "name": "DesignMD self-test",
+  "id": "designmd-selftest",
+  "api": "1.0.0",
+  "main": "dist/selftest.js",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": ["none"]
+  }
+}

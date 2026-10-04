@@ -106,3 +106,19 @@ const raw = await extractDesignSystem();
 ```
 
 Call `vi.unstubAllGlobals()` in `afterEach`, and build a fresh document per test (the tree is mutable).
+
+### Self-test with real Figma nodes
+
+The fake API can't prove that selection scanning behaves the same on real nodes, so there is a
+small companion plugin that does. It builds components, nested frames and a component set on a
+temporary page, selects them the way a user would, runs the production `extractComponents` over the
+real selection, and removes the page again.
+
+1. `npm run build` (this also writes `dist/selftest.js`).
+2. In the Figma desktop app: **Plugins › Development › Import plugin from manifest…** and pick
+   `manifest.selftest.json`.
+3. Run **DesignMD self-test** from the Development plugins menu. It reports "all N checks passed",
+   or "N of M FAILED" with details in **Plugins › Development › Open console**.
+
+The same checks run against the fake API in `tests/unit/extraction/selftest.test.ts`, so a mistake
+in the self-test itself shows up in `npm test` first.
