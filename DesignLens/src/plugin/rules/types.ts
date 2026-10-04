@@ -28,6 +28,11 @@ export interface RuleContext {
   variantInstanceCounts: Map<string, number>;
   wcagLevel: WcagLevel;
   isCancelled: () => boolean;
+  /**
+   * Await inside long loops. Yields to the event loop when a time budget is spent so a cancel
+   * request can arrive, and throws ScanCancelledError if one did.
+   */
+  checkpoint: () => Promise<void>;
 }
 
 /** A single instance of a problem (or pass) found by a rule during evaluate(). */

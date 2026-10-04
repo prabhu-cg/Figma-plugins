@@ -10,9 +10,10 @@ const iconSizeConsistencyRule: AuditRule = {
   description: "An icon-named layer doesn't match any size in the library's common icon scale, or isn't square.",
   whyItMatters: "Off-scale icons look mismatched next to standard-size icons and usually mean the SVG was placed without resizing to the grid.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const icons = findOwn(
           variant,
@@ -50,11 +51,12 @@ const strokeConsistencyRule: AuditRule = {
   description: "Border weight doesn't match the small set of stroke widths used elsewhere in the library.",
   whyItMatters: "Arbitrary stroke weights create visual noise — borders should read as one of a small number of deliberate weights (hairline, default, emphasis).",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const weightCounts = new Map<number, number>();
     const perNode: { node: SceneNode; weight: number; componentId: string; componentName: string }[] = [];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const withStrokes = ownNodes(variant).filter(
           (n) => "strokeWeight" in n && (n as MinimalStrokesMixin).strokes.length > 0
@@ -98,11 +100,12 @@ const cornerRadiusConsistencyRule: AuditRule = {
   description: "Corner radius doesn't match the small set of radii used elsewhere in the library.",
   whyItMatters: "A handful of deliberate radius steps (e.g. 0/4/8/full) reads as a coherent shape language; one-off radii look like an accident.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const radiusCounts = new Map<number, number>();
     const perNode: { node: SceneNode; radius: number; componentId: string; componentName: string }[] = [];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const withRadius = ownNodes(variant).filter((n) => "cornerRadius" in n);
         for (const node of withRadius) {

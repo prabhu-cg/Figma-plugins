@@ -1,5 +1,6 @@
 import type { Issue } from "@shared/types";
 import type { AuditRule, RuleContext } from "./types";
+import { ScanCancelledError } from "../scanner/checkpoint";
 
 class RuleRegistry {
   private rules = new Map<string, AuditRule>();
@@ -36,6 +37,8 @@ class RuleRegistry {
       try {
         findings = await rule.evaluate(context);
       } catch (err) {
+        // A cancel raised from a rule's checkpoint must end the scan, not become a "rule failed" finding.
+        if (err instanceof ScanCancelledError) throw err;
         findings = [
           {
             message: `Rule "${rule.id}" threw an error during evaluation: ${

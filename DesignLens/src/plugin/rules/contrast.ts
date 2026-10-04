@@ -20,11 +20,12 @@ const textContrastRule: AuditRule = {
     "Low-contrast text is unreadable for users with low vision or color vision deficiencies, and fails automated accessibility audits before it ever ships to production.",
   severity: "critical",
   reference: "WCAG 2.1 SC 1.4.3 Contrast (Minimum)",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
@@ -76,12 +77,13 @@ const nonTextContrastRule: AuditRule = {
     "Input borders and control boundaries need enough contrast to be perceivable — otherwise users can't tell where one element ends and another begins.",
   severity: "warning",
   reference: "WCAG 2.1 SC 1.4.11 Non-text Contrast",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
     const kindsToCheck = new Set(["button", "input", "checkbox", "radio", "switch", "badge", "alert", "card"]);
 
     for (const record of context.components) {
+      await context.checkpoint();
       if (!kindsToCheck.has(record.info.detectedKind ?? "unknown")) continue;
       for (const variant of record.variantNodes) {
         if (!("strokes" in variant)) continue;
@@ -120,11 +122,12 @@ const iconContrastRule: AuditRule = {
   whyItMatters: "Icons that communicate meaning (not purely decorative) need to be perceivable against their background just like text does.",
   severity: "warning",
   reference: "WCAG 2.1 SC 1.4.11 Non-text Contrast",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const vectorTypes = new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE", "RECTANGLE", "LINE"]);
         // Evaluate the drawn shapes of each icon: vector-like layers named "icon" or sitting inside an icon-named container.

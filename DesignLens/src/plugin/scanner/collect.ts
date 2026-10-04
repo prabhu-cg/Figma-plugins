@@ -24,10 +24,6 @@ function isDeprecatedMarker(text: string): boolean {
   return DEPRECATED_PATTERN.test(text) || text.trim().startsWith("🚫") || text.trim().startsWith("⚠️ deprecated");
 }
 
-function tick(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 function variantPropsToDict(props: { [key: string]: string } | null): Record<string, string> {
   return props ? { ...props } : {};
 }
@@ -99,7 +95,8 @@ function buildStandaloneComponentRecord(node: ComponentNode, page: PageNode): Co
 
 export async function collectDocument(
   onProgress: (phase: string, processed: number, total: number) => void,
-  isCancelled: () => boolean
+  isCancelled: () => boolean,
+  checkpoint: () => Promise<void>
 ): Promise<CollectResult> {
   await figma.loadAllPagesAsync();
   const pages = figma.root.children;
@@ -108,45 +105,49 @@ export async function collectDocument(
   const variantInstanceCounts = new Map<string, number>();
   let totalLayers = 0;
 
+  function visit(node: SceneNode, page: PageNode): void {
+    if (node.type === "COMPONENT_SET") {
+      components.push(buildComponentSetRecord(node as ComponentSetNode, page));
+    } else if (node.type === "COMPONENT" && node.parent?.type !== "COMPONENT_SET") {
+      components.push(buildStandaloneComponentRecord(node as ComponentNode, page));
+    } else if (node.type === "INSTANCE") {
+      try {
+        const main = (node as InstanceNode).mainComponent;
+        if (main) {
+          const rollupKey = main.parent?.type === "COMPONENT_SET" ? main.parent.id : main.id;
+          instanceCounts.set(rollupKey, (instanceCounts.get(rollupKey) ?? 0) + 1);
+          variantInstanceCounts.set(main.id, (variantInstanceCounts.get(main.id) ?? 0) + 1);
+        }
+      } catch {
+        // Main component not resolvable (e.g. from an unpublished library); skip.
+      }
+    }
+  }
+
   for (let p = 0; p < pages.length; p++) {
     if (isCancelled()) break;
     const page = pages[p];
     onProgress("Scanning pages", p + 1, pages.length);
 
-    const nodes = page.findAll(() => true);
-    totalLayers += nodes.length;
-
-    for (const node of nodes) {
-      if (node.type === "COMPONENT_SET") {
-        components.push(buildComponentSetRecord(node as ComponentSetNode, page));
-      } else if (node.type === "COMPONENT" && node.parent?.type !== "COMPONENT_SET") {
-        components.push(buildStandaloneComponentRecord(node as ComponentNode, page));
-      } else if (node.type === "INSTANCE") {
-        try {
-          const main = (node as InstanceNode).mainComponent;
-          if (main) {
-            const rollupKey = main.parent?.type === "COMPONENT_SET" ? main.parent.id : main.id;
-            instanceCounts.set(rollupKey, (instanceCounts.get(rollupKey) ?? 0) + 1);
-            variantInstanceCounts.set(main.id, (variantInstanceCounts.get(main.id) ?? 0) + 1);
-          }
-        } catch {
-          // Main component not resolvable (e.g. from an unpublished library); skip.
-        }
-      }
+    // Walk one top-level frame at a time instead of page.findAll(): a single findAll over a huge
+    // page is one uninterruptible call, so cancel couldn't land until it returned.
+    for (const child of page.children) {
+      const nodes = [child, ...("findAll" in child ? child.findAll(() => true) : [])];
+      totalLayers += nodes.length;
+      for (const node of nodes) visit(node, page);
+      await checkpoint();
     }
-    await tick();
   }
 
   const allComponentNodes: SceneNode[] = [];
   for (let i = 0; i < components.length; i++) {
     if (isCancelled()) break;
-    if (i % 25 === 0) {
-      onProgress("Indexing component layers", i + 1, components.length);
-      await tick();
-    }
+    if (i % 25 === 0) onProgress("Indexing component layers", i + 1, components.length);
     for (const variant of components[i].variantNodes) {
-      allComponentNodes.push(...ownNodes(variant));
+      // Loop rather than push(...spread): a variant with 100k+ layers would overflow the call stack.
+      for (const node of ownNodes(variant)) allComponentNodes.push(node);
     }
+    await checkpoint();
   }
 
   onProgress("Reading variables and styles", 0, 1);

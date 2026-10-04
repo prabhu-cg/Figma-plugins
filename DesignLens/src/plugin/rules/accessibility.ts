@@ -17,11 +17,12 @@ const touchTargetRule: AuditRule = {
     "Small tap targets are hard to hit accurately for users with motor impairments and on touch devices generally — this is one of the most common mobile accessibility failures.",
   severity: "warning",
   reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum, 24px) / SC 2.5.5 Target Size (Enhanced, 44px)",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     // AA requires 24px; AAA (and platform guidance) 44px. At AA, 24–44px is surfaced as a suggestion.
     const required = context.wcagLevel === "AAA" ? COMFORTABLE_TARGET : WCAG_AA_TARGET;
     for (const record of context.components) {
+      await context.checkpoint();
       // Inline links are exempt from the target-size criterion.
       if (!isInteractiveKind(record.info.detectedKind) || record.info.detectedKind === "link") continue;
       for (const variant of record.variantNodes) {
@@ -58,9 +59,10 @@ const minTextSizeRule: AuditRule = {
   description: "Text layer uses a font size smaller than the recommended readable minimum.",
   whyItMatters: "Very small text is difficult to read for low-vision users and fails many platform accessibility guidelines.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
@@ -95,9 +97,10 @@ const iconLabelRule: AuditRule = {
     "Screen reader users rely on accessible names for icon-only buttons and controls — a component named \"Vector 204\" with no description usually means engineering has no naming guidance to hand to their aria-label.",
   severity: "warning",
   reference: "WCAG 2.1 SC 4.1.2 Name, Role, Value",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       const nameLower = record.info.name.toLowerCase();
       const looksIconOnly = nameLower.includes("icon") && !nameLower.includes("button");
       if (!looksIconOnly) continue;
@@ -127,9 +130,10 @@ const hiddenLayerRule: AuditRule = {
   whyItMatters:
     "Hidden layers are sometimes intentional (state toggles), but they're also frequently leftover debugging cruft that ships hidden content, unexpected spacing, or dead weight into every instance.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         // Only the topmost hidden layer — its hidden children are part of the same leftover.
         const hidden = findOwn(variant, (n) => "visible" in n && n.visible === false && n.parent?.type !== "PAGE" && !(n.parent && "visible" in n.parent && (n.parent as SceneNode).visible === false));
@@ -161,9 +165,10 @@ const focusVisibilityRule: AuditRule = {
     "A focus state that looks identical to default is invisible to keyboard users — the whole point of the state is to show where keyboard focus currently is.",
   severity: "critical",
   reference: "WCAG 2.2 SC 2.4.11 Focus Not Obscured / SC 1.4.11 Non-text Contrast",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       if (record.info.type !== "COMPONENT_SET" || !record.info.detectedStates.includes("focus")) continue;
 
       record.info.variants.forEach((variantInfo, i) => {

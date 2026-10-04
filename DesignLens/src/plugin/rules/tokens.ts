@@ -10,9 +10,10 @@ const hardcodedColorRule: AuditRule = {
     "Hardcoded colors can't be updated by changing a token, break theming/dark mode, and are the single biggest source of visual drift in a design system.",
   severity: "warning",
   reference: "Design token best practice: bind color to semantic variables",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const nodes = ownNodes(variant);
         for (const node of nodes) {
@@ -68,9 +69,10 @@ const hardcodedRadiusRule: AuditRule = {
   description: "Corner radius is a raw number instead of a bound radius variable.",
   whyItMatters: "Unbound radii drift from the shape scale and make global radius changes require manual sweeps.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const nodes = ownNodes(variant);
         for (const node of nodes) {
@@ -104,7 +106,7 @@ const unusedVariableRule: AuditRule = {
   whyItMatters:
     "Unused tokens bloat the library, confuse consumers choosing between similar-looking variables, and make it unclear which tokens are actually safe to remove.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const usedIds = new Set<string>();
     const collect = (value: unknown): void => {
       if (Array.isArray(value)) {
@@ -115,7 +117,9 @@ const unusedVariableRule: AuditRule = {
         if (entry.boundVariables) Object.values(entry.boundVariables).forEach(collect);
       }
     };
+    let seen = 0;
     for (const node of context.allComponentNodes) {
+      if ((++seen & 0x7ff) === 0) await context.checkpoint();
       const bound = (node as { boundVariables?: Record<string, unknown> }).boundVariables;
       if (bound) Object.values(bound).forEach(collect);
       for (const field of ["fills", "strokes", "effects"] as const) {
@@ -203,9 +207,10 @@ const hardcodedShadowRule: AuditRule = {
   description: "A drop/inner shadow effect is set directly on the layer instead of a bound effect variable or shared effect style.",
   whyItMatters: "Unbound shadows drift from the elevation system and make global depth/elevation changes require manual sweeps across every component.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const nodes = ownNodes(variant);
         for (const node of nodes) {
@@ -243,9 +248,10 @@ const hardcodedOpacityRule: AuditRule = {
   description: "Layer opacity is a raw, non-default number instead of a bound opacity variable.",
   whyItMatters: "Ad-hoc opacity values (0.64, 0.72, 0.8...) accumulate over time and make it unclear which value represents a deliberate disabled/hover/scrim state.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const nodes = ownNodes(variant);
         for (const node of nodes) {

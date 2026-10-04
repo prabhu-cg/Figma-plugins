@@ -15,9 +15,10 @@ const missingAutoLayoutRule: AuditRule = {
   whyItMatters:
     "Without Auto Layout, spacing is positional and silently breaks when content, translations, or child count change — Auto Layout keeps spacing systematic and resilient.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const frames = findOwn<FrameNode>(variant, (n) => n.type === "FRAME" && (n as FrameNode).children.length >= 2);
         for (const frame of frames) {
@@ -49,9 +50,10 @@ const hardcodedSpacingRule: AuditRule = {
   whyItMatters:
     "Off-grid spacing accumulates into inconsistent rhythm across a product and is a strong signal the value isn't bound to a spacing token.",
   severity: "warning",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const frames = findOwn<FrameNode>(variant, (n) => n.type === "FRAME" && (n as FrameNode).layoutMode !== "NONE");
         for (const frame of frames) {

@@ -21,6 +21,24 @@
   var __spreadProps = (a, b) => __defProps(a, __getOwnPropDescs(b));
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
+  // src/plugin/scanner/checkpoint.ts
+  var ScanCancelledError = class extends Error {
+    constructor() {
+      super("Scan was cancelled");
+      this.name = "ScanCancelledError";
+    }
+  };
+  var yieldToEventLoop = () => new Promise((resolve) => setTimeout(resolve, 0));
+  function createCheckpoint(isCancelled, budgetMs = 25, now = Date.now) {
+    let lastYield = now();
+    return async () => {
+      if (now() - lastYield < budgetMs) return;
+      await yieldToEventLoop();
+      lastYield = now();
+      if (isCancelled()) throw new ScanCancelledError();
+    };
+  }
+
   // src/plugin/rules/registry.ts
   var RuleRegistry = class {
     constructor() {
@@ -51,6 +69,7 @@
         try {
           findings = await rule.evaluate(context);
         } catch (err) {
+          if (err instanceof ScanCancelledError) throw err;
           findings = [
             {
               message: `Rule "${rule.id}" threw an error during evaluation: ${err instanceof Error ? err.message : String(err)}`,
@@ -292,10 +311,11 @@
     whyItMatters: "Low-contrast text is unreadable for users with low vision or color vision deficiencies, and fails automated accessibility audits before it ever ships to production.",
     severity: "critical",
     reference: "WCAG 2.1 SC 1.4.3 Contrast (Minimum)",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
@@ -344,12 +364,13 @@
     whyItMatters: "Input borders and control boundaries need enough contrast to be perceivable \u2014 otherwise users can't tell where one element ends and another begins.",
     severity: "warning",
     reference: "WCAG 2.1 SC 1.4.11 Non-text Contrast",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const findings = [];
       const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
       const kindsToCheck = /* @__PURE__ */ new Set(["button", "input", "checkbox", "radio", "switch", "badge", "alert", "card"]);
       for (const record of context.components) {
+        await context.checkpoint();
         if (!kindsToCheck.has((_a = record.info.detectedKind) != null ? _a : "unknown")) continue;
         for (const variant of record.variantNodes) {
           if (!("strokes" in variant)) continue;
@@ -386,11 +407,12 @@
     whyItMatters: "Icons that communicate meaning (not purely decorative) need to be perceivable against their background just like text does.",
     severity: "warning",
     reference: "WCAG 2.1 SC 1.4.11 Non-text Contrast",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const findings = [];
       const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const vectorTypes = /* @__PURE__ */ new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE", "RECTANGLE", "LINE"]);
           const iconComponent = record.info.detectedKind === "icon";
@@ -444,9 +466,10 @@
     whyItMatters: "Hardcoded typography drifts from the type scale over time and breaks silently when the design system updates its type ramp \u2014 every unlinked layer has to be found and fixed by hand.",
     severity: "warning",
     reference: "Design system best practice: single source of truth for type scale",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
@@ -476,11 +499,12 @@
     description: "Component uses a font family that differs from the library's dominant font family.",
     whyItMatters: "Mixed font families inside a single design system usually indicate a copy-pasted layer from another file or an unintentional override, and they undermine visual consistency across products.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const familyCounts = /* @__PURE__ */ new Map();
       const perText = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
@@ -520,9 +544,11 @@
     description: "This shared text style isn't linked from any text node within the scanned components.",
     whyItMatters: "Unused text styles bloat the type picker and make it unclear to consumers which styles are actually part of the current type scale.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const usedStyleIds = /* @__PURE__ */ new Set();
+      let seen = 0;
       for (const node of context.allComponentNodes) {
+        if ((++seen & 2047) === 0) await context.checkpoint();
         if (node.type !== "TEXT") continue;
         const styleId = node.textStyleId;
         if (typeof styleId === "string" && styleId !== "") usedStyleIds.add(styleId);
@@ -547,11 +573,12 @@
     description: "Text uses a font size that isn't part of the library's common type scale.",
     whyItMatters: "One-off font sizes fragment the type scale over time \u2014 a design system should have a small, deliberate set of sizes that every text style draws from.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const sizeCounts = /* @__PURE__ */ new Map();
       const perText = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
@@ -598,9 +625,10 @@
     description: "A frame with multiple children does not use Auto Layout.",
     whyItMatters: "Without Auto Layout, spacing is positional and silently breaks when content, translations, or child count change \u2014 Auto Layout keeps spacing systematic and resilient.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const frames = findOwn(variant, (n) => n.type === "FRAME" && n.children.length >= 2);
           for (const frame of frames) {
@@ -630,9 +658,10 @@
     description: "Auto Layout padding or gap uses a value that isn't a multiple of the base spacing unit.",
     whyItMatters: "Off-grid spacing accumulates into inconsistent rhythm across a product and is a strong signal the value isn't bound to a spacing token.",
     severity: "warning",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const frames = findOwn(variant, (n) => n.type === "FRAME" && n.layoutMode !== "NONE");
           for (const frame of frames) {
@@ -678,9 +707,10 @@
     whyItMatters: "Hardcoded colors can't be updated by changing a token, break theming/dark mode, and are the single biggest source of visual drift in a design system.",
     severity: "warning",
     reference: "Design token best practice: bind color to semantic variables",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const nodes = ownNodes(variant);
           for (const node of nodes) {
@@ -736,9 +766,10 @@
     description: "Corner radius is a raw number instead of a bound radius variable.",
     whyItMatters: "Unbound radii drift from the shape scale and make global radius changes require manual sweeps.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const nodes = ownNodes(variant);
           for (const node of nodes) {
@@ -770,7 +801,7 @@
     description: "This variable is not bound to any property within the scanned components.",
     whyItMatters: "Unused tokens bloat the library, confuse consumers choosing between similar-looking variables, and make it unclear which tokens are actually safe to remove.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const usedIds = /* @__PURE__ */ new Set();
       const collect = (value) => {
         if (Array.isArray(value)) {
@@ -781,7 +812,9 @@
           if (entry.boundVariables) Object.values(entry.boundVariables).forEach(collect);
         }
       };
+      let seen = 0;
       for (const node of context.allComponentNodes) {
+        if ((++seen & 2047) === 0) await context.checkpoint();
         const bound = node.boundVariables;
         if (bound) Object.values(bound).forEach(collect);
         for (const field of ["fills", "strokes", "effects"]) {
@@ -863,9 +896,10 @@
     description: "A drop/inner shadow effect is set directly on the layer instead of a bound effect variable or shared effect style.",
     whyItMatters: "Unbound shadows drift from the elevation system and make global depth/elevation changes require manual sweeps across every component.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const nodes = ownNodes(variant);
           for (const node of nodes) {
@@ -902,9 +936,10 @@
     description: "Layer opacity is a raw, non-default number instead of a bound opacity variable.",
     whyItMatters: "Ad-hoc opacity values (0.64, 0.72, 0.8...) accumulate over time and make it unclear which value represents a deliberate disabled/hover/scrim state.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const nodes = ownNodes(variant);
           for (const node of nodes) {
@@ -1342,10 +1377,11 @@
     whyItMatters: "Small tap targets are hard to hit accurately for users with motor impairments and on touch devices generally \u2014 this is one of the most common mobile accessibility failures.",
     severity: "warning",
     reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum, 24px) / SC 2.5.5 Target Size (Enhanced, 44px)",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       const required = context.wcagLevel === "AAA" ? COMFORTABLE_TARGET : WCAG_AA_TARGET;
       for (const record of context.components) {
+        await context.checkpoint();
         if (!isInteractiveKind(record.info.detectedKind) || record.info.detectedKind === "link") continue;
         for (const variant of record.variantNodes) {
           const smallest = Math.min(variant.width, variant.height);
@@ -1379,9 +1415,10 @@
     description: "Text layer uses a font size smaller than the recommended readable minimum.",
     whyItMatters: "Very small text is difficult to read for low-vision users and fails many platform accessibility guidelines.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
@@ -1414,9 +1451,10 @@
     whyItMatters: 'Screen reader users rely on accessible names for icon-only buttons and controls \u2014 a component named "Vector 204" with no description usually means engineering has no naming guidance to hand to their aria-label.',
     severity: "warning",
     reference: "WCAG 2.1 SC 4.1.2 Name, Role, Value",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         const nameLower = record.info.name.toLowerCase();
         const looksIconOnly = nameLower.includes("icon") && !nameLower.includes("button");
         if (!looksIconOnly) continue;
@@ -1444,9 +1482,10 @@
     description: "A layer inside this component is set to invisible.",
     whyItMatters: "Hidden layers are sometimes intentional (state toggles), but they're also frequently leftover debugging cruft that ships hidden content, unexpected spacing, or dead weight into every instance.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const hidden = findOwn(variant, (n) => {
             var _a;
@@ -1478,9 +1517,10 @@
     whyItMatters: "A focus state that looks identical to default is invisible to keyboard users \u2014 the whole point of the state is to show where keyboard focus currently is.",
     severity: "critical",
     reference: "WCAG 2.2 SC 2.4.11 Focus Not Obscured / SC 1.4.11 Non-text Contrast",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         if (record.info.type !== "COMPONENT_SET" || !record.info.detectedStates.includes("focus")) continue;
         record.info.variants.forEach((variantInfo, i) => {
           const isFocusVariant = variantStatesOf(variantInfo.properties).includes("focus");
@@ -1835,9 +1875,10 @@
     description: "An icon-named layer doesn't match any size in the library's common icon scale, or isn't square.",
     whyItMatters: "Off-scale icons look mismatched next to standard-size icons and usually mean the SVG was placed without resizing to the grid.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       const findings = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const icons = findOwn(
             variant,
@@ -1874,11 +1915,12 @@
     description: "Border weight doesn't match the small set of stroke widths used elsewhere in the library.",
     whyItMatters: "Arbitrary stroke weights create visual noise \u2014 borders should read as one of a small number of deliberate weights (hairline, default, emphasis).",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const weightCounts = /* @__PURE__ */ new Map();
       const perNode = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const withStrokes = ownNodes(variant).filter(
             (n) => "strokeWeight" in n && n.strokes.length > 0
@@ -1914,11 +1956,12 @@
     description: "Corner radius doesn't match the small set of radii used elsewhere in the library.",
     whyItMatters: "A handful of deliberate radius steps (e.g. 0/4/8/full) reads as a coherent shape language; one-off radii look like an accident.",
     severity: "suggestion",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const radiusCounts = /* @__PURE__ */ new Map();
       const perNode = [];
       for (const record of context.components) {
+        await context.checkpoint();
         for (const variant of record.variantNodes) {
           const withRadius = ownNodes(variant).filter((n) => "cornerRadius" in n);
           for (const node of withRadius) {
@@ -1969,9 +2012,6 @@
   function isDeprecatedMarker(text) {
     if (!text) return false;
     return DEPRECATED_PATTERN.test(text) || text.trim().startsWith("\u{1F6AB}") || text.trim().startsWith("\u26A0\uFE0F deprecated");
-  }
-  function tick() {
-    return new Promise((resolve) => setTimeout(resolve, 0));
   }
   function variantPropsToDict(props) {
     return props ? __spreadValues({}, props) : {};
@@ -2037,49 +2077,50 @@
     };
     return { node, info, variantNodes: [node] };
   }
-  async function collectDocument(onProgress, isCancelled) {
-    var _a, _b, _c, _d;
+  async function collectDocument(onProgress, isCancelled, checkpoint) {
     await figma.loadAllPagesAsync();
     const pages = figma.root.children;
     const components = [];
     const instanceCounts = /* @__PURE__ */ new Map();
     const variantInstanceCounts = /* @__PURE__ */ new Map();
     let totalLayers = 0;
+    function visit(node, page) {
+      var _a, _b, _c, _d;
+      if (node.type === "COMPONENT_SET") {
+        components.push(buildComponentSetRecord(node, page));
+      } else if (node.type === "COMPONENT" && ((_a = node.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET") {
+        components.push(buildStandaloneComponentRecord(node, page));
+      } else if (node.type === "INSTANCE") {
+        try {
+          const main = node.mainComponent;
+          if (main) {
+            const rollupKey = ((_b = main.parent) == null ? void 0 : _b.type) === "COMPONENT_SET" ? main.parent.id : main.id;
+            instanceCounts.set(rollupKey, ((_c = instanceCounts.get(rollupKey)) != null ? _c : 0) + 1);
+            variantInstanceCounts.set(main.id, ((_d = variantInstanceCounts.get(main.id)) != null ? _d : 0) + 1);
+          }
+        } catch (e) {
+        }
+      }
+    }
     for (let p = 0; p < pages.length; p++) {
       if (isCancelled()) break;
       const page = pages[p];
       onProgress("Scanning pages", p + 1, pages.length);
-      const nodes = page.findAll(() => true);
-      totalLayers += nodes.length;
-      for (const node of nodes) {
-        if (node.type === "COMPONENT_SET") {
-          components.push(buildComponentSetRecord(node, page));
-        } else if (node.type === "COMPONENT" && ((_a = node.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET") {
-          components.push(buildStandaloneComponentRecord(node, page));
-        } else if (node.type === "INSTANCE") {
-          try {
-            const main = node.mainComponent;
-            if (main) {
-              const rollupKey = ((_b = main.parent) == null ? void 0 : _b.type) === "COMPONENT_SET" ? main.parent.id : main.id;
-              instanceCounts.set(rollupKey, ((_c = instanceCounts.get(rollupKey)) != null ? _c : 0) + 1);
-              variantInstanceCounts.set(main.id, ((_d = variantInstanceCounts.get(main.id)) != null ? _d : 0) + 1);
-            }
-          } catch (e) {
-          }
-        }
+      for (const child of page.children) {
+        const nodes = [child, ..."findAll" in child ? child.findAll(() => true) : []];
+        totalLayers += nodes.length;
+        for (const node of nodes) visit(node, page);
+        await checkpoint();
       }
-      await tick();
     }
     const allComponentNodes = [];
     for (let i = 0; i < components.length; i++) {
       if (isCancelled()) break;
-      if (i % 25 === 0) {
-        onProgress("Indexing component layers", i + 1, components.length);
-        await tick();
-      }
+      if (i % 25 === 0) onProgress("Indexing component layers", i + 1, components.length);
       for (const variant of components[i].variantNodes) {
-        allComponentNodes.push(...ownNodes(variant));
+        for (const node of ownNodes(variant)) allComponentNodes.push(node);
       }
+      await checkpoint();
     }
     onProgress("Reading variables and styles", 0, 1);
     const [variables, variableCollections, paintStyles, textStyles, effectStyles, gridStyles] = await Promise.all([
@@ -2175,12 +2216,6 @@
   }
 
   // src/plugin/scanner/scanEngine.ts
-  var ScanCancelledError = class extends Error {
-    constructor() {
-      super("Scan was cancelled");
-      this.name = "ScanCancelledError";
-    }
-  };
   function buildDenominators(collected, componentCount) {
     const nodeDenominator = Math.max(1, Math.round(collected.allComponentNodes.length / 25));
     const tokenDenominator = Math.max(
@@ -2205,7 +2240,8 @@
   async function runScan(onProgress, isCancelled, wcagLevel) {
     var _a;
     const startTime = Date.now();
-    const collected = await collectDocument(onProgress, isCancelled);
+    const checkpoint = createCheckpoint(isCancelled);
+    const collected = await collectDocument(onProgress, isCancelled, checkpoint);
     if (isCancelled()) throw new ScanCancelledError();
     const collectionNameById = new Map(collected.variableCollections.map((c) => [c.id, c.name]));
     const variablesByCollection = /* @__PURE__ */ new Map();
@@ -2228,7 +2264,8 @@
       instanceCounts: collected.instanceCounts,
       variantInstanceCounts: collected.variantInstanceCounts,
       wcagLevel,
-      isCancelled
+      isCancelled,
+      checkpoint
     };
     const issues = await ruleRegistry.runAll(context, (title, i, total) => onProgress(`Auditing: ${title}`, i, total));
     if (isCancelled()) throw new ScanCancelledError();

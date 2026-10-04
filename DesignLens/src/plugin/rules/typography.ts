@@ -10,9 +10,10 @@ const hardcodedTypeRule: AuditRule = {
     "Hardcoded typography drifts from the type scale over time and breaks silently when the design system updates its type ramp — every unlinked layer has to be found and fixed by hand.",
   severity: "warning",
   reference: "Design system best practice: single source of truth for type scale",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
@@ -44,11 +45,12 @@ const fontFamilyConsistencyRule: AuditRule = {
   whyItMatters:
     "Mixed font families inside a single design system usually indicate a copy-pasted layer from another file or an unintentional override, and they undermine visual consistency across products.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const familyCounts = new Map<string, number>();
     const perText: { node: TextNode; family: string; componentId: string; componentName: string }[] = [];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
@@ -90,9 +92,11 @@ const unusedTextStyleRule: AuditRule = {
   whyItMatters:
     "Unused text styles bloat the type picker and make it unclear to consumers which styles are actually part of the current type scale.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const usedStyleIds = new Set<string>();
+    let seen = 0;
     for (const node of context.allComponentNodes) {
+      if ((++seen & 0x7ff) === 0) await context.checkpoint();
       if (node.type !== "TEXT") continue;
       const styleId = (node as TextNode).textStyleId;
       if (typeof styleId === "string" && styleId !== "") usedStyleIds.add(styleId);
@@ -123,11 +127,12 @@ const sizeScaleRule: AuditRule = {
   whyItMatters:
     "One-off font sizes fragment the type scale over time — a design system should have a small, deliberate set of sizes that every text style draws from.",
   severity: "suggestion",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const sizeCounts = new Map<number, number>();
     const perText: { node: TextNode; size: number; componentId: string; componentName: string }[] = [];
 
     for (const record of context.components) {
+      await context.checkpoint();
       for (const variant of record.variantNodes) {
         const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {

@@ -3,13 +3,9 @@ import { collectDocument, type CollectResult } from "./collect";
 import { ruleRegistry } from "../rules/registry";
 import type { RuleContext } from "../rules/types";
 import { computeHealthScore } from "../scoring/healthScore";
+import { createCheckpoint, ScanCancelledError } from "./checkpoint";
 
-export class ScanCancelledError extends Error {
-  constructor() {
-    super("Scan was cancelled");
-    this.name = "ScanCancelledError";
-  }
-}
+export { ScanCancelledError };
 
 function buildDenominators(collected: CollectResult, componentCount: number): Record<AuditCategory, number> {
   const nodeDenominator = Math.max(1, Math.round(collected.allComponentNodes.length / 25));
@@ -40,7 +36,8 @@ export async function runScan(
   wcagLevel: WcagLevel
 ): Promise<ScanResult> {
   const startTime = Date.now();
-  const collected = await collectDocument(onProgress, isCancelled);
+  const checkpoint = createCheckpoint(isCancelled);
+  const collected = await collectDocument(onProgress, isCancelled, checkpoint);
   if (isCancelled()) throw new ScanCancelledError();
 
   const collectionNameById = new Map(collected.variableCollections.map((c) => [c.id, c.name] as const));
@@ -65,7 +62,8 @@ export async function runScan(
     instanceCounts: collected.instanceCounts,
     variantInstanceCounts: collected.variantInstanceCounts,
     wcagLevel,
-    isCancelled
+    isCancelled,
+    checkpoint
   };
 
   const issues = await ruleRegistry.runAll(context, (title, i, total) => onProgress(`Auditing: ${title}`, i, total));
