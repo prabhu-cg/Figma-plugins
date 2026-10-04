@@ -715,7 +715,8 @@ button {
 }
 @media (prefers-reduced-motion: reduce) {
   .progress-fill,
-  .gauge-arc {
+  .gauge-arc,
+  .shortcut-hint-wrap {
     transition: none !important;
   }
   .btn:active:not(:disabled) {
@@ -864,6 +865,25 @@ button {
   accent-color: var(--color-primary-strong);
 }
 
+/* Collapses by animating grid rows (1fr -> 0fr) rather than height, so it needs no measured size. */
+.shortcut-hint-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.18s ease, opacity 0.18s ease;
+}
+.shortcut-hint-clip {
+  min-height: 0;
+  overflow: hidden; /* also contains the hint's own top margin, so a collapsed row is truly 0px tall */
+}
+.shortcut-hint-wrap.is-collapsed {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+/* Once collapsed, take it out of the tab order and the accessibility tree (after the animation). */
+.shortcut-hint-wrap.is-collapsed .shortcut-hint-clip {
+  visibility: hidden;
+  transition: visibility 0s 0.18s;
+}
 .shortcut-hint {
   margin-top: 10px;
   font-size: var(--text-xs);

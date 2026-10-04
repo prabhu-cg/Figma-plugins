@@ -36,7 +36,7 @@ function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export function AuditView({ result, audit, onSelectNode, onSetIssueStatuses }: AuditViewProps) {
-  const { filters, setFilters, sort, setSort, selectedId, setSelectedId, checked, setChecked } = audit;
+  const { filters, setFilters, sort, setSort, selectedId, setSelectedId, checked, setChecked, hintVisible, setHintVisible } = audit;
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const allToggle = useRef<HTMLInputElement>(null);
@@ -185,6 +185,14 @@ export function AuditView({ result, audit, onSelectNode, onSetIssueStatuses }: A
               {sortedIssues.length} of {result.issues.length} issues shown
             </div>
           </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            aria-expanded={hintVisible}
+            aria-controls="shortcut-hint"
+            onClick={() => setHintVisible(!hintVisible)}
+          >
+            {hintVisible ? "Hide shortcuts" : "Shortcuts"}
+          </button>
         </div>
 
         <Filters
@@ -196,9 +204,13 @@ export function AuditView({ result, audit, onSelectNode, onSetIssueStatuses }: A
           sort={sort}
           onSortChange={setSort}
         />
-        <div className="shortcut-hint">
-          With the list focused: <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>x</kbd> select · <kbd>r</kbd> resolve · <kbd>i</kbd> ignore · <kbd>o</kbd> reopen ·{" "}
-          <kbd>g</kbd> go to layer
+        <div id="shortcut-hint" className={`shortcut-hint-wrap${hintVisible ? "" : " is-collapsed"}`}>
+          <div className="shortcut-hint-clip">
+            <div className="shortcut-hint">
+              With the list focused: <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>x</kbd> select · <kbd>r</kbd> resolve · <kbd>i</kbd> ignore ·{" "}
+              <kbd>o</kbd> reopen · <kbd>g</kbd> go to layer
+            </div>
+          </div>
         </div>
       </div>
 
