@@ -1,0 +1,136 @@
+import { kebabCase, nameHasHint } from '@shared/naming';
+import type { DesignSystem, StyleToken, VariableToken } from '@shared/types';
+import type { GeneratedFile } from '@shared/messages';
+import { buildCssVariableMaps } from './cssVariables';
+import { buildTokenTree, type TokenTreeEntry } from './tokenTree';
+
+type Tree = Record<string, unknown>;
+
+const isString = (v: unknown): boolean => typeof v === 'string';
+
+/** Leading path segments that only restate the bucket a token already lives in. */
+const REDUNDANT_PREFIXES: Record<string, string[]> = {
+  colors: ['color', 'colors', 'semantic', 'semantics'],
+  spacing: ['spacing', 'space', 'spacings'],
+  borderRadius: ['radius', 'radii', 'border-radius', 'corner-radius'],
+  fontSize: ['font-size', 'fontsize', 'size', 'font', 'text'],
+  fontFamily: ['font-family', 'family', 'font'],
+  boxShadow: ['shadow', 'shadows', 'elevation', 'effect', 'effects'],
+};
+
+function keyPath(path: string[], bucket: keyof typeof REDUNDANT_PREFIXES): string[] {
+  const segments = path.map(kebabCase).filter(Boolean);
+  const prefixes = REDUNDANT_PREFIXES[bucket];
+  while (segments.length > 1 && prefixes.includes(segments[0])) segments.shift();
+  return segments;
+}
+
+function tree(entries: TokenTreeEntry<string>[]): Tree {
+  return buildTokenTree(entries, isString) as Tree;
+}
+
+/**
+ * tailwind.tokens.js: a Tailwind preset whose theme values are `var(--token)` references, so the
+ * preset stays tiny and light/dark modes switch through tokens.css rather than rebuilding CSS.
+ * Only tokens that exist in the generated CSS variables are referenced.
+ */
+export function generateTailwindPreset(ds: DesignSystem): GeneratedFile {
+  const { root } = buildCssVariableMaps(ds);
+  const ref = (cssName: string) => (cssName in root ? `var(${cssName})` : undefined);
+
+  const entriesFor = (
+    bucket: keyof typeof REDUNDANT_PREFIXES,
+    variables: VariableToken[],
+  ): TokenTreeEntry<string>[] =>
+    variables.flatMap((v) => {
+      const value = ref(v.cssName);
+      return value ? [{ path: keyPath(v.path, bucket), leaf: value }] : [];
+    });
+  const styleEntries = (
+    bucket: keyof typeof REDUNDANT_PREFIXES,
+    styles: StyleToken[],
+    cssName: (s: StyleToken) => string,
+  ): TokenTreeEntry<string>[] =>
+    styles.flatMap((s) => {
+      const value = ref(cssName(s));
+      return value ? [{ path: keyPath(s.path, bucket), leaf: value }] : [];
+    });
+
+  const colorVariables = ds.variables.filter(
+    (v) => v.resolvedType === 'COLOR' && (v.category === 'color' || v.category === 'semantic'),
+  );
+  const colors =
+    colorVariables.length > 0
+      ? tree(entriesFor('colors', colorVariables))
+      : tree(styleEntries('colors', ds.styles.color, (s) => s.cssName));
+
+  const spacingVariables = ds.variables.filter((v) => v.category === 'spacing');
+  const isRadius = (v: VariableToken) =>
+    v.scopes.includes('CORNER_RADIUS') || nameHasHint(v.name, ['radius', 'radii']);
+  const spacing = tree(
+    entriesFor(
+      'spacing',
+      spacingVariables.filter((v) => !isRadius(v)),
+    ),
+  );
+  const borderRadius = tree(entriesFor('borderRadius', spacingVariables.filter(isRadius)));
+
+  const typographyVariables = ds.variables.filter((v) => v.category === 'typography');
+  const fontFamily = tree(
+    entriesFor(
+      'fontFamily',
+      typographyVariables.filter(
+        (v) => v.resolvedType === 'STRING' && v.scopes.includes('FONT_FAMILY'),
+      ),
+    ),
+  );
+  const fontSizeVariables = typographyVariables.filter(
+    (v) =>
+      v.resolvedType === 'FLOAT' &&
+      (v.scopes.includes('FONT_SIZE') || nameHasHint(v.name, ['size'])),
+  );
+  const fontSize: Tree = tree(entriesFor('fontSize', fontSizeVariables));
+  // Text styles only have CSS variables when the file defines no typography variables.
+  if (typographyVariables.length === 0) {
+    for (const s of ds.styles.text) {
+      const size = ref(`${s.cssName}-font-size`);
+      if (!size) continue;
+      const details = Object.fromEntries(
+        (
+          [
+            ['lineHeight', `${s.cssName}-line-height`],
+            ['letterSpacing', `${s.cssName}-letter-spacing`],
+            ['fontWeight', `${s.cssName}-font-weight`],
+          ] as const
+        ).flatMap(([prop, name]) => (ref(name) ? [[prop, ref(name)]] : [])),
+      );
+      const [first, ...rest] = keyPath(s.path, 'fontSize');
+      // Text style names rarely nest more than once; flatten to a single Tailwind class name.
+      fontSize[[first, ...rest].join('-')] = [size, details];
+    }
+  }
+
+  const boxShadow = tree(styleEntries('boxShadow', ds.styles.effect, (s) => s.cssName));
+
+  const extend: Record<string, Tree> = {
+    colors,
+    spacing,
+    borderRadius,
+    fontFamily,
+    fontSize,
+    boxShadow,
+  };
+  const theme = Object.fromEntries(
+    Object.entries(extend).filter(([, v]) => Object.keys(v).length > 0),
+  );
+
+  const header =
+    `// Generated by DesignMD from "${ds.metadata.fileName.replace(/\n/g, ' ')}" — do not edit by hand.\n` +
+    '// Values are CSS variables from tokens.css, so import that file too and switch modes with\n' +
+    '// [data-theme="..."]. Usage: presets: [require("./tailwind.tokens.js")] in tailwind.config.js.\n';
+
+  return {
+    path: 'tailwind.tokens.js',
+    content: `${header}module.exports = ${JSON.stringify({ theme: { extend: theme } }, null, 2)};\n`,
+  };
+}
