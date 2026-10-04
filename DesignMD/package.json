@@ -1,7 +1,7 @@
 {
   "name": "designmd",
   "version": "1.0.0",
-  "description": "Figma plugin that deterministically extracts a design system into developer-ready documentation and token files (design.md, component docs, tokens.json, css-tokens.json) with no AI or backend services.",
+  "description": "Figma plugin that deterministically extracts a design system into developer-ready documentation and token files (design.md, component docs, tokens.json, css-tokens.json, tokens.css, _tokens.scss, a Tailwind preset) with no AI or backend services.",
   "private": true,
   "license": "MIT",
   "scripts": {

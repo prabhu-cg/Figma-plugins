@@ -45,12 +45,22 @@ No AI. No servers. No account. Nothing leaves your machine.
 
 ### What it generates
 
-- **design.md** — a single Markdown file covering your variable collections, color/typography/spacing/effect/grid tokens, a component index, naming conventions, and accessibility notes
-- **Component docs** — one Markdown file per component or component set: variants, sizes, states, properties, token references, and related components
-- **tokens.json** — a normalized, nested token export that preserves your variable hierarchy, ready for design-token pipelines
-- **css-tokens.json** — a CSS custom-property-ready export (`--color-primary-500`, `--spacing-md`, …) including per-mode values
+- **design.md** — a single Markdown file covering your variable collections, color/typography/spacing/effect/grid tokens, a component index, token and style usage, naming conventions, and accessibility notes with WCAG contrast checked for every color mode (Light, Dark, …)
+- **Component docs** — one Markdown file per component or component set: variants, sizes, states, layout (size, auto layout, gap, padding, radius), properties, token references, and related components
+- **tokens.json** — nested, W3C-style design tokens (color, dimension, typography, shadow, …) with modes and usage, ready for design-token pipelines
+- **css-tokens.json** and **tokens.css** — CSS custom properties (`--color-primary-500`, `--spacing-md`, …) with a `[data-theme]` block per mode and automatic dark-mode support
+- **\_tokens.scss** — Sass variables plus a `$modes` map
+- **tailwind.tokens.js** — a Tailwind preset that reads those variables, including opacity modifiers like `bg-primary/50`
 
-Everything is bundled into a single ZIP you can drop straight into a Git repository.
+Bundle everything into a single ZIP you can drop straight into a Git repository, or preview and copy any file right in the plugin first.
+
+### Made for real workflows
+
+- **Scan the whole file or just your selection** — document one section of a big system without waiting for the rest
+- **Contrast pairs you choose** — add the text/background combinations you care about and see ratios in every mode, plus automatic checks inferred from token names
+- **Skip what you don't want documented** — leave out draft pages, and anything hidden from publishing is ignored automatically
+- **Find dead weight** — see which variables and styles no component uses
+- **It remembers** — your outputs, excluded pages and contrast pairs are restored next time
 
 ### Why it's useful
 
@@ -66,8 +76,8 @@ variables (e.g. no color variables defined), DesignMD automatically falls back t
 equivalent Styles (Paint/Text/Effect/Grid) and notes that it did so — so the output is
 useful even in files that predate Variables.
 
-Everything is generated from a single normalized internal schema, so all four output
-formats stay consistent with each other.
+Everything is generated from a single normalized internal schema, so every output
+format stays consistent with the others.
 
 ### Built for real files
 
@@ -93,7 +103,7 @@ plugin sandbox. Nothing is uploaded anywhere.
 
 - `icon.png` — 128×128 plugin icon
 - `thumbnail.png` — 1920×960 Community cover image
-- `screenshot-1.png` — gallery screenshot of the plugin UI (full output-selection flow)
+- `screenshot-1.png` — gallery screenshot of the plugin UI. **Out of date:** it predates the tabbed UI (Summary, Contrast, Export, Files); retake it before the next Community update
 
 All three were generated to match the plugin's actual UI (same colors, same component
 styling) so the listing accurately represents what using the plugin looks like.
