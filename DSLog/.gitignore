@@ -2,3 +2,4 @@ node_modules
 dist-ui
 *.log
 .DS_Store
+.impeccable
