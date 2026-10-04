@@ -42,6 +42,18 @@ export function node(
   if (children) {
     n.children = children;
     for (const child of children) child.parent = n;
+    // Containers (frames, pages, the document) can search their descendants, like the real API.
+    n.findAllWithCriteria = ({ types }: { types: string[] }) => {
+      const found: FakeNode[] = [];
+      const walk = (parent: FakeNode) => {
+        for (const child of parent.children ?? []) {
+          if (types.includes(child.type)) found.push(child);
+          walk(child);
+        }
+      };
+      walk(n);
+      return found;
+    };
   }
   return n;
 }
@@ -75,19 +87,8 @@ export function componentSet(
 
 export const alias = (id: string) => ({ type: 'VARIABLE_ALIAS', id });
 
-export function document(name: string, pages: FakeNode[]): FakeNode {
-  const root = node('DOCUMENT', name, {}, pages);
-  const walk = (n: FakeNode, out: FakeNode[]) => {
-    out.push(n);
-    n.children?.forEach((c) => walk(c, out));
-  };
-  root.findAllWithCriteria = ({ types }: { types: string[] }) => {
-    const all: FakeNode[] = [];
-    walk(root, all);
-    return all.filter((n) => types.includes(n.type));
-  };
-  return root;
-}
+export const document = (name: string, pages: FakeNode[]): FakeNode =>
+  node('DOCUMENT', name, {}, pages);
 
 export interface FakeVariableCollection {
   id: string;
@@ -114,6 +115,10 @@ export interface FakeFigmaOptions {
   root?: FakeNode;
   collections?: FakeVariableCollection[];
   variables?: FakeVariable[];
+  /** Nodes returned by figma.currentPage.selection. */
+  selection?: FakeNode[];
+  /** Initial figma.clientStorage contents. */
+  storage?: Record<string, unknown>;
   textStyles?: Props[];
   paintStyles?: Props[];
   effectStyles?: Props[];
@@ -128,6 +133,8 @@ export interface FakeFigmaOptions {
     paintStyles?: boolean;
     effectStyles?: boolean;
     gridStyles?: boolean;
+    storageRead?: boolean;
+    storageWrite?: boolean;
   };
 }
 
@@ -136,6 +143,12 @@ export interface FakeFigmaHandle {
   /** Messages posted via figma.ui.postMessage, in order. */
   posted: unknown[];
   calls: { loadAllPages: number; variableLookups: string[] };
+  /** figma.clientStorage contents (mutated by setAsync). */
+  storage: Record<string, unknown>;
+  /** Selection that figma.currentPage.selection returns; reassign then call `emit`. */
+  setSelection: (nodes: FakeNode[]) => void;
+  /** Fire a figma.on(...) event, e.g. 'selectionchange'. */
+  emit: (event: string) => void;
   /** Deliver a UI -> plugin message to the controller registered on figma.ui.onmessage. */
   send: (message: unknown) => Promise<void>;
 }
@@ -149,11 +162,31 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
   const variablesById = new Map((options.variables ?? []).map((v) => [v.id, v]));
   const posted: unknown[] = [];
   const calls = { loadAllPages: 0, variableLookups: [] as string[] };
+  const storage = { ...(options.storage ?? {}) };
+  let selection = options.selection ?? [];
+  const listeners = new Map<string, Array<() => void>>();
 
   const figma: Props & { ui: Props } = {
     root,
     mixed: Symbol('figma.mixed'),
     showUI: vi.fn(),
+    currentPage: {
+      get selection() {
+        return selection;
+      },
+    },
+    on: (event: string, handler: () => void) => {
+      listeners.set(event, [...(listeners.get(event) ?? []), handler]);
+    },
+    clientStorage: {
+      getAsync: (key: string) =>
+        failures.storageRead ? reject('clientStorage.getAsync') : Promise.resolve(storage[key]),
+      setAsync: (key: string, value: unknown) => {
+        if (failures.storageWrite) return reject('clientStorage.setAsync');
+        storage[key] = value;
+        return Promise.resolve();
+      },
+    },
     ui: {
       postMessage: (message: unknown) => posted.push(message),
       onmessage: undefined,
@@ -204,6 +237,11 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
     figma,
     posted,
     calls,
+    storage,
+    setSelection: (nodes) => {
+      selection = nodes;
+    },
+    emit: (event) => listeners.get(event)?.forEach((handler) => handler()),
     send: async (message) => {
       const handler = figma.ui.onmessage as ((m: unknown) => Promise<void> | void) | undefined;
       if (!handler) throw new Error('No figma.ui.onmessage handler registered');

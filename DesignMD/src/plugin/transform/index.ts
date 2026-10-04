@@ -1,4 +1,4 @@
-import type { DesignSystem } from '@shared/types';
+import type { DesignSystem, ExtractionScope } from '@shared/types';
 import type { ExtractionResult } from '../extraction/rawTypes';
 import { transformComponents } from './components';
 import {
@@ -19,7 +19,11 @@ import { buildSummary } from './summary';
 
 const PLUGIN_VERSION = '1.0.0';
 
-export function transformToDesignSystem(raw: ExtractionResult, fileName: string): DesignSystem {
+export function transformToDesignSystem(
+  raw: ExtractionResult,
+  fileName: string,
+  scope: ExtractionScope = 'file',
+): DesignSystem {
   const allCollections = transformVariableCollections(raw.collections);
   const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
   const hiddenVariableIds = new Set(
@@ -66,6 +70,7 @@ export function transformToDesignSystem(raw: ExtractionResult, fileName: string)
   return {
     metadata: {
       fileName,
+      scope,
       generatedAt: new Date().toISOString(),
       pluginVersion: PLUGIN_VERSION,
     },

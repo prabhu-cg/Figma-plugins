@@ -1,5 +1,26 @@
 (function() {
   "use strict";
+  const DEFAULT_EXPORT_OPTIONS = {
+    designMd: true,
+    componentDocs: true,
+    tokensJson: false,
+    cssTokensJson: false,
+    cssFile: false,
+    scssFile: false,
+    tailwindPreset: false,
+    zip: true
+  };
+  function sanitizeSavedSettings(value) {
+    if (typeof value !== "object" || value === null) return null;
+    const stored = value.options;
+    if (typeof stored !== "object" || stored === null) return null;
+    const options = { ...DEFAULT_EXPORT_OPTIONS };
+    for (const key of Object.keys(DEFAULT_EXPORT_OPTIONS)) {
+      const candidate = stored[key];
+      if (typeof candidate === "boolean") options[key] = candidate;
+    }
+    return { options };
+  }
   function yieldToEventLoop() {
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -349,16 +370,36 @@
   function unionOf(lists) {
     return Array.from(new Set(lists.flat()));
   }
-  async function extractComponents(onProgress, onWarning) {
+  const findComponentLike = (root) => root.findAllWithCriteria({
+    types: ["COMPONENT", "COMPONENT_SET"]
+  });
+  function findComponentsWithin(roots) {
+    const found = /* @__PURE__ */ new Map();
+    const add = (n) => {
+      var _a;
+      const target = n.type === "COMPONENT" && ((_a = n.parent) == null ? void 0 : _a.type) === "COMPONENT_SET" ? n.parent : n;
+      found.set(target.id, target);
+    };
+    for (const root of roots) {
+      if (root.type === "COMPONENT" || root.type === "COMPONENT_SET") add(root);
+      if ("findAllWithCriteria" in root) {
+        for (const n of findComponentLike(root)) add(n);
+      }
+    }
+    return Array.from(found.values());
+  }
+  async function extractComponents(onProgress, onWarning, selection) {
     const warn = onWarning ?? (() => {
     });
-    await safely(
-      () => figma.loadAllPagesAsync(),
-      (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
-    );
+    if (!selection) {
+      await safely(
+        () => figma.loadAllPagesAsync(),
+        (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
+      );
+    }
     const nodes = await safely(
-      () => Promise.resolve(figma.root.findAllWithCriteria({ types: ["COMPONENT", "COMPONENT_SET"] })),
-      (err) => warn(`Failed to scan document for components: ${String(err)}`)
+      () => Promise.resolve(selection ? findComponentsWithin(selection) : findComponentLike(figma.root)),
+      (err) => warn(`Failed to scan ${selection ? "selection" : "document"} for components: ${String(err)}`)
     );
     const allNodes = nodes ?? [];
     const componentSetsAll = allNodes.filter(
@@ -505,7 +546,7 @@
     )).filter((v) => v !== null);
     return { collections, variables };
   }
-  async function extractDesignSystem(onProgress) {
+  async function extractDesignSystem(onProgress, options = {}) {
     const warnings = [];
     const warn = (message) => warnings.push(message);
     const { collections, variables } = await extractVariableCollections(
@@ -530,13 +571,16 @@
     );
     const components = await extractComponents(
       (done, total) => onProgress == null ? void 0 : onProgress({ stage: "components", done, total }),
-      warn
+      warn,
+      options.selection
     );
     if (collections.length === 0 && variables.length === 0) {
       warn("No local variables found — falling back to styles as the token source of truth.");
     }
     if (components.length === 0) {
-      warn("No components or component sets found in this file.");
+      warn(
+        options.selection ? "No components or component sets found in the selection." : "No components or component sets found in this file."
+      );
     }
     return {
       collections,
@@ -1234,6 +1278,10 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const { summary, metadata } = ds;
     const rows = [
       ["Source File", metadata.fileName],
+      [
+        "Scope",
+        metadata.scope === "selection" ? "Selected layers only (components within the selection; variables and styles are file-wide)" : "Whole file"
+      ],
       ["Generated", metadata.generatedAt],
       ["Variable Collections", String(summary.variableCollectionsCount)],
       ["Variables", String(summary.variablesCount)],
@@ -2135,7 +2183,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     };
   }
   const PLUGIN_VERSION = "1.0.0";
-  function transformToDesignSystem(raw, fileName) {
+  function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
     const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
     const hiddenVariableIds = new Set(
@@ -2174,6 +2222,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     return {
       metadata: {
         fileName,
+        scope,
         generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
         pluginVersion: PLUGIN_VERSION
       },
@@ -2201,13 +2250,46 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   function post(message) {
     figma.ui.postMessage(message);
   }
-  async function handleExtract() {
+  const SETTINGS_KEY = "designmd.settings.v1";
+  async function loadSettings() {
     try {
-      const raw = await extractDesignSystem((progress) => {
-        const percent = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 100;
-        post({ type: "progress", stage: progress.stage, percent });
-      });
-      const designSystem = transformToDesignSystem(raw, figma.root.name);
+      return sanitizeSavedSettings(await figma.clientStorage.getAsync(SETTINGS_KEY));
+    } catch {
+      return null;
+    }
+  }
+  async function saveSettings(settings) {
+    try {
+      await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
+    } catch {
+    }
+  }
+  function postSelection() {
+    post({ type: "selection", count: figma.currentPage.selection.length });
+  }
+  async function handleReady() {
+    postSelection();
+    post({ type: "settings", settings: await loadSettings() });
+  }
+  async function handleExtract(scope) {
+    try {
+      const selection = scope === "selection" ? figma.currentPage.selection : void 0;
+      if (selection && selection.length === 0) {
+        post({
+          type: "error",
+          stage: "extraction",
+          message: "Select at least one layer in Figma to scan only the selection."
+        });
+        return;
+      }
+      const raw = await extractDesignSystem(
+        (progress) => {
+          const percent = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 100;
+          post({ type: "progress", stage: progress.stage, percent });
+        },
+        { selection }
+      );
+      const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
       cachedDesignSystem = designSystem;
       post({ type: "extraction-complete", designSystem });
     } catch (err) {
@@ -2249,12 +2331,19 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   }
   figma.ui.onmessage = async (message) => {
     switch (message.type) {
+      case "ready":
+        await handleReady();
+        break;
       case "extract":
-        await handleExtract();
+        await handleExtract(message.scope ?? "file");
+        break;
+      case "save-settings":
+        await saveSettings(message.settings);
         break;
       case "generate":
         await handleGenerate(message);
         break;
     }
   };
+  figma.on("selectionchange", postSelection);
 })();

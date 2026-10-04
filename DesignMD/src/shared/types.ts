@@ -183,8 +183,12 @@ export interface DesignSystemSummary {
   modesCount: number;
 }
 
+/** What the components in an extraction were drawn from. Variables and styles are always file-wide. */
+export type ExtractionScope = 'file' | 'selection';
+
 export interface DesignSystemMetadata {
   fileName: string;
+  scope: ExtractionScope;
   generatedAt: string;
   pluginVersion: string;
 }

@@ -102,3 +102,15 @@ describe('generateDesignMd component links', () => {
     }
   });
 });
+
+describe('generateDesignMd scope', () => {
+  it('states the whole file as the scope by default', () => {
+    expect(generateDesignMd(makeDesignSystem()).content).toContain('| Scope | Whole file |');
+  });
+
+  it('flags a selection-scoped export', () => {
+    const ds = makeDesignSystem();
+    ds.metadata.scope = 'selection';
+    expect(generateDesignMd(ds).content).toContain('| Scope | Selected layers only');
+  });
+});

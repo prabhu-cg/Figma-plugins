@@ -5,6 +5,12 @@ export function overviewSection(ds: DesignSystem): string {
   const { summary, metadata } = ds;
   const rows = [
     ['Source File', metadata.fileName],
+    [
+      'Scope',
+      metadata.scope === 'selection'
+        ? 'Selected layers only (components within the selection; variables and styles are file-wide)'
+        : 'Whole file',
+    ],
     ['Generated', metadata.generatedAt],
     ['Variable Collections', String(summary.variableCollectionsCount)],
     ['Variables', String(summary.variablesCount)],

@@ -181,21 +181,57 @@ function unionOf(lists: string[][]): string[] {
   return Array.from(new Set(lists.flat()));
 }
 
+type ComponentLike = ComponentNode | ComponentSetNode;
+
+const findComponentLike = (root: SceneNode | DocumentNode | PageNode): ComponentLike[] =>
+  (root as ChildrenMixin).findAllWithCriteria({
+    types: ['COMPONENT', 'COMPONENT_SET'],
+  }) as ComponentLike[];
+
+/**
+ * Components and component sets within the given layers: the layers themselves when they are
+ * components, plus everything nested inside them. A selected variant stands for its whole set.
+ */
+function findComponentsWithin(
+  roots: readonly SceneNode[],
+): Array<ComponentNode | ComponentSetNode> {
+  const found = new Map<string, ComponentNode | ComponentSetNode>();
+  const add = (n: ComponentNode | ComponentSetNode) => {
+    const target = n.type === 'COMPONENT' && n.parent?.type === 'COMPONENT_SET' ? n.parent : n;
+    found.set(target.id, target as ComponentNode | ComponentSetNode);
+  };
+  for (const root of roots) {
+    if (root.type === 'COMPONENT' || root.type === 'COMPONENT_SET') add(root);
+    if ('findAllWithCriteria' in root) {
+      for (const n of findComponentLike(root)) add(n);
+    }
+  }
+  return Array.from(found.values());
+}
+
+/**
+ * @param selection When given, only components inside these layers are extracted (the whole
+ * document is scanned otherwise).
+ */
 export async function extractComponents(
   onProgress?: (done: number, total: number) => void,
   onWarning?: (message: string) => void,
+  selection?: readonly SceneNode[],
 ): Promise<RawComponent[]> {
   const warn = onWarning ?? (() => {});
 
-  await safely(
-    () => figma.loadAllPagesAsync(),
-    (err) => warn(`Failed to load all pages for component scan: ${String(err)}`),
-  );
+  if (!selection) {
+    await safely(
+      () => figma.loadAllPagesAsync(),
+      (err) => warn(`Failed to load all pages for component scan: ${String(err)}`),
+    );
+  }
 
   const nodes = await safely(
     () =>
-      Promise.resolve(figma.root.findAllWithCriteria({ types: ['COMPONENT', 'COMPONENT_SET'] })),
-    (err) => warn(`Failed to scan document for components: ${String(err)}`),
+      Promise.resolve(selection ? findComponentsWithin(selection) : findComponentLike(figma.root)),
+    (err) =>
+      warn(`Failed to scan ${selection ? 'selection' : 'document'} for components: ${String(err)}`),
   );
 
   const allNodes = nodes ?? [];

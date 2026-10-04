@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_EXPORT_OPTIONS } from '../../../src/shared/messages';
 import {
   component,
+  frame,
   componentSet,
   document,
   fakeCollection,
@@ -171,5 +172,91 @@ describe('plugin controller (main.ts)', () => {
       (m) => (m.designSystem as { metadata: { fileName: string } }).metadata.fileName,
     );
     expect(designSystems).toEqual(['Acme', 'Renamed']);
+  });
+
+  it('ready: reports the current selection count and saved settings', async () => {
+    const h = await bootPlugin({
+      ...richFile(),
+      selection: [frame('A'), frame('B')],
+      storage: {
+        'designmd.settings.v1': { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true } },
+      },
+    });
+    await h.send({ type: 'ready' });
+    expect(ofType(h, 'selection')).toEqual([{ type: 'selection', count: 2 }]);
+    expect(ofType(h, 'settings')).toEqual([
+      { type: 'settings', settings: { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true } } },
+    ]);
+  });
+
+  it('ready: reports no saved settings on a first run or when storage fails', async () => {
+    const first = await bootPlugin(richFile());
+    await first.send({ type: 'ready' });
+    expect(ofType(first, 'settings')).toEqual([{ type: 'settings', settings: null }]);
+
+    const broken = await bootPlugin({ ...richFile(), failures: { storageRead: true } });
+    await broken.send({ type: 'ready' });
+    expect(ofType(broken, 'settings')).toEqual([{ type: 'settings', settings: null }]);
+  });
+
+  it('save-settings: persists, and ignores storage failures', async () => {
+    const h = await bootPlugin(richFile());
+    const settings = { options: { ...DEFAULT_EXPORT_OPTIONS, scssFile: true } };
+    await h.send({ type: 'save-settings', settings });
+    expect(h.storage['designmd.settings.v1']).toEqual(settings);
+
+    const broken = await bootPlugin({ ...richFile(), failures: { storageWrite: true } });
+    await expect(broken.send({ type: 'save-settings', settings })).resolves.toBeUndefined();
+    expect(ofType(broken, 'error')).toEqual([]);
+  });
+
+  it('posts the selection count whenever the selection changes', async () => {
+    const h = await bootPlugin(richFile());
+    h.setSelection([frame('A')]);
+    h.emit('selectionchange');
+    h.setSelection([]);
+    h.emit('selectionchange');
+    expect(ofType(h, 'selection')).toEqual([
+      { type: 'selection', count: 1 },
+      { type: 'selection', count: 0 },
+    ]);
+  });
+
+  it('extract (selection scope): scans only selected layers and records the scope', async () => {
+    const picked = frame('Picked', [component('InSelection')]);
+    const h = await bootPlugin({
+      root: document('Acme', [page('P', [picked, component('Outside')])]),
+      selection: [picked],
+    });
+    await h.send({ type: 'extract', scope: 'selection' });
+    const [done] = ofType(h, 'extraction-complete');
+    const ds = done.designSystem as {
+      metadata: { scope: string };
+      components: Array<{ name: string }>;
+    };
+    expect(ds.metadata.scope).toBe('selection');
+    expect(ds.components.map((c) => c.name)).toEqual(['InSelection']);
+  });
+
+  it('extract (selection scope): asks for a selection when nothing is selected', async () => {
+    const h = await bootPlugin({ ...richFile(), selection: [] });
+    await h.send({ type: 'extract', scope: 'selection' });
+    expect(ofType(h, 'error')).toEqual([
+      {
+        type: 'error',
+        stage: 'extraction',
+        message: 'Select at least one layer in Figma to scan only the selection.',
+      },
+    ]);
+    expect(ofType(h, 'extraction-complete')).toHaveLength(0);
+  });
+
+  it('extract defaults to the whole file and the design.md overview states the scope', async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({ type: 'extract' });
+    expect(
+      (ofType(h, 'extraction-complete')[0].designSystem as { metadata: { scope: string } }).metadata
+        .scope,
+    ).toBe('file');
   });
 });

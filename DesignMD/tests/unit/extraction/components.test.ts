@@ -306,3 +306,50 @@ describe('extractComponents: layout', () => {
     expect(c.layout).toBeUndefined();
   });
 });
+
+describe('extractComponents: selection scope', () => {
+  it('extracts only components inside the selected layers, without scanning the document', async () => {
+    const inFrame = component('InFrame');
+    const picked = frame('Picked', [inFrame, frame('Nested', [component('Deep')])]);
+    const other = component('Elsewhere');
+    const handle = installFakeFigma({ root: document('File', [page('P', [picked, other])]) });
+    const result = await extractComponents(undefined, undefined, [picked as never]);
+    expect(result.map((c) => c.name).sort()).toEqual(['Deep', 'InFrame']);
+    expect(handle.calls.loadAllPages).toBe(0);
+  });
+
+  it('includes a selected component itself, even without children to search', async () => {
+    const button = component('Button');
+    const frameNode = frame('F', [button]);
+    installFakeFigma({ root: document('File', [page('P', [frameNode])]) });
+    const result = await extractComponents(undefined, undefined, [button as never]);
+    expect(result.map((c) => c.name)).toEqual(['Button']);
+  });
+
+  it('treats a selected variant as its whole component set, once', async () => {
+    const set = componentSet('Chip', [{ props: { S: 'a' } }, { props: { S: 'b' } }]);
+    installFakeFigma({ root: document('File', [page('P', [set])]) });
+    const [variantA, variantB] = set.children!;
+    const result = await extractComponents(undefined, undefined, [
+      variantA,
+      variantB,
+      set,
+    ] as never[]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ name: 'Chip', isComponentSet: true });
+    expect(result[0].variants).toHaveLength(2);
+  });
+
+  it('ignores selected layers that are not containers', async () => {
+    const rect = node('RECTANGLE', 'r');
+    installFakeFigma({ root: document('File', [page('P', [rect])]) });
+    expect(await extractComponents(undefined, undefined, [rect as never])).toEqual([]);
+  });
+
+  it('still hides components hidden from publishing', async () => {
+    const picked = frame('Picked', [component('Shown'), component('.Hidden')]);
+    installFakeFigma({ root: document('File', [page('P', [picked])]) });
+    const result = await extractComponents(undefined, undefined, [picked as never]);
+    expect(result.map((c) => c.name)).toEqual(['Shown']);
+  });
+});

@@ -1,5 +1,11 @@
 import type { DesignSystem } from '@shared/types';
-import type { PluginToUIMessage, UIToPluginMessage } from '@shared/messages';
+import type { ExtractionScope } from '@shared/types';
+import {
+  sanitizeSavedSettings,
+  type PluginToUIMessage,
+  type SavedSettings,
+  type UIToPluginMessage,
+} from '@shared/messages';
 import { extractDesignSystem } from './extraction';
 import { generateOutputs } from './generators';
 import { transformToDesignSystem } from './transform';
@@ -13,14 +19,55 @@ function post(message: PluginToUIMessage): void {
   figma.ui.postMessage(message);
 }
 
-async function handleExtract(): Promise<void> {
-  try {
-    const raw = await extractDesignSystem((progress) => {
-      const percent = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 100;
-      post({ type: 'progress', stage: progress.stage, percent });
-    });
+const SETTINGS_KEY = 'designmd.settings.v1';
 
-    const designSystem = transformToDesignSystem(raw, figma.root.name);
+async function loadSettings(): Promise<SavedSettings | null> {
+  try {
+    return sanitizeSavedSettings(await figma.clientStorage.getAsync(SETTINGS_KEY));
+  } catch {
+    return null; // Storage unavailable: behave as a first run.
+  }
+}
+
+async function saveSettings(settings: SavedSettings): Promise<void> {
+  try {
+    await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
+  } catch {
+    // Not being able to remember settings must never get in the user's way.
+  }
+}
+
+function postSelection(): void {
+  post({ type: 'selection', count: figma.currentPage.selection.length });
+}
+
+async function handleReady(): Promise<void> {
+  postSelection();
+  post({ type: 'settings', settings: await loadSettings() });
+}
+
+async function handleExtract(scope: ExtractionScope): Promise<void> {
+  try {
+    const selection = scope === 'selection' ? figma.currentPage.selection : undefined;
+    if (selection && selection.length === 0) {
+      post({
+        type: 'error',
+        stage: 'extraction',
+        message: 'Select at least one layer in Figma to scan only the selection.',
+      });
+      return;
+    }
+
+    const raw = await extractDesignSystem(
+      (progress) => {
+        const percent =
+          progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 100;
+        post({ type: 'progress', stage: progress.stage, percent });
+      },
+      { selection },
+    );
+
+    const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
     cachedDesignSystem = designSystem;
 
     post({ type: 'extraction-complete', designSystem });
@@ -68,11 +115,19 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
 
 figma.ui.onmessage = async (message: UIToPluginMessage) => {
   switch (message.type) {
+    case 'ready':
+      await handleReady();
+      break;
     case 'extract':
-      await handleExtract();
+      await handleExtract(message.scope ?? 'file');
+      break;
+    case 'save-settings':
+      await saveSettings(message.settings);
       break;
     case 'generate':
       await handleGenerate(message);
       break;
   }
 };
+
+figma.on('selectionchange', postSelection);

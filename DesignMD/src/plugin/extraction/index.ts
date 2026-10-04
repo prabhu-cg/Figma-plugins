@@ -23,8 +23,14 @@ export interface ExtractionProgress {
  * corrupted style — never prevents the rest of the design system from
  * being extracted.
  */
+export interface ExtractionOptions {
+  /** Limit component extraction to these layers. Variables and styles are always file-wide. */
+  selection?: readonly SceneNode[];
+}
+
 export async function extractDesignSystem(
   onProgress?: (progress: ExtractionProgress) => void,
+  options: ExtractionOptions = {},
 ): Promise<ExtractionResult> {
   const warnings: string[] = [];
   const warn = (message: string) => warnings.push(message);
@@ -57,13 +63,18 @@ export async function extractDesignSystem(
   const components = await extractComponents(
     (done, total) => onProgress?.({ stage: 'components', done, total }),
     warn,
+    options.selection,
   );
 
   if (collections.length === 0 && variables.length === 0) {
     warn('No local variables found — falling back to styles as the token source of truth.');
   }
   if (components.length === 0) {
-    warn('No components or component sets found in this file.');
+    warn(
+      options.selection
+        ? 'No components or component sets found in the selection.'
+        : 'No components or component sets found in this file.',
+    );
   }
 
   return {
