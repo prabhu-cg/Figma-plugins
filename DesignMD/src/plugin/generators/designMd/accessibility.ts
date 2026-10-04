@@ -2,6 +2,8 @@ import type { DesignSystem } from '@shared/types';
 import { joinSections, mdHeading, mdList, mdTable } from '../markdown';
 import {
   computeContrastReportsByMode,
+  computeDefinedPairs,
+  type DefinedPairResult,
   type ContrastPair,
   type ContrastReport,
   type FallbackContrastCheck,
@@ -83,11 +85,37 @@ function contrastBody(report: ContrastReport, level: number): string {
   ]);
 }
 
+function definedPairsBlock(ds: DesignSystem, modeName: string | null, level: number): string {
+  const specs = ds.contrastPairs ?? [];
+  if (specs.length === 0) return '';
+  const results: DefinedPairResult[] = computeDefinedPairs(ds, specs, modeName ?? undefined);
+  const rows = results.map((r) => {
+    const names = [r.spec.foreground, r.spec.background];
+    if (r.status === 'missing') return [...names, '—', 'Token not found', 'Token not found'];
+    if (r.status === 'translucent') return [...names, '—', 'Translucent', 'Translucent'];
+    return [
+      ...names,
+      formatRatio(r.ratio!),
+      r.passesAANormal ? 'Pass' : 'Fail',
+      r.passesAALarge ? 'Pass' : 'Fail',
+    ];
+  });
+  return joinSections([
+    mdHeading(level, 'Defined Pairs'),
+    'Pairs chosen explicitly in the plugin, checked in addition to the inferred ones.\n',
+    mdTable(['Foreground', 'Background', 'Ratio', 'AA Normal (4.5:1)', 'AA Large (3:1)'], rows),
+  ]);
+}
+
 function colorContrastSection(ds: DesignSystem): string {
   const reports = computeContrastReportsByMode(ds);
 
   if (reports.length === 1) {
-    return joinSections([mdHeading(3, 'Color Contrast'), contrastBody(reports[0].report, 4)]);
+    return joinSections([
+      mdHeading(3, 'Color Contrast'),
+      contrastBody(reports[0].report, 4),
+      definedPairsBlock(ds, reports[0].modeName, 4),
+    ]);
   }
 
   // Each mode is checked on its own: a pair that passes in Light can fail in Dark.
@@ -99,6 +127,7 @@ function colorContrastSection(ds: DesignSystem): string {
     ...reports.flatMap(({ modeName, report }) => [
       mdHeading(4, `Mode: ${modeName}`),
       contrastBody(report, 5),
+      definedPairsBlock(ds, modeName, 5),
     ]),
   ]);
 }

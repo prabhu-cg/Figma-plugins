@@ -21,6 +21,19 @@
     }
     return { options };
   }
+  const EMPTY_FILE_SETTINGS = { excludedPages: [], contrastPairs: [] };
+  const isString$1 = (v) => typeof v === "string";
+  function sanitizeFileSettings(value) {
+    if (typeof value !== "object" || value === null) return EMPTY_FILE_SETTINGS;
+    const { excludedPages, contrastPairs } = value;
+    return {
+      excludedPages: Array.isArray(excludedPages) ? excludedPages.filter(isString$1) : [],
+      contrastPairs: Array.isArray(contrastPairs) ? contrastPairs.flatMap((pair) => {
+        const { foreground, background } = pair ?? {};
+        return isString$1(foreground) && isString$1(background) ? [{ foreground, background }] : [];
+      }) : []
+    };
+  }
   function yieldToEventLoop() {
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
@@ -1099,6 +1112,32 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       skippedTranslucentCount
     };
   }
+  function computeDefinedPairs(ds, specs, modeName) {
+    const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
+    const colors = /* @__PURE__ */ new Map();
+    for (const s of ds.styles.color) {
+      if (s.paint && !s.paintIsGradientOrImage) colors.set(s.name, s.paint);
+    }
+    for (const v of ds.variables) {
+      if (v.resolvedType !== "COLOR") continue;
+      const color = resolveVariableColor(v, variablesById, modeName);
+      if (color) colors.set(v.name, color);
+    }
+    return specs.map((spec) => {
+      const foreground = colors.get(spec.foreground);
+      const background = colors.get(spec.background);
+      if (!foreground || !background) return { spec, status: "missing" };
+      if (foreground.a < 0.999 || background.a < 0.999) return { spec, status: "translucent" };
+      const ratio = contrastRatio(foreground, background);
+      return {
+        spec,
+        status: "ok",
+        ratio,
+        passesAANormal: ratio >= AA_NORMAL_MIN_RATIO,
+        passesAALarge: ratio >= AA_LARGE_MIN_RATIO
+      };
+    });
+  }
   const MAX_FAILING_ROWS = 100;
   function formatRatio(ratio) {
     return `${ratio.toFixed(2)}:1`;
@@ -1160,10 +1199,35 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       fallbackChecksTable(report.fallbackChecks)
     ]);
   }
+  function definedPairsBlock(ds, modeName, level) {
+    const specs = ds.contrastPairs ?? [];
+    if (specs.length === 0) return "";
+    const results = computeDefinedPairs(ds, specs, modeName ?? void 0);
+    const rows = results.map((r) => {
+      const names = [r.spec.foreground, r.spec.background];
+      if (r.status === "missing") return [...names, "—", "Token not found", "Token not found"];
+      if (r.status === "translucent") return [...names, "—", "Translucent", "Translucent"];
+      return [
+        ...names,
+        formatRatio(r.ratio),
+        r.passesAANormal ? "Pass" : "Fail",
+        r.passesAALarge ? "Pass" : "Fail"
+      ];
+    });
+    return joinSections([
+      mdHeading(level, "Defined Pairs"),
+      "Pairs chosen explicitly in the plugin, checked in addition to the inferred ones.\n",
+      mdTable(["Foreground", "Background", "Ratio", "AA Normal (4.5:1)", "AA Large (3:1)"], rows)
+    ]);
+  }
   function colorContrastSection(ds) {
     const reports = computeContrastReportsByMode(ds);
     if (reports.length === 1) {
-      return joinSections([mdHeading(3, "Color Contrast"), contrastBody(reports[0].report, 4)]);
+      return joinSections([
+        mdHeading(3, "Color Contrast"),
+        contrastBody(reports[0].report, 4),
+        definedPairsBlock(ds, reports[0].modeName, 4)
+      ]);
     }
     return joinSections([
       mdHeading(3, "Color Contrast"),
@@ -1171,7 +1235,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
 `,
       ...reports.flatMap(({ modeName, report }) => [
         mdHeading(4, `Mode: ${modeName}`),
-        contrastBody(report, 5)
+        contrastBody(report, 5),
+        definedPairsBlock(ds, modeName, 5)
       ])
     ]);
   }
@@ -2381,6 +2446,20 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       return null;
     }
   }
+  const fileSettingsKey = () => `designmd.file.v1:${figma.root.name}`;
+  async function loadFileSettings() {
+    try {
+      return sanitizeFileSettings(await figma.clientStorage.getAsync(fileSettingsKey()));
+    } catch {
+      return sanitizeFileSettings(null);
+    }
+  }
+  async function saveFileSettings(fileSettings) {
+    try {
+      await figma.clientStorage.setAsync(fileSettingsKey(), fileSettings);
+    } catch {
+    }
+  }
   async function saveSettings(settings) {
     try {
       await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
@@ -2392,7 +2471,11 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   }
   async function handleReady() {
     postSelection();
-    post({ type: "settings", settings: await loadSettings() });
+    post({
+      type: "settings",
+      settings: await loadSettings(),
+      fileSettings: await loadFileSettings()
+    });
   }
   async function handleExtract(scope) {
     try {
@@ -2433,7 +2516,10 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         });
         return;
       }
-      const designSystem = filterDesignSystemByPages(cachedDesignSystem, options.excludedPages);
+      const designSystem = {
+        ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
+        contrastPairs: options.contrastPairs ?? []
+      };
       const files = generateOutputs(designSystem, options.options);
       if (files.length === 0) {
         post({
@@ -2462,6 +2548,9 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         break;
       case "save-settings":
         await saveSettings(message.settings);
+        break;
+      case "save-file-settings":
+        await saveFileSettings(message.fileSettings);
         break;
       case "generate":
         await handleGenerate(message);

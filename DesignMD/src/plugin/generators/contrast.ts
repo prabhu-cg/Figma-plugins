@@ -13,7 +13,7 @@
  */
 import { nameHasHint } from '@shared/naming';
 import { defaultModeValue } from './tokenValue';
-import type { ColorValue, DesignSystem, VariableToken } from '@shared/types';
+import type { ColorValue, ContrastPairSpec, DesignSystem, VariableToken } from '@shared/types';
 
 export interface ContrastColorToken {
   name: string;
@@ -279,4 +279,72 @@ export function computeContrastReport(ds: DesignSystem, modeName?: string): Cont
     totalColorTokensChecked: tokens.length,
     skippedTranslucentCount,
   };
+}
+
+/** Names of color tokens that can be used in a contrast pair: color variables and solid color styles. */
+export function listColorTokenNames(ds: DesignSystem): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  const add = (name: string) => {
+    if (!seen.has(name)) {
+      seen.add(name);
+      names.push(name);
+    }
+  };
+  for (const v of ds.variables) {
+    if (v.resolvedType === 'COLOR' && (v.category === 'color' || v.category === 'semantic')) {
+      add(v.name);
+    }
+  }
+  for (const s of ds.styles.color) {
+    if (s.paint && !s.paintIsGradientOrImage) add(s.name);
+  }
+  return names;
+}
+
+export type DefinedPairStatus = 'ok' | 'missing' | 'translucent';
+
+export interface DefinedPairResult {
+  spec: ContrastPairSpec;
+  status: DefinedPairStatus;
+  ratio?: number;
+  passesAANormal?: boolean;
+  passesAALarge?: boolean;
+}
+
+/**
+ * Contrast for pairs the user chose explicitly, in one mode. Unlike inferred pairs these are
+ * never dropped silently: a token that no longer exists or is translucent is reported as such.
+ */
+export function computeDefinedPairs(
+  ds: DesignSystem,
+  specs: readonly ContrastPairSpec[],
+  modeName?: string,
+): DefinedPairResult[] {
+  const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
+  const colors = new Map<string, ColorValue>();
+  for (const s of ds.styles.color) {
+    if (s.paint && !s.paintIsGradientOrImage) colors.set(s.name, s.paint);
+  }
+  // Variables win over styles with the same name, like everywhere else.
+  for (const v of ds.variables) {
+    if (v.resolvedType !== 'COLOR') continue;
+    const color = resolveVariableColor(v, variablesById, modeName);
+    if (color) colors.set(v.name, color);
+  }
+
+  return specs.map((spec) => {
+    const foreground = colors.get(spec.foreground);
+    const background = colors.get(spec.background);
+    if (!foreground || !background) return { spec, status: 'missing' };
+    if (foreground.a < 0.999 || background.a < 0.999) return { spec, status: 'translucent' };
+    const ratio = contrastRatio(foreground, background);
+    return {
+      spec,
+      status: 'ok',
+      ratio,
+      passesAANormal: ratio >= AA_NORMAL_MIN_RATIO,
+      passesAALarge: ratio >= AA_LARGE_MIN_RATIO,
+    };
+  });
 }

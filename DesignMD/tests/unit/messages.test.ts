@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_EXPORT_OPTIONS, sanitizeSavedSettings } from '../../src/shared/messages';
+import {
+  DEFAULT_EXPORT_OPTIONS,
+  EMPTY_FILE_SETTINGS,
+  sanitizeFileSettings,
+  sanitizeSavedSettings,
+} from '../../src/shared/messages';
 
 describe('DEFAULT_EXPORT_OPTIONS', () => {
   it('checks design.md, component docs, and zip by default', () => {
@@ -32,5 +37,32 @@ describe('sanitizeSavedSettings', () => {
       tokensJson: true,
     });
     expect(result?.options).not.toHaveProperty('unknown');
+  });
+});
+
+describe('sanitizeFileSettings', () => {
+  it('falls back to empty settings for anything malformed', () => {
+    expect(sanitizeFileSettings(undefined)).toEqual(EMPTY_FILE_SETTINGS);
+    expect(sanitizeFileSettings('x')).toEqual(EMPTY_FILE_SETTINGS);
+    expect(sanitizeFileSettings({ excludedPages: 3, contrastPairs: 'no' })).toEqual(
+      EMPTY_FILE_SETTINGS,
+    );
+  });
+
+  it('keeps well-formed entries and drops the rest', () => {
+    expect(
+      sanitizeFileSettings({
+        excludedPages: ['Drafts', 7, null, 'Playground'],
+        contrastPairs: [
+          { foreground: 'Text', background: 'Surface' },
+          { foreground: 'Text' },
+          null,
+          { foreground: 1, background: 2 },
+        ],
+      }),
+    ).toEqual({
+      excludedPages: ['Drafts', 'Playground'],
+      contrastPairs: [{ foreground: 'Text', background: 'Surface' }],
+    });
   });
 });

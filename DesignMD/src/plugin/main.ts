@@ -1,7 +1,9 @@
 import type { DesignSystem } from '@shared/types';
 import type { ExtractionScope } from '@shared/types';
 import {
+  sanitizeFileSettings,
   sanitizeSavedSettings,
+  type FileSettings,
   type PluginToUIMessage,
   type SavedSettings,
   type UIToPluginMessage,
@@ -29,6 +31,25 @@ async function loadSettings(): Promise<SavedSettings | null> {
   }
 }
 
+/** Per-file settings are keyed by file name: plugins can't read a file's id without extra access. */
+const fileSettingsKey = () => `designmd.file.v1:${figma.root.name}`;
+
+async function loadFileSettings(): Promise<FileSettings> {
+  try {
+    return sanitizeFileSettings(await figma.clientStorage.getAsync(fileSettingsKey()));
+  } catch {
+    return sanitizeFileSettings(null);
+  }
+}
+
+async function saveFileSettings(fileSettings: FileSettings): Promise<void> {
+  try {
+    await figma.clientStorage.setAsync(fileSettingsKey(), fileSettings);
+  } catch {
+    // Remembering is best-effort.
+  }
+}
+
 async function saveSettings(settings: SavedSettings): Promise<void> {
   try {
     await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
@@ -43,7 +64,11 @@ function postSelection(): void {
 
 async function handleReady(): Promise<void> {
   postSelection();
-  post({ type: 'settings', settings: await loadSettings() });
+  post({
+    type: 'settings',
+    settings: await loadSettings(),
+    fileSettings: await loadFileSettings(),
+  });
 }
 
 async function handleExtract(scope: ExtractionScope): Promise<void> {
@@ -91,7 +116,10 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       return;
     }
 
-    const designSystem = filterDesignSystemByPages(cachedDesignSystem, options.excludedPages);
+    const designSystem = {
+      ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
+      contrastPairs: options.contrastPairs ?? [],
+    };
     const files = generateOutputs(designSystem, options.options);
 
     if (files.length === 0) {
@@ -123,6 +151,9 @@ figma.ui.onmessage = async (message: UIToPluginMessage) => {
       break;
     case 'save-settings':
       await saveSettings(message.settings);
+      break;
+    case 'save-file-settings':
+      await saveFileSettings(message.fileSettings);
       break;
     case 'generate':
       await handleGenerate(message);

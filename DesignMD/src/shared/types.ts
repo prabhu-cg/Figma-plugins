@@ -197,6 +197,12 @@ export interface DesignSystemMetadata {
   pluginVersion: string;
 }
 
+/** A user-defined foreground/background pair to contrast-check, by color token name. */
+export interface ContrastPairSpec {
+  foreground: string;
+  background: string;
+}
+
 export interface DesignSystem {
   metadata: DesignSystemMetadata;
   collections: VariableCollection[];
@@ -211,4 +217,6 @@ export interface DesignSystem {
   summary: DesignSystemSummary;
   /** Actionable, non-fatal issues surfaced during extraction/transformation. */
   warnings: string[];
+  /** Extra pairs to contrast-check, on top of those inferred from names. Set at generation time. */
+  contrastPairs?: ContrastPairSpec[];
 }

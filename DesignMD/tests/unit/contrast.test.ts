@@ -6,6 +6,8 @@ import {
   colorModeNames,
   computeContrastReport,
   computeContrastReportsByMode,
+  computeDefinedPairs,
+  listColorTokenNames,
 } from '../../src/plugin/generators/contrast';
 import { generateDesignMd } from '../../src/plugin/generators/designMd';
 import { makeDesignSystem } from './fixtures';
@@ -288,5 +290,137 @@ describe('mode-aware contrast', () => {
     expect(content).toContain('Checked separately for each of the 2 color modes: Light, Dark.');
     expect(content).toContain('#### Mode: Light');
     expect(content).toContain('#### Mode: Dark');
+  });
+});
+
+describe('defined contrast pairs', () => {
+  const color = (hex: string, v: number, a = 1): ColorValue => ({ hex, r: v, g: v, b: v, a });
+  function ds() {
+    const system = makeDesignSystem();
+    system.variables = [];
+    system.styles.color = [
+      { ...makeDesignSystem().styles.color[0], id: 'ink', name: 'Ink', paint: color('#000', 0) },
+      {
+        ...makeDesignSystem().styles.color[0],
+        id: 'paper',
+        name: 'Paper',
+        paint: color('#fff', 1),
+      },
+      {
+        ...makeDesignSystem().styles.color[0],
+        id: 'grey',
+        name: 'Grey',
+        paint: color('#777', 0.47),
+      },
+      {
+        ...makeDesignSystem().styles.color[0],
+        id: 'ghost',
+        name: 'Ghost',
+        paint: color('#fff8', 1, 0.5),
+      },
+    ];
+    return system;
+  }
+
+  it('lists color tokens usable in a pair, once each', () => {
+    const system = makeDesignSystem();
+    expect(listColorTokenNames(system)).toEqual([
+      'Color/Primary/500',
+      'Semantic/Color/Danger',
+      'Surface/Background',
+    ]);
+  });
+
+  it('computes ratio and AA results', () => {
+    const [ok, weak] = computeDefinedPairs(ds(), [
+      { foreground: 'Ink', background: 'Paper' },
+      { foreground: 'Grey', background: 'Paper' },
+    ]);
+    expect(ok).toMatchObject({ status: 'ok', passesAANormal: true, passesAALarge: true });
+    expect(ok.ratio).toBeCloseTo(21, 1);
+    expect(weak.status).toBe('ok');
+    expect(weak.passesAANormal).toBe(false);
+  });
+
+  it('reports missing and translucent tokens instead of dropping them', () => {
+    const [missing, translucent] = computeDefinedPairs(ds(), [
+      { foreground: 'Ink', background: 'Deleted' },
+      { foreground: 'Ink', background: 'Ghost' },
+    ]);
+    expect(missing.status).toBe('missing');
+    expect(translucent.status).toBe('translucent');
+  });
+
+  it('resolves variables in the requested mode', () => {
+    const system = dsWithModesForPairs();
+    const [light] = computeDefinedPairs(
+      system,
+      [{ foreground: 'Text/Primary', background: 'Surface/Page' }],
+      'Light',
+    );
+    const [dark] = computeDefinedPairs(
+      system,
+      [{ foreground: 'Text/Primary', background: 'Surface/Page' }],
+      'Dark',
+    );
+    expect(light.passesAANormal).toBe(true);
+    expect(dark.passesAANormal).toBe(false);
+  });
+
+  function dsWithModesForPairs() {
+    const system = makeDesignSystem();
+    system.styles.color = [];
+    const base = {
+      collectionId: 'c',
+      collectionName: 'T',
+      resolvedType: 'COLOR' as const,
+      category: 'color' as const,
+      description: '',
+      codeSyntax: {},
+      usedByComponents: [],
+      scopes: [] as string[],
+    };
+    system.variables = [
+      {
+        ...base,
+        id: 't',
+        name: 'Text/Primary',
+        path: ['Text', 'Primary'],
+        cssName: '--t',
+        valuesByMode: [
+          { modeId: 'l', modeName: 'Light', value: { kind: 'color', color: color('#111', 0.07) } },
+          { modeId: 'd', modeName: 'Dark', value: { kind: 'color', color: color('#222', 0.13) } },
+        ],
+      },
+      {
+        ...base,
+        id: 'b',
+        name: 'Surface/Page',
+        path: ['Surface', 'Page'],
+        cssName: '--b',
+        valuesByMode: [
+          { modeId: 'l', modeName: 'Light', value: { kind: 'color', color: color('#fff', 1) } },
+          { modeId: 'd', modeName: 'Dark', value: { kind: 'color', color: color('#000', 0) } },
+        ],
+      },
+    ];
+    return system;
+  }
+
+  it('renders a Defined Pairs table in design.md, per mode when there are several', () => {
+    const system = dsWithModesForPairs();
+    system.contrastPairs = [
+      { foreground: 'Text/Primary', background: 'Surface/Page' },
+      { foreground: 'Text/Primary', background: 'Gone' },
+    ];
+    const { content } = generateDesignMd(system);
+    expect(content.match(/Defined Pairs/g)).toHaveLength(2);
+    expect(content).toContain('Token not found');
+    expect(content).toMatch(/\| Text\/Primary \| Surface\/Page \| [\d.]+:1 \| Pass \| Pass \|/);
+    expect(content).toMatch(/\| Text\/Primary \| Surface\/Page \| [\d.]+:1 \| Fail \| Fail \|/);
+  });
+
+  it('adds nothing when no pairs are defined', () => {
+    expect(generateDesignMd(makeDesignSystem()).content).not.toContain('Defined Pairs');
   });
 });

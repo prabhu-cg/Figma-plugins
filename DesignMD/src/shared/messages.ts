@@ -1,4 +1,4 @@
-import type { DesignSystem, ExtractionScope } from './types';
+import type { ContrastPairSpec, DesignSystem, ExtractionScope } from './types';
 
 export interface ExportOptions {
   designMd: boolean;
@@ -53,16 +53,47 @@ export function sanitizeSavedSettings(value: unknown): SavedSettings | null {
   return { options };
 }
 
+/** Settings that belong to one Figma file (keyed by file name), remembered between sessions. */
+export interface FileSettings {
+  excludedPages: string[];
+  contrastPairs: ContrastPairSpec[];
+}
+
+export const EMPTY_FILE_SETTINGS: FileSettings = { excludedPages: [], contrastPairs: [] };
+
+const isString = (v: unknown): v is string => typeof v === 'string';
+
+/** Validates stored per-file settings; anything malformed is dropped rather than trusted. */
+export function sanitizeFileSettings(value: unknown): FileSettings {
+  if (typeof value !== 'object' || value === null) return EMPTY_FILE_SETTINGS;
+  const { excludedPages, contrastPairs } = value as Record<string, unknown>;
+  return {
+    excludedPages: Array.isArray(excludedPages) ? excludedPages.filter(isString) : [],
+    contrastPairs: Array.isArray(contrastPairs)
+      ? contrastPairs.flatMap((pair) => {
+          const { foreground, background } = (pair ?? {}) as Record<string, unknown>;
+          return isString(foreground) && isString(background) ? [{ foreground, background }] : [];
+        })
+      : [],
+  };
+}
+
 export type UIToPluginMessage =
   | { type: 'ready' }
   | { type: 'extract'; scope?: ExtractionScope }
-  | { type: 'generate'; options: ExportOptions; excludedPages: string[] }
-  | { type: 'save-settings'; settings: SavedSettings };
+  | {
+      type: 'generate';
+      options: ExportOptions;
+      excludedPages: string[];
+      contrastPairs?: ContrastPairSpec[];
+    }
+  | { type: 'save-settings'; settings: SavedSettings }
+  | { type: 'save-file-settings'; fileSettings: FileSettings };
 
 export type PluginToUIMessage =
   | { type: 'progress'; stage: string; percent: number; message?: string }
   | { type: 'selection'; count: number }
-  | { type: 'settings'; settings: SavedSettings | null }
+  | { type: 'settings'; settings: SavedSettings | null; fileSettings: FileSettings }
   | { type: 'extraction-complete'; designSystem: DesignSystem }
   | { type: 'generation-complete'; files: GeneratedFile[] }
   | { type: 'error'; stage: string; message: string };

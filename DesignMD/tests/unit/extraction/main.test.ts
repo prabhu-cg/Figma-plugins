@@ -185,18 +185,22 @@ describe('plugin controller (main.ts)', () => {
     await h.send({ type: 'ready' });
     expect(ofType(h, 'selection')).toEqual([{ type: 'selection', count: 2 }]);
     expect(ofType(h, 'settings')).toEqual([
-      { type: 'settings', settings: { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true } } },
+      {
+        type: 'settings',
+        settings: { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true } },
+        fileSettings: { excludedPages: [], contrastPairs: [] },
+      },
     ]);
   });
 
   it('ready: reports no saved settings on a first run or when storage fails', async () => {
     const first = await bootPlugin(richFile());
     await first.send({ type: 'ready' });
-    expect(ofType(first, 'settings')).toEqual([{ type: 'settings', settings: null }]);
+    expect(ofType(first, 'settings')[0]).toMatchObject({ type: 'settings', settings: null });
 
     const broken = await bootPlugin({ ...richFile(), failures: { storageRead: true } });
     await broken.send({ type: 'ready' });
-    expect(ofType(broken, 'settings')).toEqual([{ type: 'settings', settings: null }]);
+    expect(ofType(broken, 'settings')[0]).toMatchObject({ type: 'settings', settings: null });
   });
 
   it('save-settings: persists, and ignores storage failures', async () => {
@@ -258,5 +262,75 @@ describe('plugin controller (main.ts)', () => {
       (ofType(h, 'extraction-complete')[0].designSystem as { metadata: { scope: string } }).metadata
         .scope,
     ).toBe('file');
+  });
+
+  it('ready: includes this file’s settings, keyed by file name', async () => {
+    const h = await bootPlugin({
+      ...richFile(),
+      storage: {
+        'designmd.file.v1:Acme': {
+          excludedPages: ['Drafts'],
+          contrastPairs: [{ foreground: 'Text', background: 'Surface' }],
+        },
+        'designmd.file.v1:Other file': { excludedPages: ['Nope'], contrastPairs: [] },
+      },
+    });
+    await h.send({ type: 'ready' });
+    expect(ofType(h, 'settings')[0].fileSettings).toEqual({
+      excludedPages: ['Drafts'],
+      contrastPairs: [{ foreground: 'Text', background: 'Surface' }],
+    });
+  });
+
+  it('ready: gives empty file settings for a file with nothing saved or unreadable storage', async () => {
+    const empty = { excludedPages: [], contrastPairs: [] };
+    const fresh = await bootPlugin(richFile());
+    await fresh.send({ type: 'ready' });
+    expect(ofType(fresh, 'settings')[0].fileSettings).toEqual(empty);
+
+    const broken = await bootPlugin({ ...richFile(), failures: { storageRead: true } });
+    await broken.send({ type: 'ready' });
+    expect(ofType(broken, 'settings')[0].fileSettings).toEqual(empty);
+  });
+
+  it('save-file-settings: stores under this file’s key only', async () => {
+    const h = await bootPlugin(richFile());
+    const fileSettings = {
+      excludedPages: ['Drafts'],
+      contrastPairs: [{ foreground: 'A', background: 'B' }],
+    };
+    await h.send({ type: 'save-file-settings', fileSettings });
+    expect(h.storage['designmd.file.v1:Acme']).toEqual(fileSettings);
+    expect(Object.keys(h.storage)).toEqual(['designmd.file.v1:Acme']);
+  });
+
+  it('generate: checks the contrast pairs the user defined', async () => {
+    const h = await bootPlugin({
+      root: document('Acme', [page('P')]),
+      collections: [fakeCollection({ variableIds: ['t', 'b'] })],
+      variables: [
+        fakeVariable({
+          id: 't',
+          name: 'Color/Ink',
+          valuesByMode: { 'm:light': { r: 0, g: 0, b: 0, a: 1 } },
+        }),
+        fakeVariable({
+          id: 'b',
+          name: 'Color/Paper',
+          valuesByMode: { 'm:light': { r: 1, g: 1, b: 1, a: 1 } },
+        }),
+      ],
+    });
+    await h.send({ type: 'extract' });
+    await h.send({
+      type: 'generate',
+      options: { ...DEFAULT_EXPORT_OPTIONS, componentDocs: false },
+      excludedPages: [],
+      contrastPairs: [{ foreground: 'Color/Ink', background: 'Color/Paper' }],
+    });
+    const [done] = ofType(h, 'generation-complete');
+    const designMd = (done.files as Array<{ path: string; content: string }>)[0].content;
+    expect(designMd).toContain('Defined Pairs');
+    expect(designMd).toMatch(/\| Color\/Ink \| Color\/Paper \| 21\.00:1 \| Pass \| Pass \|/);
   });
 });
