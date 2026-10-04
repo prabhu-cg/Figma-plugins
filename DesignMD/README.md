@@ -85,7 +85,9 @@ real extraction code runs against it:
 
 ```ts
 const handle = installFakeFigma({
-  root: document('My File', [page('Buttons', [componentSet('Button', [{ props: { Size: 'L' } }])])]),
+  root: document('My File', [
+    page('Buttons', [componentSet('Button', [{ props: { Size: 'L' } }])]),
+  ]),
   collections: [fakeCollection({ variableIds: ['v1'] })],
   variables: [fakeVariable({ id: 'v1' })],
 });
