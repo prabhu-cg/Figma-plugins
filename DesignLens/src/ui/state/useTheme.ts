@@ -26,9 +26,14 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    if (theme === "system") root.removeAttribute("data-theme");
-    else root.setAttribute("data-theme", theme);
+    // Resolve "system" to a concrete light/dark so the stylesheet needs only one dark token block.
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => root.setAttribute("data-theme", theme === "system" ? (media.matches ? "dark" : "light") : theme);
+    apply();
     writeStoredTheme(theme);
+    if (theme !== "system") return;
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
   }, [theme]);
 
   return { theme, setTheme };

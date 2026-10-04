@@ -1,5 +1,6 @@
 import type { ScanProgress, ScanStatus } from "../state/useScan";
-import { AlertIcon, AuditIcon, CheckCircleIcon } from "./Icons";
+import { AlertIcon, AuditIcon } from "./Icons";
+import { ProgressBar } from "./Shared";
 
 interface ScanGateProps {
   status: ScanStatus;
@@ -18,11 +19,11 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
           <AuditIcon className="icon" style={{ width: 24, height: 24 }} />
         </div>
         <div className="state-title">Auditing your design system…</div>
-        <div className="state-body">{progress.phase || "Scanning components, variants, and variables"}</div>
+        <div className="state-body" role="status" aria-live="polite">
+          {progress.phase || "Scanning components, variants, and variables"}
+        </div>
         <div style={{ width: 320 }}>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${pct}%` }} />
-          </div>
+          <ProgressBar value={pct} label="Audit progress" />
           <div className="flex items-center justify-between" style={{ marginTop: 8 }}>
             <span className="text-tertiary" style={{ fontSize: 11 }}>
               {progress.total > 1 ? `${progress.processed} / ${progress.total}` : "Working…"}
@@ -42,7 +43,7 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
   if (status === "error") {
     return (
       <div className="state-screen">
-        <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical)" }}>
+        <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical-text)" }}>
           <AlertIcon style={{ width: 24, height: 24 }} />
         </div>
         <div className="state-title">Scan failed</div>
@@ -71,10 +72,10 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
 
   return (
     <div className="state-screen">
-      <div className="state-icon" style={{ background: "var(--color-success-soft)", color: "var(--color-success)" }}>
-        <CheckCircleIcon style={{ width: 24, height: 24 }} />
+      <div className="state-icon">
+        <AuditIcon style={{ width: 24, height: 24 }} />
       </div>
-      <div className="state-title">DesignLens is ready</div>
+      <div className="state-title">Audit this file</div>
       <div className="state-body">
         Scan this file's components, variants, variables, and styles to generate a full design system health
         report — contrast, tokens, documentation, governance, and more.

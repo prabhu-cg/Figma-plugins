@@ -49,6 +49,34 @@ export function LegendRow({ color, label, value }: { color: string; label: strin
   );
 }
 
+/** Fill and text colors for a 0-100 score. Fills use the vivid step; text uses the AA-contrast step. */
+export function scoreColors(score: number): { fill: string; text: string } {
+  if (score >= 85) return { fill: "var(--color-success)", text: "var(--color-success-text)" };
+  if (score >= 60) return { fill: "var(--color-primary)", text: "var(--color-primary-text)" };
+  return { fill: "var(--color-critical)", text: "var(--color-critical-text)" };
+}
+
+interface ProgressBarProps {
+  /** 0-100 */
+  value: number;
+  /** Accessible name. Omit only when the value is shown as adjacent text (decorative bar). */
+  label?: string;
+  color?: string;
+  width?: number | string;
+}
+
+export function ProgressBar({ value, label, color, width }: ProgressBarProps) {
+  const pct = Math.max(0, Math.min(100, value));
+  const a11y = label
+    ? { role: "progressbar", "aria-label": label, "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": Math.round(pct) }
+    : { "aria-hidden": true };
+  return (
+    <div className="progress-track" style={width !== undefined ? { width } : undefined} {...a11y}>
+      <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})`, ...(color ? { background: color } : null) }} />
+    </div>
+  );
+}
+
 export function ScoreBar({
   label,
   score,
@@ -60,19 +88,17 @@ export function ScoreBar({
   right?: string;
   delta?: number | null;
 }) {
-  const color = score >= 85 ? "var(--color-success)" : score >= 60 ? "var(--color-primary)" : "var(--color-critical)";
+  const { fill, text } = scoreColors(score);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div className="flex items-center justify-between">
         <span style={{ fontWeight: 700, fontSize: 12.5 }}>{label}</span>
         <span className="flex items-center gap-2">
           {delta !== undefined && <TrendBadge delta={delta} />}
-          <span style={{ fontWeight: 800, fontSize: 12.5, color }}>{right ?? `${score}`}</span>
+          <span style={{ fontWeight: 800, fontSize: 12.5, color: text }}>{right ?? `${score}`}</span>
         </span>
       </div>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${Math.max(0, Math.min(100, score))}%`, background: color }} />
-      </div>
+      <ProgressBar value={score} color={fill} />
     </div>
   );
 }

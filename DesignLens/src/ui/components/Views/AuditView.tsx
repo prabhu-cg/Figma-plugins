@@ -72,7 +72,13 @@ export function AuditView({ result, onSelectNode, onSetIssueStatus }: AuditViewP
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 12 }}>
         <div className="grid" style={{ gridTemplateColumns: "1fr 360px", alignItems: "start" }}>
           <div style={{ paddingRight: 4 }}>
-            <IssueList issues={visible} selectedId={selectedId} onSelect={setSelectedId} />
+            <IssueList
+              issues={visible}
+              totalIssues={result.issues.length}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onClearFilters={() => setFilters(DEFAULT_FILTERS)}
+            />
             {hasMore && (
               <button className="btn btn-secondary btn-sm" style={{ width: "100%", marginTop: 8 }} onClick={loadMore}>
                 Load {Math.min(PAGE_SIZE, remaining)} more ({remaining} remaining)

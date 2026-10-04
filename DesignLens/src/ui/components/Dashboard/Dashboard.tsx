@@ -6,7 +6,7 @@ import { Donut } from "../Charts/Donut";
 import { Sparkline } from "../Charts/Sparkline";
 import { StackedBarList, type StackedBarItem } from "../Charts/StackedBarList";
 import { LegendRow, ScoreBar, StatCard, TrendBadge } from "../Shared";
-import { Tabs } from "../Tabs";
+import { Tabs, tabPanelProps } from "../Tabs";
 import { computeDashboardMetrics } from "../../lib/metrics";
 import type { View } from "../../App";
 
@@ -15,6 +15,7 @@ interface DashboardProps {
   trend: TrendEntry[];
   onRescan: () => void;
   onNavigate: (view: View) => void;
+  isScanning?: boolean;
 }
 
 type DashboardTab = "categories" | "breakdown" | "coverage" | "inventory";
@@ -47,7 +48,7 @@ function toStackedItem(label: string, counts: Record<Severity, number>): Stacked
   };
 }
 
-export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProps) {
+export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = false }: DashboardProps) {
   const [tab, setTab] = useState<DashboardTab>("categories");
   const metrics = useMemo(() => computeDashboardMetrics(result), [result]);
   const { stats, health } = result;
@@ -121,10 +122,11 @@ export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProp
         </div>
         <div className="flex gap-2">
           <button className="btn btn-secondary btn-sm" onClick={() => onNavigate("reports")}>
-            Export report
+            View reports
           </button>
-          <button className="btn btn-primary btn-sm" onClick={onRescan}>
-            Rescan
+          <button className="btn btn-primary btn-sm" onClick={onRescan} disabled={isScanning} aria-busy={isScanning}>
+            {isScanning && <span className="spinner" aria-hidden="true" />}
+            {isScanning ? "Rescanning…" : "Rescan"}
           </button>
         </div>
       </div>
@@ -163,10 +165,10 @@ export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProp
         </div>
       </div>
 
-      <Tabs tabs={TABS} active={tab} onChange={setTab} />
+      <Tabs tabs={TABS} active={tab} onChange={setTab} idPrefix="dash" label="Dashboard sections" />
 
       {tab === "categories" && (
-        <div className="card">
+        <div className="card" {...tabPanelProps("dash", "categories")}>
           <div className="grid grid-cols-2" style={{ rowGap: 16, columnGap: 32 }}>
             {sortedCategories.map((c) => (
               <ScoreBar
@@ -181,7 +183,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProp
       )}
 
       {tab === "breakdown" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)" }} {...tabPanelProps("dash", "breakdown")}>
           <div className="grid grid-cols-2">
             <div
               className="card flex"
@@ -236,7 +238,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProp
       )}
 
       {tab === "coverage" && (
-        <div className="card">
+        <div className="card" {...tabPanelProps("dash", "coverage")}>
           <div className="grid grid-cols-2" style={{ rowGap: 16, columnGap: 32 }}>
             {coverageItems.map((item) => (
               <ScoreBar
@@ -251,7 +253,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProp
       )}
 
       {tab === "inventory" && (
-        <div className="grid grid-cols-4">
+        <div className="grid grid-cols-4" {...tabPanelProps("dash", "inventory")}>
           {inventoryItems.map((item) => (
             <StatCard key={item.label} label={item.label} value={item.value} sub={item.sub} />
           ))}

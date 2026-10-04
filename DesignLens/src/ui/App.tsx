@@ -8,6 +8,7 @@ import { VariablesView } from "./components/Views/VariablesView";
 import { DocumentationView } from "./components/Views/DocumentationView";
 import { ReportsView } from "./components/Views/ReportsView";
 import { SettingsView } from "./components/Views/SettingsView";
+import { ProgressBar } from "./components/Shared";
 import { useScan } from "./state/useScan";
 import { useTheme } from "./state/useTheme";
 
@@ -56,7 +57,13 @@ export function App() {
               />
             )}
             {view === "dashboard" && (
-              <Dashboard result={scan.result} trend={scan.trend} onRescan={scan.startScan} onNavigate={setView} />
+              <Dashboard
+                result={scan.result}
+                trend={scan.trend}
+                onRescan={scan.startScan}
+                onNavigate={setView}
+                isScanning={scan.status === "scanning"}
+              />
             )}
             {view === "audit" && (
               <AuditView result={scan.result} onSelectNode={scan.selectNode} onSetIssueStatus={scan.setIssueStatus} />
@@ -72,6 +79,7 @@ export function App() {
                 wcagLevel={scan.settings.wcagLevel}
                 onWcagLevelChange={scan.setWcagLevel}
                 onRescan={scan.startScan}
+                isScanning={scan.status === "scanning"}
                 hasResult
               />
             )}
@@ -97,16 +105,16 @@ function RescanBanner({
   return (
     <div
       className="flex items-center gap-3"
+      role="status"
+      aria-live="polite"
       style={{
         padding: "8px 24px",
         background: "var(--color-primary-soft)",
         borderBottom: "1px solid var(--color-border)"
       }}
     >
-      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary)" }}>Rescanning… {phase}</span>
-      <div className="progress-track" style={{ width: 160 }}>
-        <div className="progress-fill" style={{ width: `${pct}%` }} />
-      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary-text)" }}>Rescanning… {phase}</span>
+      <ProgressBar value={pct} label="Rescan progress" width={160} />
       <button className="btn btn-ghost btn-sm" onClick={onCancel}>
         Cancel
       </button>

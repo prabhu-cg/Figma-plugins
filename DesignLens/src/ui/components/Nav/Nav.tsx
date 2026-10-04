@@ -39,7 +39,8 @@ export function Nav({ active, onSelect, disabled }: NavProps) {
         className={`nav-item${active === item.id ? " active" : ""}`}
         onClick={() => onSelect(item.id)}
         disabled={isDisabled}
-        style={isDisabled ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+        aria-current={active === item.id ? "page" : undefined}
+        title={isDisabled ? "Run an audit first" : undefined}
       >
         <Icon className="icon" />
         {item.label}
@@ -48,7 +49,7 @@ export function Nav({ active, onSelect, disabled }: NavProps) {
   }
 
   return (
-    <nav className="nav">
+    <nav className="nav" aria-label="Main">
       <div className="nav-brand">
         <LogoMark className="nav-brand-mark" />
         <div className="nav-brand-text">

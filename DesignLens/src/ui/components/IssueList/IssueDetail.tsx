@@ -87,6 +87,9 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, stickyTop = 0 }:
               </div>
             </div>
           )}
+          <div className="visually-hidden" role="status" aria-live="polite">
+            {issue.status === "open" ? "" : `Issue marked ${issue.status}`}
+          </div>
           <div className="flex gap-2" style={{ borderTop: "1px solid var(--color-border)", paddingTop: 14 }}>
             {issue.status !== "resolved" && (
               <button className="btn btn-primary btn-sm" onClick={() => onSetStatus(issue, "resolved")}>

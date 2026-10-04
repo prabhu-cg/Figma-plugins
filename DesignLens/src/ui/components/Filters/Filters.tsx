@@ -43,6 +43,8 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
         />
         <input
           className="input"
+          type="search"
+          aria-label="Search issues"
           style={{ paddingLeft: 30, width: "100%" }}
           placeholder="Search issues…"
           value={value.search}
@@ -52,6 +54,7 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
       <div className="select-wrapper">
         <select
           className="select"
+          aria-label="Filter by module"
           value={value.category}
           onChange={(e) => onChange({ ...value, category: e.target.value as AuditCategory | "all" })}
         >
@@ -66,6 +69,7 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
       <div className="select-wrapper">
         <select
           className="select"
+          aria-label="Filter by severity"
           value={value.severity}
           onChange={(e) => onChange({ ...value, severity: e.target.value as Severity | "all" })}
         >
@@ -78,6 +82,7 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
       <div className="select-wrapper">
         <select
           className="select"
+          aria-label="Filter by status"
           value={value.status}
           onChange={(e) => onChange({ ...value, status: e.target.value as IssueStatus | "all" })}
         >
@@ -88,7 +93,7 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
         </select>
       </div>
       <div className="select-wrapper">
-        <select className="select" value={value.componentId} onChange={(e) => onChange({ ...value, componentId: e.target.value })}>
+        <select className="select" aria-label="Filter by component" value={value.componentId} onChange={(e) => onChange({ ...value, componentId: e.target.value })}>
           <option value="all">All components</option>
           {componentOptions.map((c) => (
             <option key={c.id} value={c.id}>
@@ -99,7 +104,7 @@ export function Filters({ value, onChange, componentOptions, collectionOptions }
       </div>
       {collectionOptions.length > 0 && (
         <div className="select-wrapper">
-          <select className="select" value={value.collection} onChange={(e) => onChange({ ...value, collection: e.target.value })}>
+          <select className="select" aria-label="Filter by collection" value={value.collection} onChange={(e) => onChange({ ...value, collection: e.target.value })}>
             <option value="all">All collections</option>
             {collectionOptions.map((c) => (
               <option key={c} value={c}>

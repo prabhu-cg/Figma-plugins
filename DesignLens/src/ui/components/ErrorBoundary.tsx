@@ -24,7 +24,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
     return (
       <div className="state-screen">
-        <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical)" }}>
+        <div className="state-icon" style={{ background: "var(--color-critical-soft)", color: "var(--color-critical-text)" }}>
           !
         </div>
         <div className="state-title">DesignLens hit an unexpected error</div>

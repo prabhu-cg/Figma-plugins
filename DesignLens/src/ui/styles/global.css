@@ -4,6 +4,14 @@
   --color-primary: #ee661d;
   --color-primary-hover: #d85812;
   --color-primary-soft: #fdeee3;
+  /* The brand orange (#ee661d) is only 3.2:1 on white, enough for fills and graphics but not
+     for text. These steps carry text: -strong is a fill that holds white labels (4.9:1),
+     -text is orange set as type on light or soft surfaces. The *-text semantic steps below do
+     the same for success/critical/suggestion, which failed 4.5:1 as badge/score text. */
+  --color-primary-strong: #c2490a;
+  --color-primary-strong-hover: #a83d08;
+  --color-primary-text: #b83f06;
+  --color-focus: #c2490a;
   --color-secondary: #555555;
 
   --color-bg: #ffffff;
@@ -12,10 +20,11 @@
   --color-border: #e5e5e7;
   --color-text: #17181a;
   --color-text-secondary: #58585c;
-  --color-text-tertiary: #8a8a8f;
+  --color-text-tertiary: #6b6b70;
 
   --color-critical: #d92d20;
   --color-critical-soft: #fef1f0;
+  --color-critical-text: #c4271b;
   /* #f0900a (not a plain darker orange): validated against --color-critical via the
      dataviz skill's palette checker — normal-vision separation 20.1 ΔE (was 10.5, below
      the 15 floor with the old #dc6803). A same-lightness/same-hue-family orange reads as
@@ -30,8 +39,10 @@
   --color-warning-soft: #fef1de;
   --color-suggestion: #2970ff;
   --color-suggestion-soft: #eef4ff;
+  --color-suggestion-text: #1d5fe0;
   --color-success: #12b76a;
   --color-success-soft: #ecfdf3;
+  --color-success-text: #0a7a45;
 
   --radius-lg: 12px;
   --radius-md: 8px;
@@ -51,6 +62,8 @@
   color-scheme: light;
 }
 
+/* "Match system" is resolved to light/dark in useTheme and written to data-theme, so the dark
+   tokens live in exactly one place. */
 :root[data-theme="dark"] {
   --color-bg: #18191b;
   --color-surface: #1f2023;
@@ -58,37 +71,21 @@
   --color-border: #35363a;
   --color-text: #f3f3f4;
   --color-text-secondary: #b2b3b7;
-  --color-text-tertiary: #86878c;
+  --color-text-tertiary: #9a9ba0;
   --color-primary-soft: #3a2414;
+  --color-primary-text: #ff8a4c;
+  --color-focus: #ff8a4c;
   --color-critical-soft: #34201d;
+  --color-critical-text: #ff6b60;
   --color-warning-text: #f0900a;
   --color-warning-soft: #332a0d;
   --color-suggestion-soft: #182238;
+  --color-suggestion-text: #6b9bff;
   --color-success-soft: #142a20;
+  --color-success-text: #3ccf8e;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --color-bg: #18191b;
-    --color-surface: #1f2023;
-    --color-surface-alt: #26272b;
-    --color-border: #35363a;
-    --color-text: #f3f3f4;
-    --color-text-secondary: #b2b3b7;
-    --color-text-tertiary: #86878c;
-    --color-primary-soft: #3a2414;
-    --color-critical-soft: #34201d;
-    --color-warning-text: #f0900a;
-    --color-warning-soft: #332a0d;
-    --color-suggestion-soft: #182238;
-    --color-success-soft: #142a20;
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.5);
-    color-scheme: dark;
-  }
 }
 
 * {
@@ -181,7 +178,7 @@ button {
 }
 
 .nav-brand-name-accent {
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .nav-brand-tagline {
@@ -214,7 +211,16 @@ button {
 
 .nav-item.active {
   background: var(--color-primary-soft);
-  color: var(--color-primary);
+  color: var(--color-primary-text);
+}
+
+.nav-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.nav-item:disabled:hover {
+  background: transparent;
+  color: var(--color-text-secondary);
 }
 
 .nav-item .icon {
@@ -316,19 +322,22 @@ button {
   border: 1px solid transparent;
   font-weight: 700;
   font-size: 13px;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .btn-primary {
-  background: var(--color-primary);
+  background: var(--color-primary-strong);
   color: #ffffff;
 }
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-strong-hover);
 }
 
 .btn-secondary {
@@ -336,7 +345,7 @@ button {
   border-color: var(--color-border);
   color: var(--color-text);
 }
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background: var(--color-surface-alt);
 }
 
@@ -344,7 +353,7 @@ button {
   background: transparent;
   color: var(--color-text-secondary);
 }
-.btn-ghost:hover {
+.btn-ghost:hover:not(:disabled) {
   background: var(--color-surface-alt);
   color: var(--color-text);
 }
@@ -368,7 +377,7 @@ button {
 
 .badge-critical {
   background: var(--color-critical-soft);
-  color: var(--color-critical);
+  color: var(--color-critical-text);
 }
 .badge-warning {
   background: var(--color-warning-soft);
@@ -376,11 +385,11 @@ button {
 }
 .badge-suggestion {
   background: var(--color-suggestion-soft);
-  color: var(--color-suggestion);
+  color: var(--color-suggestion-text);
 }
 .badge-success {
   background: var(--color-success-soft);
-  color: var(--color-success);
+  color: var(--color-success-text);
 }
 .badge-neutral {
   background: var(--color-surface-alt);
@@ -395,11 +404,14 @@ button {
   background: var(--color-surface-alt);
   overflow: hidden;
 }
+/* The fill is full-width and scaled with transform (compositor-friendly) rather than
+   animating width, which forces layout on every progress tick. */
 .progress-fill {
+  width: 100%;
   height: 100%;
-  border-radius: var(--radius-full);
   background: var(--color-primary);
-  transition: width 0.2s ease;
+  transform-origin: left center;
+  transition: transform 0.2s ease;
 }
 
 /* ---- Inputs ---- */
@@ -535,7 +547,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-primary);
+  color: var(--color-primary-text);
 }
 
 .state-title {
@@ -583,4 +595,99 @@ button {
 }
 .wrap {
   flex-wrap: wrap;
+}
+
+/* ---- Keyboard focus ---- */
+/* One visible ring for every interactive element; individual components used to override
+   outline implicitly (border:none, custom borders) and lost their ring. */
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+.input:focus-visible,
+.select:focus-visible {
+  outline-offset: -1px;
+}
+.nav-item:focus-visible,
+.tab-btn:focus-visible {
+  outline-offset: -2px;
+}
+
+/* ---- Loading ---- */
+.spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---- Issue list ---- */
+.issue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.issue-card {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.issue-card:hover {
+  background: var(--color-surface-alt);
+}
+/* Selected is a tint plus a 2px ring on all sides (no one-sided accent stripe), so it reads
+   at a glance in a long list instead of a 1px border change. */
+.issue-card[aria-pressed="true"] {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-text);
+  box-shadow: inset 0 0 0 1px var(--color-primary-text);
+}
+.issue-title {
+  font-weight: 700;
+  font-size: 12.5px;
+}
+/* Resolved/ignored rows recede by color, not opacity, so their text keeps its contrast. */
+.issue-card.is-done .issue-title {
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+.issue-meta {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

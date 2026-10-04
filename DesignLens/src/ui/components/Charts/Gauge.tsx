@@ -1,3 +1,5 @@
+import { scoreColors } from "../Shared";
+
 interface GaugeProps {
   score: number;
   size?: number;
@@ -13,11 +15,11 @@ export function Gauge({ score, size = 190, thickness = 18, label }: GaugeProps) 
   const pathLength = Math.PI * r;
   const clamped = Math.max(0, Math.min(100, score));
   const dashoffset = pathLength * (1 - clamped / 100);
-  const color = clamped >= 85 ? "var(--color-success)" : clamped >= 60 ? "var(--color-primary)" : "var(--color-critical)";
+  const { fill: color, text: textColor } = scoreColors(clamped);
   const viewBoxHeight = size / 2 + thickness;
 
   return (
-    <div style={{ width: size, position: "relative" }}>
+    <div style={{ width: size, position: "relative" }} role="img" aria-label={`${label ?? "Score"}: ${Math.round(clamped)} out of 100`}>
       <svg width={size} height={viewBoxHeight} viewBox={`0 0 ${size} ${viewBoxHeight}`}>
         <path d={pathD} fill="none" stroke="var(--color-surface-alt)" strokeWidth={thickness} strokeLinecap="round" />
         <path
@@ -32,7 +34,7 @@ export function Gauge({ score, size = 190, thickness = 18, label }: GaugeProps) 
         />
       </svg>
       <div style={{ position: "absolute", left: 0, right: 0, bottom: 2, textAlign: "center" }}>
-        <div style={{ fontSize: Math.round(size * 0.2), fontWeight: 800, letterSpacing: "-0.03em", color }}>
+        <div style={{ fontSize: Math.round(size * 0.2), fontWeight: 800, letterSpacing: "-0.03em", color: textColor }}>
           {Math.round(clamped)}
         </div>
         {label && (

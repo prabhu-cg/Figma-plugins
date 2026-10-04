@@ -7,6 +7,7 @@ interface SettingsViewProps {
   wcagLevel: WcagLevel;
   onWcagLevelChange: (level: WcagLevel) => void;
   onRescan: () => void;
+  isScanning?: boolean;
   hasResult: boolean;
 }
 
@@ -21,7 +22,7 @@ const WCAG_OPTIONS: { id: WcagLevel; label: string; description: string }[] = [
   { id: "AAA", label: "WCAG AAA", description: "7:1 text, 4.5:1 large text — for products with a stricter accessibility target." }
 ];
 
-export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChange, onRescan, hasResult }: SettingsViewProps) {
+export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChange, onRescan, hasResult, isScanning = false }: SettingsViewProps) {
   return (
     <div className="view">
       <div className="view-header">
@@ -41,6 +42,7 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
               <button
                 key={opt.id}
                 className={`btn btn-sm ${theme === opt.id ? "btn-primary" : "btn-secondary"}`}
+                aria-pressed={theme === opt.id}
                 onClick={() => onThemeChange(opt.id)}
               >
                 {opt.label}
@@ -56,8 +58,9 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
           <div className="text-secondary" style={{ fontSize: 12.5, marginBottom: 12 }}>
             Re-scan this file to refresh the audit after making changes to components, variants, or variables.
           </div>
-          <button className="btn btn-primary btn-sm" onClick={onRescan}>
-            {hasResult ? "Rescan file" : "Start audit"}
+          <button className="btn btn-primary btn-sm" onClick={onRescan} disabled={isScanning} aria-busy={isScanning}>
+            {isScanning && <span className="spinner" aria-hidden="true" />}
+            {isScanning ? "Scanning…" : hasResult ? "Rescan file" : "Start audit"}
           </button>
         </div>
 
@@ -70,6 +73,7 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
               <button
                 key={opt.id}
                 onClick={() => onWcagLevelChange(opt.id)}
+                aria-pressed={wcagLevel === opt.id}
                 className="card"
                 style={{
                   flex: "1 1 220px",
