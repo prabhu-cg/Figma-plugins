@@ -12,7 +12,7 @@ import {
   spacingTokensSection,
   typographyTokensSection,
 } from './tokens';
-import { tokenUsageSection } from './usage';
+import { styleUsageSection, tokenUsageSection } from './usage';
 
 export function generateDesignMd(ds: DesignSystem): GeneratedFile {
   const content = joinSections([
@@ -26,6 +26,7 @@ export function generateDesignMd(ds: DesignSystem): GeneratedFile {
     gridTokensSection(ds),
     componentsSection(ds),
     tokenUsageSection(ds),
+    styleUsageSection(ds),
     accessibilitySection(ds),
     namingConventionsSection(ds),
     designPrinciplesSection(),

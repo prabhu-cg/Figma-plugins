@@ -52,6 +52,7 @@ export function transformComponents(raw: RawComponent[]): ComponentDoc[] {
       relatedComponentNames: [],
       pageName: c.pageName,
       layout: c.layout,
+      styleIds: c.styleIds ?? [],
     };
   });
 

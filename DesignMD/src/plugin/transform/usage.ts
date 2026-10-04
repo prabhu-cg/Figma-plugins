@@ -1,4 +1,4 @@
-import type { ComponentDoc, VariableToken } from '@shared/types';
+import type { ComponentDoc, DesignSystem, StyleToken, VariableToken } from '@shared/types';
 import type { RawComponent } from '../extraction/rawTypes';
 
 /**
@@ -48,4 +48,32 @@ export function mergeStyleBoundVariables(
       boundVariableIds: Array.from(new Set([...component.boundVariableIds, ...extra])),
     };
   });
+}
+
+/** Same reverse index as variables: which components apply each style. */
+export function computeStyleUsage(
+  styles: DesignSystem['styles'],
+  components: ComponentDoc[],
+): DesignSystem['styles'] {
+  const namesByStyleId = new Map<string, Set<string>>();
+  for (const component of components) {
+    for (const styleId of component.styleIds ?? []) {
+      const names = namesByStyleId.get(styleId);
+      if (names) names.add(component.name);
+      else namesByStyleId.set(styleId, new Set([component.name]));
+    }
+  }
+  const withUsage = (list: StyleToken[]): StyleToken[] =>
+    list.map((style) => ({
+      ...style,
+      usedByComponents: Array.from(namesByStyleId.get(style.id) ?? []).sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    }));
+  return {
+    text: withUsage(styles.text),
+    color: withUsage(styles.color),
+    effect: withUsage(styles.effect),
+    grid: withUsage(styles.grid),
+  };
 }

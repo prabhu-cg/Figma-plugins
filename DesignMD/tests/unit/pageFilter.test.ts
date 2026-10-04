@@ -62,7 +62,8 @@ describe('filterDesignSystemByPages', () => {
     const ds = makeSystem();
     const filtered = filterDesignSystemByPages(ds, ['Playground']);
     expect(filtered.collections).toBe(ds.collections);
-    expect(filtered.styles).toBe(ds.styles);
+    // Styles themselves are kept; only their usage is recomputed.
+    expect(filtered.styles.text.map((t) => t.id)).toEqual(ds.styles.text.map((t) => t.id));
     expect(filtered.summary.variablesCount).toBe(ds.summary.variablesCount);
   });
 

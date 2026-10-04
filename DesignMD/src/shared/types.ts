@@ -122,6 +122,8 @@ export interface StyleToken {
   paintIsGradientOrImage?: boolean;
   effects?: EffectValue[];
   grids?: GridValue[];
+  /** Names of components that apply this style anywhere in their layers. Filled in by usage analysis. */
+  usedByComponents?: string[];
 }
 
 export type ComponentPropertyType = 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP' | 'VARIANT';
@@ -169,6 +171,8 @@ export interface ComponentDoc {
   relatedComponentNames: string[];
   pageName: string;
   layout?: ComponentLayout;
+  /** Ids of the local styles applied anywhere inside the component. */
+  styleIds?: string[];
 }
 
 export interface DesignSystemSummary {

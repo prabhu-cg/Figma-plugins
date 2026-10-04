@@ -168,6 +168,7 @@ function styleToLeaf(style: StyleToken, category: TokenCategory): TokenTreeEntry
   const figma: JsonLeaf['$extensions']['figma'] = {
     source: 'style',
     cssName: style.cssName,
+    usedBy: style.usedByComponents ?? [],
   };
   let type: string;
   let value: JsonValue;

@@ -1468,6 +1468,43 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       unusedTable
     ]);
   }
+  const STYLE_KINDS = [
+    ["text", "Text"],
+    ["color", "Color"],
+    ["effect", "Effect"],
+    ["grid", "Grid"]
+  ];
+  function styleUsageSection(ds) {
+    const all = STYLE_KINDS.flatMap(
+      ([key, label]) => ds.styles[key].map((s) => ({ style: s, label }))
+    );
+    if (all.length === 0) {
+      return joinSections([
+        mdHeading(2, "Style Usage"),
+        "_No styles to cross-reference against components._\n"
+      ]);
+    }
+    const used = all.filter(({ style }) => {
+      var _a;
+      return (((_a = style.usedByComponents) == null ? void 0 : _a.length) ?? 0) > 0;
+    });
+    const unused = all.filter(({ style }) => {
+      var _a;
+      return (((_a = style.usedByComponents) == null ? void 0 : _a.length) ?? 0) === 0;
+    });
+    const percent = Math.round(used.length / all.length * 100);
+    const unusedTable = unused.length === 0 ? "_Every style is applied inside at least one component._\n" : mdTable(
+      ["Style", "Type", "CSS Variable"],
+      unused.map(({ style, label }) => [style.name, label, style.cssName])
+    );
+    return joinSections([
+      mdHeading(2, "Style Usage"),
+      `${used.length} of ${all.length} styles (${percent}%) are applied inside at least one component. A style marked unused here may still be used on frames outside components, so treat the list below as candidates to review, not as safe to delete. Grid styles live on frames and are rarely applied inside components.
+`,
+      mdHeading(3, "Styles Not Applied In Any Component"),
+      unusedTable
+    ]);
+  }
   function generateDesignMd(ds) {
     const content = joinSections([
       mdHeading(1, "Design System"),
@@ -1480,6 +1517,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       gridTokensSection(ds),
       componentsSection(ds),
       tokenUsageSection(ds),
+      styleUsageSection(ds),
       accessibilitySection(ds),
       namingConventionsSection(ds),
       designPrinciplesSection()
@@ -1762,7 +1800,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   function styleToLeaf(style, category) {
     const figma2 = {
       source: "style",
-      cssName: style.cssName
+      cssName: style.cssName,
+      usedBy: style.usedByComponents ?? []
     };
     let type;
     let value;
@@ -1921,7 +1960,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         boundVariableIds: c.boundVariableIds,
         relatedComponentNames: [],
         pageName: c.pageName,
-        layout: c.layout
+        layout: c.layout,
+        styleIds: c.styleIds ?? []
       };
     });
     const docsByVariableId = /* @__PURE__ */ new Map();
@@ -2165,6 +2205,28 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       };
     });
   }
+  function computeStyleUsage(styles, components) {
+    const namesByStyleId = /* @__PURE__ */ new Map();
+    for (const component of components) {
+      for (const styleId of component.styleIds ?? []) {
+        const names = namesByStyleId.get(styleId);
+        if (names) names.add(component.name);
+        else namesByStyleId.set(styleId, /* @__PURE__ */ new Set([component.name]));
+      }
+    }
+    const withUsage = (list) => list.map((style) => ({
+      ...style,
+      usedByComponents: Array.from(namesByStyleId.get(style.id) ?? []).sort(
+        (a, b) => a.localeCompare(b)
+      )
+    }));
+    return {
+      text: withUsage(styles.text),
+      color: withUsage(styles.color),
+      effect: withUsage(styles.effect),
+      grid: withUsage(styles.grid)
+    };
+  }
   function buildSummary(system) {
     const modeIds = new Set(system.collections.flatMap((c) => c.modes.map((m) => m.modeId)));
     return {
@@ -2196,7 +2258,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       );
     }
     const collections = allCollections.filter((c) => !isCollectionHidden(c)).map((c) => ({ ...c, variableIds: c.variableIds.filter((id) => !hiddenVariableIds.has(id)) }));
-    const styles = {
+    const rawStyles = {
       text: transformTextStyles(raw.textStyles),
       color: transformPaintStyles(raw.paintStyles),
       effect: transformEffectStyles(raw.effectStyles),
@@ -2218,6 +2280,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       ).filter((v) => !hiddenVariableIds.has(v.id)),
       components
     );
+    const styles = computeStyleUsage(rawStyles, components);
     const base = { collections, variables, styles, components };
     return {
       metadata: {
@@ -2237,10 +2300,12 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const components = ds.components.filter((c) => !excluded.has(c.pageName));
     if (components.length === ds.components.length) return ds;
     const variables = computeVariableUsage(ds.variables, components);
-    const base = { collections: ds.collections, variables, styles: ds.styles, components };
+    const styles = computeStyleUsage(ds.styles, components);
+    const base = { collections: ds.collections, variables, styles, components };
     return {
       ...ds,
       variables,
+      styles,
       components,
       summary: buildSummary(base)
     };

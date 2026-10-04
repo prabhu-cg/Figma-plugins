@@ -48,3 +48,44 @@ export function tokenUsageSection(ds: DesignSystem): string {
     unusedTable,
   ]);
 }
+
+const STYLE_KINDS: Array<[keyof DesignSystem['styles'], string]> = [
+  ['text', 'Text'],
+  ['color', 'Color'],
+  ['effect', 'Effect'],
+  ['grid', 'Grid'],
+];
+
+export function styleUsageSection(ds: DesignSystem): string {
+  const all = STYLE_KINDS.flatMap(([key, label]) =>
+    ds.styles[key].map((s) => ({ style: s, label })),
+  );
+  if (all.length === 0) {
+    return joinSections([
+      mdHeading(2, 'Style Usage'),
+      '_No styles to cross-reference against components._\n',
+    ]);
+  }
+
+  const used = all.filter(({ style }) => (style.usedByComponents?.length ?? 0) > 0);
+  const unused = all.filter(({ style }) => (style.usedByComponents?.length ?? 0) === 0);
+  const percent = Math.round((used.length / all.length) * 100);
+
+  const unusedTable =
+    unused.length === 0
+      ? '_Every style is applied inside at least one component._\n'
+      : mdTable(
+          ['Style', 'Type', 'CSS Variable'],
+          unused.map(({ style, label }) => [style.name, label, style.cssName]),
+        );
+
+  return joinSections([
+    mdHeading(2, 'Style Usage'),
+    `${used.length} of ${all.length} styles (${percent}%) are applied inside at least one component. ` +
+      'A style marked unused here may still be used on frames outside components, so treat the list ' +
+      'below as candidates to review, not as safe to delete. Grid styles live on frames and are ' +
+      'rarely applied inside components.\n',
+    mdHeading(3, 'Styles Not Applied In Any Component'),
+    unusedTable,
+  ]);
+}

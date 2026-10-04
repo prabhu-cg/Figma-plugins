@@ -14,7 +14,7 @@ import {
   transformVariableCollections,
   transformVariables,
 } from './variables';
-import { computeVariableUsage, mergeStyleBoundVariables } from './usage';
+import { computeStyleUsage, computeVariableUsage, mergeStyleBoundVariables } from './usage';
 import { buildSummary } from './summary';
 
 const PLUGIN_VERSION = '1.0.0';
@@ -41,7 +41,7 @@ export function transformToDesignSystem(
     .filter((c) => !isCollectionHidden(c))
     .map((c) => ({ ...c, variableIds: c.variableIds.filter((id) => !hiddenVariableIds.has(id)) }));
 
-  const styles = {
+  const rawStyles = {
     text: transformTextStyles(raw.textStyles),
     color: transformPaintStyles(raw.paintStyles),
     effect: transformEffectStyles(raw.effectStyles),
@@ -65,6 +65,7 @@ export function transformToDesignSystem(
     components,
   );
 
+  const styles = computeStyleUsage(rawStyles, components);
   const base = { collections, variables, styles, components };
 
   return {
