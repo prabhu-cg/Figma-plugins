@@ -36,14 +36,22 @@ export interface FallbackContrastCheck {
 }
 
 export interface ContrastReport {
-  /** Foreground x background pairs, only populated when both roles could be inferred. */
+  /**
+   * Lowest-contrast foreground x background pairs (worst first), capped at MAX_REPORTED_PAIRS.
+   * Only populated when both roles could be inferred; the totals below cover every pair.
+   */
   pairs: ContrastPair[];
+  totalPairs: number;
+  passingNormalCount: number;
+  failingLargeCount: number;
   /** Used instead of `pairs` when no foreground/background roles could be inferred. */
   fallbackChecks: FallbackContrastCheck[];
   totalColorTokensChecked: number;
   skippedTranslucentCount: number;
 }
 
+/** Foreground x background is a cross product; keep only the worst pairs so large systems stay cheap. */
+export const MAX_REPORTED_PAIRS = 500;
 const AA_NORMAL_MIN_RATIO = 4.5;
 const AA_LARGE_MIN_RATIO = 3;
 const WHITE: ColorValue = { hex: '#ffffff', r: 1, g: 1, b: 1, a: 1 };
@@ -165,23 +173,41 @@ export function computeContrastReport(ds: DesignSystem): ContrastReport {
   const backgrounds = tokens.filter((t) => t.role === 'background');
 
   if (foregrounds.length > 0 && backgrounds.length > 0) {
-    const pairs: ContrastPair[] = [];
+    let kept: ContrastPair[] = [];
+    let cutoff = Infinity;
+    let totalPairs = 0;
+    let passingNormalCount = 0;
+    let failingLargeCount = 0;
+
     for (const foreground of foregrounds) {
       for (const background of backgrounds) {
         if (foreground.name === background.name) continue;
         const ratio = contrastRatio(foreground.color, background.color);
-        pairs.push({
+        totalPairs += 1;
+        if (ratio >= AA_NORMAL_MIN_RATIO) passingNormalCount += 1;
+        if (ratio < AA_LARGE_MIN_RATIO) failingLargeCount += 1;
+        if (ratio >= cutoff) continue;
+        kept.push({
           foreground,
           background,
           ratio,
           passesAANormal: ratio >= AA_NORMAL_MIN_RATIO,
           passesAALarge: ratio >= AA_LARGE_MIN_RATIO,
         });
+        if (kept.length >= MAX_REPORTED_PAIRS * 4) {
+          kept.sort((a, b) => a.ratio - b.ratio);
+          kept = kept.slice(0, MAX_REPORTED_PAIRS);
+          cutoff = kept[kept.length - 1].ratio;
+        }
       }
     }
-    pairs.sort((a, b) => a.ratio - b.ratio);
+
+    kept.sort((a, b) => a.ratio - b.ratio);
     return {
-      pairs,
+      pairs: kept.slice(0, MAX_REPORTED_PAIRS),
+      totalPairs,
+      passingNormalCount,
+      failingLargeCount,
       fallbackChecks: [],
       totalColorTokensChecked: tokens.length,
       skippedTranslucentCount,
@@ -206,6 +232,9 @@ export function computeContrastReport(ds: DesignSystem): ContrastReport {
 
   return {
     pairs: [],
+    totalPairs: 0,
+    passingNormalCount: 0,
+    failingLargeCount: 0,
     fallbackChecks,
     totalColorTokensChecked: tokens.length,
     skippedTranslucentCount,

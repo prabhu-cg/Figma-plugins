@@ -35,3 +35,27 @@ describe('transformComponents', () => {
     expect(doc.relatedComponentNames).toEqual([]);
   });
 });
+
+describe('transformComponents related components', () => {
+  it('ignores tokens bound by most components once the system is large', () => {
+    const shared = Array.from({ length: 40 }, (_, i) =>
+      makeComponent({ id: `c${i}`, name: `Comp${i}`, boundVariableIds: ['var:common'] }),
+    );
+    const docs = transformComponents(shared);
+    expect(docs[0].relatedComponentNames).toEqual([]);
+  });
+
+  it('ranks components sharing more (and rarer) tokens first and caps the list', () => {
+    const a = makeComponent({ id: 'a', name: 'A', boundVariableIds: ['v1', 'v2', 'v3'] });
+    const strong = makeComponent({ id: 'b', name: 'Strong', boundVariableIds: ['v1', 'v2', 'v3'] });
+    const weak = makeComponent({ id: 'c', name: 'Weak', boundVariableIds: ['v1'] });
+    const [doc] = transformComponents([a, weak, strong]);
+    expect(doc.relatedComponentNames).toEqual(['Strong', 'Weak']);
+
+    const many = Array.from({ length: 15 }, (_, i) =>
+      makeComponent({ id: `m${i}`, name: `M${i}`, boundVariableIds: ['v1'] }),
+    );
+    const [first] = transformComponents(many);
+    expect(first.relatedComponentNames).toHaveLength(10);
+  });
+});

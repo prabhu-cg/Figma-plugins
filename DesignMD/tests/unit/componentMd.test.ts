@@ -53,3 +53,24 @@ describe('generateComponentDocs', () => {
     expect(generateComponentDocs(ds)).toEqual([]);
   });
 });
+
+describe('component doc file names', () => {
+  it('treats names differing only by case as colliding', () => {
+    const ds = makeDesignSystem();
+    ds.components = [
+      { ...ds.components[0], id: 'a', name: 'Button' },
+      { ...ds.components[0], id: 'b', name: 'button' },
+    ];
+    const paths = generateComponentDocs(ds).map((f) => f.path);
+    expect(paths.map((p) => p.toLowerCase())).toEqual([
+      'components/button.md',
+      'components/button-2.md',
+    ]);
+  });
+
+  it('falls back to a safe name when the component name sanitizes to nothing', () => {
+    const ds = makeDesignSystem();
+    ds.components = [{ ...ds.components[0], name: '???' }];
+    expect(generateComponentDocs(ds)[0].path).toBe('components/Component.md');
+  });
+});

@@ -4,8 +4,17 @@ import type { RawComponent, RawComponentProperty, RawComponentVariant } from './
 
 const COMPONENT_BATCH_SIZE = 100;
 /** Bound to avoid pathological cost scanning huge component subtrees for bound variables. */
-const MAX_DESCENDANTS_SCANNED = 60;
-const MAX_DESCENDANT_DEPTH = 4;
+const MAX_DESCENDANTS_SCANNED = 500;
+const MAX_DESCENDANT_DEPTH = 10;
+
+/** Node properties that hold the id of an applied local/library style. */
+const STYLE_ID_KEYS = [
+  'textStyleId',
+  'fillStyleId',
+  'strokeStyleId',
+  'effectStyleId',
+  'gridStyleId',
+] as const;
 
 function findPageName(node: BaseNode): string {
   let current: BaseNode | null = node;
@@ -39,25 +48,50 @@ export function isHiddenFromPublishing(node: NamedAncestor): boolean {
   return false;
 }
 
-function scanDescendantBoundVariableIds(node: SceneNode): string[] {
-  const ids = new Set<string>();
+interface NodeBindings {
+  variableIds: string[];
+  styleIds: string[];
+  /** True when the subtree was larger than the scan budget, so usage may be under-reported. */
+  truncated: boolean;
+}
+
+function readStyleIds(n: SceneNode, into: Set<string>): void {
+  for (const key of STYLE_ID_KEYS) {
+    try {
+      const value = (n as unknown as Record<string, unknown>)[key];
+      // figma.mixed is a symbol; an unstyled node is ''.
+      if (typeof value === 'string' && value !== '') into.add(value);
+    } catch {
+      // Some node types throw on style-id access — nothing to record.
+    }
+  }
+}
+
+/** Collects variable ids bound directly on a subtree, plus the styles it applies (resolved later). */
+function scanNodeBindings(node: SceneNode): NodeBindings {
+  const variableIds = new Set<string>();
+  const styleIds = new Set<string>();
   let scanned = 0;
+  let truncated = false;
 
   const visit = (n: SceneNode, depth: number) => {
-    if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) return;
+    if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) {
+      truncated = true;
+      return;
+    }
     scanned++;
     const bound = (n as unknown as { boundVariables?: unknown }).boundVariables;
-    collectBoundVariableIds(bound).forEach((id) => ids.add(id));
+    collectBoundVariableIds(bound).forEach((id) => variableIds.add(id));
+    readStyleIds(n, styleIds);
     if ('children' in n) {
       for (const child of (n as unknown as { children: SceneNode[] }).children) {
-        if (scanned >= MAX_DESCENDANTS_SCANNED) break;
         visit(child, depth + 1);
       }
     }
   };
 
   visit(node, 0);
-  return Array.from(ids);
+  return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
 }
 
 function mapPropertyDefinitions(
@@ -72,14 +106,22 @@ function mapPropertyDefinitions(
   }));
 }
 
-function mapVariant(node: ComponentNode): RawComponentVariant {
+function mapVariant(node: ComponentNode): { variant: RawComponentVariant; bindings: NodeBindings } {
+  const bindings = scanNodeBindings(node);
   return {
-    id: node.id,
-    name: node.name,
-    description: node.description ?? '',
-    variantProperties: node.variantProperties ?? {},
-    boundVariableIds: scanDescendantBoundVariableIds(node),
+    variant: {
+      id: node.id,
+      name: node.name,
+      description: node.description ?? '',
+      variantProperties: node.variantProperties ?? {},
+      boundVariableIds: bindings.variableIds,
+    },
+    bindings,
   };
+}
+
+function unionOf(lists: string[][]): string[] {
+  return Array.from(new Set(lists.flat()));
 }
 
 export async function extractComponents(
@@ -121,11 +163,15 @@ export async function extractComponents(
     );
   }
 
+  let truncatedCount = 0;
+
   const fromSets = await processInBatches(
     componentSets,
     COMPONENT_BATCH_SIZE,
     (set): RawComponent => {
       const variantMembers = set.children.filter((c): c is ComponentNode => c.type === 'COMPONENT');
+      const mapped = variantMembers.map(mapVariant);
+      if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
       return {
         id: set.id,
         key: set.key ?? set.id,
@@ -134,10 +180,9 @@ export async function extractComponents(
         isComponentSet: true,
         pageName: findPageName(set),
         properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
-        variants: variantMembers.map(mapVariant),
-        boundVariableIds: Array.from(
-          new Set(variantMembers.flatMap((v) => scanDescendantBoundVariableIds(v))),
-        ),
+        variants: mapped.map((m) => m.variant),
+        boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
+        styleIds: unionOf(mapped.map((m) => m.bindings.styleIds)),
       };
     },
     onProgress,
@@ -146,19 +191,31 @@ export async function extractComponents(
   const fromStandalone = await processInBatches(
     standaloneComponents,
     COMPONENT_BATCH_SIZE,
-    (node): RawComponent => ({
-      id: node.id,
-      key: node.key ?? node.id,
-      name: node.name,
-      description: node.description ?? '',
-      isComponentSet: false,
-      pageName: findPageName(node),
-      properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
-      variants: [mapVariant(node)],
-      boundVariableIds: scanDescendantBoundVariableIds(node),
-    }),
+    (node): RawComponent => {
+      const { variant, bindings } = mapVariant(node);
+      if (bindings.truncated) truncatedCount++;
+      return {
+        id: node.id,
+        key: node.key ?? node.id,
+        name: node.name,
+        description: node.description ?? '',
+        isComponentSet: false,
+        pageName: findPageName(node),
+        properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
+        variants: [variant],
+        boundVariableIds: bindings.variableIds,
+        styleIds: bindings.styleIds,
+      };
+    },
     onProgress,
   );
+
+  if (truncatedCount > 0) {
+    warn(
+      `${truncatedCount} component(s) are larger than the scan budget (${MAX_DESCENDANTS_SCANNED} layers, ` +
+        `${MAX_DESCENDANT_DEPTH} levels deep), so their token usage may be under-reported.`,
+    );
+  }
 
   return [...fromSets, ...fromStandalone];
 }

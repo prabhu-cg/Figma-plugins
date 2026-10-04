@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   contrastRatio,
   relativeLuminance,
+  MAX_REPORTED_PAIRS,
   computeContrastReport,
 } from '../../src/plugin/generators/contrast';
 import { makeDesignSystem } from './fixtures';
@@ -162,5 +163,31 @@ describe('contrast role inference', () => {
     expect(report.pairs).toHaveLength(1);
     expect(report.pairs[0].foreground.name).toBe('on-primary');
     expect(report.pairs[0].background.name).toBe('button-bg');
+  });
+});
+
+describe('contrast pair cap', () => {
+  it('keeps only the worst pairs for large cross products but reports exact totals', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    const style = ds.styles.color[0];
+    const mk = (name: string, lightness: number) => ({
+      ...style,
+      id: name,
+      name,
+      cssName: `--${name}`,
+      paint: { hex: '#000', r: lightness, g: lightness, b: lightness, a: 1 },
+    });
+    ds.styles.color = [
+      ...Array.from({ length: 40 }, (_, i) => mk(`text-${i}`, i / 40)),
+      ...Array.from({ length: 40 }, (_, i) => mk(`bg-${i}`, i / 40)),
+    ];
+    const report = computeContrastReport(ds);
+    expect(report.totalPairs).toBe(40 * 40);
+    expect(report.pairs.length).toBeLessThanOrEqual(MAX_REPORTED_PAIRS);
+    expect(report.pairs.length).toBe(MAX_REPORTED_PAIRS);
+    const ratios = report.pairs.map((p) => p.ratio);
+    expect([...ratios].sort((a, b) => a - b)).toEqual(ratios);
+    expect(report.failingLargeCount).toBeGreaterThan(0);
   });
 });

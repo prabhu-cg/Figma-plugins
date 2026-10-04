@@ -36,10 +36,13 @@ export function toFileSafeName(name: string): string {
     .replace(/[\\/:*?"<>|]+/g, ' ')
     .trim()
     .replace(/\s+/g, ' ');
-  return cleaned
+  // No leading/trailing dots (hidden files, ".."), and never an empty file name.
+  const pascal = cleaned
+    .replace(/^[.\s]+|[.\s]+$/g, '')
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join('');
+  return pascal || 'Component';
 }
 
 const FONT_WEIGHT_KEYWORDS: Array<[RegExp, number]> = [

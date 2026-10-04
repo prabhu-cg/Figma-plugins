@@ -119,7 +119,6 @@ export function generateCssTokensJson(ds: DesignSystem): GeneratedFile {
   }
 
   const output = {
-    $schema: 'https://designmd.dev/schema/css-tokens.json',
     metadata: {
       fileName: ds.metadata.fileName,
       generatedAt: ds.metadata.generatedAt,

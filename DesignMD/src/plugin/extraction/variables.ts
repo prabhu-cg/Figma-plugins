@@ -75,6 +75,7 @@ export async function extractVariableCollections(
           scopes: v.scopes ?? [],
           codeSyntax: (v.codeSyntax ?? {}) as RawVariable['codeSyntax'],
           valuesByMode,
+          hiddenFromPublishing: Boolean(v.hiddenFromPublishing),
         };
 
         if (!collection) {

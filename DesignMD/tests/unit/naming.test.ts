@@ -91,3 +91,11 @@ describe('fontWeightFromStyle', () => {
     expect(fontWeightFromStyle(style)).toBe(weight);
   });
 });
+
+describe('toFileSafeName edge cases', () => {
+  it('never returns an empty name or a hidden/dot-only name', () => {
+    expect(toFileSafeName('???')).toBe('Component');
+    expect(toFileSafeName('..')).toBe('Component');
+    expect(toFileSafeName('.hidden')).toBe('Hidden');
+  });
+});

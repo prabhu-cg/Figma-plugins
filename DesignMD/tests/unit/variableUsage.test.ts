@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeVariableUsage } from '../../src/plugin/transform/usage';
+import { computeVariableUsage, mergeStyleBoundVariables } from '../../src/plugin/transform/usage';
 import { makeColorVariable, makeCollection, makeComponent } from './fixtures';
 import { transformComponents } from '../../src/plugin/transform/components';
 import {
@@ -41,5 +41,25 @@ describe('computeVariableUsage', () => {
     const [variable] = computeVariableUsage(variables, components);
 
     expect(variable.usedByComponents).toEqual(['Button']);
+  });
+});
+
+describe('mergeStyleBoundVariables', () => {
+  it('adds variables bound inside styles a component applies', () => {
+    const component = makeComponent({ boundVariableIds: ['var:1'], styleIds: ['style:text:1'] });
+    const [merged] = mergeStyleBoundVariables(
+      [component],
+      [{ id: 'style:text:1', boundVariableIds: ['var:2', 'var:1'] }],
+    );
+    expect(merged.boundVariableIds.sort()).toEqual(['var:1', 'var:2']);
+  });
+
+  it('leaves components without style ids untouched', () => {
+    const component = makeComponent({ boundVariableIds: ['var:1'] });
+    const result = mergeStyleBoundVariables(
+      [component],
+      [{ id: 's', boundVariableIds: ['var:9'] }],
+    );
+    expect(result[0]).toBe(component);
   });
 });

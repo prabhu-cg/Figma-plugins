@@ -33,6 +33,46 @@ function orderDefaultModeFirst<T extends { modeId: string }>(
   return [values[index], ...values.slice(0, index), ...values.slice(index + 1)];
 }
 
+/** Figma's "hide from publishing" convention: the flag, or a name starting with ".". */
+export function isCollectionHidden(c: { name: string; hiddenFromPublishing: boolean }): boolean {
+  return c.hiddenFromPublishing || c.name.trim().startsWith('.');
+}
+
+/** A variable is hidden when it, a group in its name, or its whole collection is hidden from publishing. */
+export function isVariableHidden(
+  v: Pick<RawVariable, 'name' | 'hiddenFromPublishing'>,
+  collection: { name: string; hiddenFromPublishing: boolean } | undefined,
+): boolean {
+  if (v.hiddenFromPublishing) return true;
+  if (collection && isCollectionHidden(collection)) return true;
+  return toPathSegments(v.name).some((segment) => segment.startsWith('.'));
+}
+
+/**
+ * Hidden variables are dropped from outputs, so an alias pointing at one would reference a
+ * token that doesn't exist. Replace such aliases with the hidden target's own value.
+ */
+export function inlineHiddenAliases(
+  variables: VariableToken[],
+  hiddenIds: ReadonlySet<string>,
+): VariableToken[] {
+  if (hiddenIds.size === 0) return variables;
+  const byId = new Map(variables.map((v) => [v.id, v]));
+
+  const resolve = (value: TokenValue, modeId: string, depth = 0): TokenValue => {
+    if (value.kind !== 'alias' || !hiddenIds.has(value.variableId) || depth > 10) return value;
+    const target = byId.get(value.variableId);
+    if (!target) return value;
+    const next = target.valuesByMode.find((m) => m.modeId === modeId) ?? target.valuesByMode[0];
+    return next ? resolve(next.value, modeId, depth + 1) : { kind: 'unknown' };
+  };
+
+  return variables.map((v) => ({
+    ...v,
+    valuesByMode: v.valuesByMode.map((m) => ({ ...m, value: resolve(m.value, m.modeId) })),
+  }));
+}
+
 export function transformVariableCollections(raw: RawVariableCollection[]): VariableCollection[] {
   return raw.map((c) => ({
     id: c.id,

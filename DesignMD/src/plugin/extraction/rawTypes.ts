@@ -36,6 +36,7 @@ export interface RawVariable {
   scopes: string[];
   codeSyntax: Partial<Record<'WEB' | 'ANDROID' | 'iOS', string>>;
   valuesByMode: { modeId: string; value: RawVariableValue }[];
+  hiddenFromPublishing?: boolean;
 }
 
 export interface RawTextStyle {
@@ -113,6 +114,8 @@ export interface RawComponentVariant {
 }
 
 export interface RawComponent {
+  /** Ids of local/library styles applied anywhere in the component; resolved to bound variables in transform. */
+  styleIds?: string[];
   id: string;
   key: string;
   name: string;

@@ -7,14 +7,35 @@ import {
   transformPaintStyles,
   transformTextStyles,
 } from './styles';
-import { transformVariableCollections, transformVariables } from './variables';
-import { computeVariableUsage } from './usage';
+import {
+  inlineHiddenAliases,
+  isCollectionHidden,
+  isVariableHidden,
+  transformVariableCollections,
+  transformVariables,
+} from './variables';
+import { computeVariableUsage, mergeStyleBoundVariables } from './usage';
 import { buildSummary } from './summary';
 
 const PLUGIN_VERSION = '1.0.0';
 
 export function transformToDesignSystem(raw: ExtractionResult, fileName: string): DesignSystem {
-  const collections = transformVariableCollections(raw.collections);
+  const allCollections = transformVariableCollections(raw.collections);
+  const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
+  const hiddenVariableIds = new Set(
+    raw.variables
+      .filter((v) => isVariableHidden(v, collectionsById.get(v.variableCollectionId)))
+      .map((v) => v.id),
+  );
+  const warnings = [...raw.warnings];
+  if (hiddenVariableIds.size > 0) {
+    warnings.push(
+      `Skipped ${hiddenVariableIds.size} variable(s) hidden from publishing (hidden flag, or a name/group/collection starting with ".").`,
+    );
+  }
+  const collections = allCollections
+    .filter((c) => !isCollectionHidden(c))
+    .map((c) => ({ ...c, variableIds: c.variableIds.filter((id) => !hiddenVariableIds.has(id)) }));
 
   const styles = {
     text: transformTextStyles(raw.textStyles),
@@ -23,9 +44,20 @@ export function transformToDesignSystem(raw: ExtractionResult, fileName: string)
     grid: transformGridStyles(raw.gridStyles),
   };
 
-  const components = transformComponents(raw.components);
+  const rawComponents = mergeStyleBoundVariables(raw.components, [
+    ...raw.textStyles,
+    ...raw.paintStyles,
+    ...raw.effectStyles,
+  ]).map((c) => ({
+    ...c,
+    boundVariableIds: c.boundVariableIds.filter((id) => !hiddenVariableIds.has(id)),
+  }));
+  const components = transformComponents(rawComponents);
   const variables = computeVariableUsage(
-    transformVariables(raw.variables, collections),
+    inlineHiddenAliases(
+      transformVariables(raw.variables, allCollections),
+      hiddenVariableIds,
+    ).filter((v) => !hiddenVariableIds.has(v.id)),
     components,
   );
 
@@ -39,6 +71,6 @@ export function transformToDesignSystem(raw: ExtractionResult, fileName: string)
     },
     ...base,
     summary: buildSummary(base),
-    warnings: raw.warnings,
+    warnings,
   };
 }

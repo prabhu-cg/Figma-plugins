@@ -1,4 +1,5 @@
 import type { ComponentDoc, VariableToken } from '@shared/types';
+import type { RawComponent } from '../extraction/rawTypes';
 
 /**
  * Reverse index of transformComponents' variableId -> component lookup: for each
@@ -24,4 +25,27 @@ export function computeVariableUsage(
       a.localeCompare(b),
     ),
   }));
+}
+
+/**
+ * Adds the variables bound inside each style a component applies, so tokens used only
+ * through a text/color/effect style still count as used by that component.
+ */
+export function mergeStyleBoundVariables(
+  components: RawComponent[],
+  styles: Array<{ id: string; boundVariableIds: string[] }>,
+): RawComponent[] {
+  const variableIdsByStyleId = new Map(
+    styles.filter((s) => s.boundVariableIds.length > 0).map((s) => [s.id, s.boundVariableIds]),
+  );
+  if (variableIdsByStyleId.size === 0) return components;
+
+  return components.map((component) => {
+    const extra = (component.styleIds ?? []).flatMap((id) => variableIdsByStyleId.get(id) ?? []);
+    if (extra.length === 0) return component;
+    return {
+      ...component,
+      boundVariableIds: Array.from(new Set([...component.boundVariableIds, ...extra])),
+    };
+  });
 }

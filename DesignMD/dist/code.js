@@ -35,7 +35,8 @@
   }
   function toFileSafeName(name) {
     const cleaned = name.replace(/[\\/:*?"<>|]+/g, " ").trim().replace(/\s+/g, " ");
-    return cleaned.split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+    const pascal = cleaned.replace(/^[.\s]+|[.\s]+$/g, "").split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join("");
+    return pascal || "Component";
   }
   const FONT_WEIGHT_KEYWORDS = [
     [/thin|hairline/, 100],
@@ -219,8 +220,15 @@
     );
   }
   const COMPONENT_BATCH_SIZE = 100;
-  const MAX_DESCENDANTS_SCANNED = 60;
-  const MAX_DESCENDANT_DEPTH = 4;
+  const MAX_DESCENDANTS_SCANNED = 500;
+  const MAX_DESCENDANT_DEPTH = 10;
+  const STYLE_ID_KEYS = [
+    "textStyleId",
+    "fillStyleId",
+    "strokeStyleId",
+    "effectStyleId",
+    "gridStyleId"
+  ];
   function findPageName(node) {
     let current = node;
     while (current) {
@@ -238,23 +246,37 @@
     }
     return false;
   }
-  function scanDescendantBoundVariableIds(node) {
-    const ids = /* @__PURE__ */ new Set();
+  function readStyleIds(n, into) {
+    for (const key of STYLE_ID_KEYS) {
+      try {
+        const value = n[key];
+        if (typeof value === "string" && value !== "") into.add(value);
+      } catch {
+      }
+    }
+  }
+  function scanNodeBindings(node) {
+    const variableIds = /* @__PURE__ */ new Set();
+    const styleIds = /* @__PURE__ */ new Set();
     let scanned = 0;
+    let truncated = false;
     const visit = (n, depth) => {
-      if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) return;
+      if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) {
+        truncated = true;
+        return;
+      }
       scanned++;
       const bound = n.boundVariables;
-      collectBoundVariableIds(bound).forEach((id) => ids.add(id));
+      collectBoundVariableIds(bound).forEach((id) => variableIds.add(id));
+      readStyleIds(n, styleIds);
       if ("children" in n) {
         for (const child of n.children) {
-          if (scanned >= MAX_DESCENDANTS_SCANNED) break;
           visit(child, depth + 1);
         }
       }
     };
     visit(node, 0);
-    return Array.from(ids);
+    return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
   }
   function mapPropertyDefinitions(defs) {
     if (!defs) return [];
@@ -266,13 +288,20 @@
     }));
   }
   function mapVariant(node) {
+    const bindings = scanNodeBindings(node);
     return {
-      id: node.id,
-      name: node.name,
-      description: node.description ?? "",
-      variantProperties: node.variantProperties ?? {},
-      boundVariableIds: scanDescendantBoundVariableIds(node)
+      variant: {
+        id: node.id,
+        name: node.name,
+        description: node.description ?? "",
+        variantProperties: node.variantProperties ?? {},
+        boundVariableIds: bindings.variableIds
+      },
+      bindings
     };
+  }
+  function unionOf(lists) {
+    return Array.from(new Set(lists.flat()));
   }
   async function extractComponents(onProgress, onWarning) {
     const warn = onWarning ?? (() => {
@@ -303,11 +332,14 @@
         `Skipped ${hiddenCount} component(s)/component set(s) hidden from publishing (name, or an ancestor frame/section/page, starts with ".").`
       );
     }
+    let truncatedCount = 0;
     const fromSets = await processInBatches(
       componentSets,
       COMPONENT_BATCH_SIZE,
       (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
+        const mapped = variantMembers.map(mapVariant);
+        if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
         return {
           id: set.id,
           key: set.key ?? set.id,
@@ -316,10 +348,9 @@
           isComponentSet: true,
           pageName: findPageName(set),
           properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
-          variants: variantMembers.map(mapVariant),
-          boundVariableIds: Array.from(
-            new Set(variantMembers.flatMap((v) => scanDescendantBoundVariableIds(v)))
-          )
+          variants: mapped.map((m) => m.variant),
+          boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
+          styleIds: unionOf(mapped.map((m) => m.bindings.styleIds))
         };
       },
       onProgress
@@ -327,19 +358,29 @@
     const fromStandalone = await processInBatches(
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
-      (node) => ({
-        id: node.id,
-        key: node.key ?? node.id,
-        name: node.name,
-        description: node.description ?? "",
-        isComponentSet: false,
-        pageName: findPageName(node),
-        properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
-        variants: [mapVariant(node)],
-        boundVariableIds: scanDescendantBoundVariableIds(node)
-      }),
+      (node) => {
+        const { variant, bindings } = mapVariant(node);
+        if (bindings.truncated) truncatedCount++;
+        return {
+          id: node.id,
+          key: node.key ?? node.id,
+          name: node.name,
+          description: node.description ?? "",
+          isComponentSet: false,
+          pageName: findPageName(node),
+          properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
+          variants: [variant],
+          boundVariableIds: bindings.variableIds,
+          styleIds: bindings.styleIds
+        };
+      },
       onProgress
     );
+    if (truncatedCount > 0) {
+      warn(
+        `${truncatedCount} component(s) are larger than the scan budget (${MAX_DESCENDANTS_SCANNED} layers, ${MAX_DESCENDANT_DEPTH} levels deep), so their token usage may be under-reported.`
+      );
+    }
     return [...fromSets, ...fromStandalone];
   }
   const VARIABLE_BATCH_SIZE = 200;
@@ -404,7 +445,8 @@
           description: v.description ?? "",
           scopes: v.scopes ?? [],
           codeSyntax: v.codeSyntax ?? {},
-          valuesByMode
+          valuesByMode,
+          hiddenFromPublishing: Boolean(v.hiddenFromPublishing)
         };
         if (!collection) {
           warn(`Variable "${v.name}" references missing collection ${v.variableCollectionId}`);
@@ -567,7 +609,19 @@
   function relatedComponentsSection(c) {
     return joinSections([mdHeading(2, "Related Components"), mdList(c.relatedComponentNames)]);
   }
-  function generateComponentMd(c, ds) {
+  function assignComponentDocPaths(components) {
+    const paths = /* @__PURE__ */ new Map();
+    const taken = /* @__PURE__ */ new Set();
+    for (const c of components) {
+      const base = toFileSafeName(c.name);
+      let candidate = base;
+      for (let n = 2; taken.has(candidate.toLowerCase()); n++) candidate = `${base}-${n}`;
+      taken.add(candidate.toLowerCase());
+      paths.set(c.id, `components/${candidate}.md`);
+    }
+    return paths;
+  }
+  function generateComponentMd(c, ds, path = `components/${toFileSafeName(c.name)}.md`) {
     const content = joinSections([
       mdHeading(1, c.name),
       c.isComponentSet ? "_Component Set_\n" : "_Component_\n",
@@ -582,18 +636,11 @@
       tokenReferencesSection(c, ds),
       relatedComponentsSection(c)
     ]);
-    return { path: `components/${toFileSafeName(c.name)}.md`, content };
+    return { path, content };
   }
   function generateComponentDocs(ds) {
-    const usedPaths = /* @__PURE__ */ new Map();
-    return ds.components.map((c) => {
-      const file = generateComponentMd(c, ds);
-      const count = usedPaths.get(file.path) ?? 0;
-      usedPaths.set(file.path, count + 1);
-      if (count === 0) return file;
-      const deduped = file.path.replace(/\.md$/, `-${count + 1}.md`);
-      return { ...file, path: deduped };
-    });
+    const paths = assignComponentDocPaths(ds.components);
+    return ds.components.map((c) => generateComponentMd(c, ds, paths.get(c.id)));
   }
   function unitFor(category) {
     return category === "spacing" || category === "typography" ? "px" : "";
@@ -690,7 +737,6 @@
       Object.assign(root, gridStyleToCssVars(s));
     }
     const output = {
-      $schema: "https://designmd.dev/schema/css-tokens.json",
       metadata: {
         fileName: ds.metadata.fileName,
         generatedAt: ds.metadata.generatedAt
@@ -703,6 +749,7 @@
       content: JSON.stringify(output, null, 2)
     };
   }
+  const MAX_REPORTED_PAIRS = 500;
   const AA_NORMAL_MIN_RATIO = 4.5;
   const AA_LARGE_MIN_RATIO = 3;
   const WHITE = { r: 1, g: 1, b: 1 };
@@ -796,23 +843,39 @@
     const foregrounds = tokens.filter((t) => t.role === "foreground");
     const backgrounds = tokens.filter((t) => t.role === "background");
     if (foregrounds.length > 0 && backgrounds.length > 0) {
-      const pairs = [];
+      let kept = [];
+      let cutoff = Infinity;
+      let totalPairs = 0;
+      let passingNormalCount = 0;
+      let failingLargeCount = 0;
       for (const foreground of foregrounds) {
         for (const background of backgrounds) {
           if (foreground.name === background.name) continue;
           const ratio = contrastRatio(foreground.color, background.color);
-          pairs.push({
+          totalPairs += 1;
+          if (ratio >= AA_NORMAL_MIN_RATIO) passingNormalCount += 1;
+          if (ratio < AA_LARGE_MIN_RATIO) failingLargeCount += 1;
+          if (ratio >= cutoff) continue;
+          kept.push({
             foreground,
             background,
             ratio,
             passesAANormal: ratio >= AA_NORMAL_MIN_RATIO,
             passesAALarge: ratio >= AA_LARGE_MIN_RATIO
           });
+          if (kept.length >= MAX_REPORTED_PAIRS * 4) {
+            kept.sort((a, b) => a.ratio - b.ratio);
+            kept = kept.slice(0, MAX_REPORTED_PAIRS);
+            cutoff = kept[kept.length - 1].ratio;
+          }
         }
       }
-      pairs.sort((a, b) => a.ratio - b.ratio);
+      kept.sort((a, b) => a.ratio - b.ratio);
       return {
-        pairs,
+        pairs: kept.slice(0, MAX_REPORTED_PAIRS),
+        totalPairs,
+        passingNormalCount,
+        failingLargeCount,
         fallbackChecks: [],
         totalColorTokensChecked: tokens.length,
         skippedTranslucentCount
@@ -833,6 +896,9 @@
     );
     return {
       pairs: [],
+      totalPairs: 0,
+      passingNormalCount: 0,
+      failingLargeCount: 0,
       fallbackChecks,
       totalColorTokensChecked: tokens.length,
       skippedTranslucentCount
@@ -1025,15 +1091,19 @@
         "_No components or component sets found in this file._\n"
       ]);
     }
-    const rows = ds.components.map((c) => [
-      c.name,
-      c.isComponentSet ? "Component Set" : "Component",
-      c.pageName,
-      String(c.variants.length),
-      c.states.join(", ") || "—",
-      c.sizes.join(", ") || "—",
-      `[${c.name}.md](./components/${c.name.replace(/[\\/:*?"<>|]+/g, "-")}.md)`
-    ]);
+    const docPaths = assignComponentDocPaths(ds.components);
+    const rows = ds.components.map((c) => {
+      var _a;
+      return [
+        c.name,
+        c.isComponentSet ? "Component Set" : "Component",
+        c.pageName,
+        String(c.variants.length),
+        c.states.join(", ") || "—",
+        c.sizes.join(", ") || "—",
+        `[${(_a = docPaths.get(c.id)) == null ? void 0 : _a.replace(/^components\//, "")}](./${markdownLinkTarget(docPaths.get(c.id) ?? "")})`
+      ];
+    });
     return joinSections([
       mdHeading(2, "Components"),
       "Full per-component documentation lives in `/components`. See individual files for variants, properties, and token references.\n",
@@ -1041,6 +1111,9 @@
       mdHeading(3, "All Components"),
       mdTable(["Component", "Type", "Page", "Variants", "States", "Sizes", "Docs"], rows)
     ]);
+  }
+  function markdownLinkTarget(path) {
+    return encodeURI(path).replace(/\(/g, "%28").replace(/\)/g, "%29");
   }
   function formatUsedBy(names, max = 5) {
     if (names.length === 0) return "—";
@@ -1069,7 +1142,7 @@
     );
     return joinSections([
       mdHeading(2, "Token Usage"),
-      `${used.length} of ${ds.variables.length} variables (${percent}%) are referenced by at least one component in this file. Usage is derived from bound variables detected in each component's node tree — Style bindings applied directly to nodes (not via Variables) are not tracked here.
+      `${used.length} of ${ds.variables.length} variables (${percent}%) are referenced by at least one component in this file. Usage is derived from bound variables detected in each component's node tree, including variables bound inside the text, color, and effect styles those components apply. Very large components are scanned only up to a layer/depth budget, so usage can be under-reported for them.
 `,
       mdHeading(3, "Referenced Variables"),
       mdTable(["Token", "CSS Variable", "Used By", "Components"], usedRows),
@@ -1077,6 +1150,7 @@
       unusedTable
     ]);
   }
+  const MAX_FAILING_ROWS = 100;
   function formatRatio(ratio) {
     return `${ratio.toFixed(2)}:1`;
   }
@@ -1117,11 +1191,15 @@
       ]);
     }
     if (report.pairs.length > 0) {
-      const passingNormal = report.pairs.filter((p) => p.passesAANormal).length;
-      const failing = report.pairs.filter((p) => !p.passesAALarge);
+      const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
       notes.unshift(
-        `Checked ${report.pairs.length} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${passingNormal} of ${report.pairs.length} pair(s) meet WCAG AA for normal text (4.5:1).`
+        `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${report.passingNormalCount} of ${report.totalPairs} pair(s) meet WCAG AA for normal text (4.5:1).`
       );
+      if (report.failingLargeCount > failing.length) {
+        notes.push(
+          `Showing the ${failing.length} lowest-contrast of ${report.failingLargeCount} failing pairs.`
+        );
+      }
       return joinSections([
         mdHeading(3, "Color Contrast"),
         mdList(notes),
@@ -1250,36 +1328,88 @@
     }
     return path;
   }
+  const CATEGORIES = [
+    "color",
+    "typography",
+    "spacing",
+    "effect",
+    "grid",
+    "semantic",
+    "component"
+  ];
   function isJsonLeaf(v) {
     return typeof v === "object" && v !== null && "$value" in v;
   }
-  function valueToJson(value) {
+  function safeSegment(segment) {
+    return segment.replace(/[.{}]/g, "-").replace(/^\$/, "_");
+  }
+  function round(value, digits = 3) {
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+  const DIMENSION_SCOPES = [
+    "CORNER_RADIUS",
+    "WIDTH_HEIGHT",
+    "GAP",
+    "FONT_SIZE",
+    "LETTER_SPACING",
+    "LINE_HEIGHT",
+    "PARAGRAPH_SPACING",
+    "PARAGRAPH_INDENT"
+  ];
+  function dtcgTypeForVariable(variable) {
+    switch (variable.resolvedType) {
+      case "COLOR":
+        return "color";
+      case "FLOAT":
+        if (variable.scopes.includes("FONT_WEIGHT")) return "fontWeight";
+        if (variable.category === "spacing") return "dimension";
+        if (variable.scopes.some((s) => DIMENSION_SCOPES.includes(s))) return "dimension";
+        return "number";
+      case "STRING":
+        return variable.scopes.includes("FONT_FAMILY") ? "fontFamily" : "string";
+      case "BOOLEAN":
+        return "boolean";
+      default:
+        return "string";
+    }
+  }
+  function valueToJson(value, type, ctx) {
     switch (value.kind) {
       case "color":
         return value.color.hex;
       case "float":
-        return value.value;
+        return type === "dimension" ? `${value.value}px` : value.value;
       case "string":
         return value.value;
       case "boolean":
         return value.value;
-      case "alias":
-        return `{${toPathSegments(value.variableName).join(".")}}`;
+      case "alias": {
+        const path = ctx.pathsById.get(value.variableId) ?? toPathSegments(value.variableName).map(safeSegment);
+        return `{${path.join(".")}}`;
+      }
       default:
         return null;
     }
   }
-  function variableToLeaf(variable, category) {
+  function variableSection(category) {
+    return CATEGORIES.includes(category) ? category : "other";
+  }
+  function variableTreePath(variable) {
+    return stripRedundantCategoryPrefix(variable.path, variable.category).map(safeSegment);
+  }
+  function variableToLeaf(variable, ctx) {
+    const type = dtcgTypeForVariable(variable);
     const defaultValue = variable.valuesByMode[0];
     const modes = {};
     for (const vbm of variable.valuesByMode) {
-      modes[vbm.modeName] = valueToJson(vbm.value);
+      modes[vbm.modeName] = valueToJson(vbm.value, type, ctx);
     }
     return {
-      path: stripRedundantCategoryPrefix(variable.path, category),
+      path: variableTreePath(variable),
       leaf: {
-        $type: category,
-        $value: defaultValue ? valueToJson(defaultValue.value) : null,
+        $type: type,
+        $value: defaultValue ? valueToJson(defaultValue.value, type, ctx) : null,
         $description: variable.description || void 0,
         $extensions: {
           figma: {
@@ -1294,22 +1424,89 @@
       }
     };
   }
-  function styleToLeaf(style, category) {
+  function lineHeightToMultiplier(lineHeight, fontSize) {
+    if (lineHeight.endsWith("%")) return round(parseFloat(lineHeight) / 100);
+    if (lineHeight.endsWith("px") && fontSize > 0) return round(parseFloat(lineHeight) / fontSize);
+    return void 0;
+  }
+  function letterSpacingToPx(letterSpacing, fontSize) {
+    if (letterSpacing.endsWith("%"))
+      return `${round(parseFloat(letterSpacing) / 100 * fontSize, 2)}px`;
+    return letterSpacing;
+  }
+  function shadowToJson(e) {
     var _a;
-    let value = null;
-    if (style.type === "PAINT") value = ((_a = style.paint) == null ? void 0 : _a.hex) ?? null;
-    else if (style.type === "TEXT") value = JSON.stringify(style.textProperties);
-    else if (style.type === "EFFECT") value = JSON.stringify(style.effects);
-    else if (style.type === "GRID") value = JSON.stringify(style.grids);
+    const shadow = {
+      color: ((_a = e.color) == null ? void 0 : _a.hex) ?? "#000000",
+      offsetX: `${e.offsetX ?? 0}px`,
+      offsetY: `${e.offsetY ?? 0}px`,
+      blur: `${e.radius ?? 0}px`,
+      spread: `${e.spread ?? 0}px`
+    };
+    if (e.type === "INNER_SHADOW") shadow.inset = true;
+    return shadow;
+  }
+  function styleToLeaf(style, category) {
+    const figma2 = {
+      source: "style",
+      cssName: style.cssName
+    };
+    let type;
+    let value;
+    if (style.type === "PAINT") {
+      if (!style.paint) return null;
+      type = "color";
+      value = style.paint.hex;
+    } else if (style.type === "TEXT") {
+      const p = style.textProperties;
+      if (!p) return null;
+      type = "typography";
+      const typography = {
+        fontFamily: p.fontFamily,
+        fontSize: `${p.fontSize}px`,
+        fontWeight: p.fontWeight,
+        letterSpacing: letterSpacingToPx(p.letterSpacing, p.fontSize)
+      };
+      const lineHeight = lineHeightToMultiplier(p.lineHeight, p.fontSize);
+      if (lineHeight !== void 0) typography.lineHeight = lineHeight;
+      value = typography;
+      figma2.fontStyle = p.fontStyle;
+      figma2.textCase = p.textCase;
+      figma2.textDecoration = p.textDecoration;
+      figma2.paragraphSpacing = p.paragraphSpacing;
+    } else if (style.type === "EFFECT") {
+      const visible = (style.effects ?? []).filter((e) => e.visible);
+      const shadows = visible.filter((e) => e.type === "DROP_SHADOW" || e.type === "INNER_SHADOW");
+      const blur = visible.find((e) => e.type === "LAYER_BLUR" || e.type === "BACKGROUND_BLUR");
+      if (shadows.length > 0) {
+        type = "shadow";
+        value = shadows.length === 1 ? shadowToJson(shadows[0]) : shadows.map(shadowToJson);
+      } else if ((blur == null ? void 0 : blur.radius) !== void 0) {
+        type = "dimension";
+        value = `${blur.radius}px`;
+        figma2.effectType = blur.type;
+      } else {
+        return null;
+      }
+    } else {
+      type = "grid";
+      value = (style.grids ?? []).map((g) => {
+        const grid = { pattern: g.pattern };
+        if (g.count !== void 0) grid.count = g.count;
+        if (g.gutterSize !== void 0) grid.gutter = `${g.gutterSize}px`;
+        if (g.offset !== void 0) grid.offset = `${g.offset}px`;
+        if (g.sectionSize !== void 0) grid.sectionSize = `${g.sectionSize}px`;
+        if (g.alignment !== void 0) grid.alignment = g.alignment;
+        return grid;
+      });
+    }
     return {
-      path: stripRedundantCategoryPrefix(style.path, category),
+      path: stripRedundantCategoryPrefix(style.path, category).map(safeSegment),
       leaf: {
-        $type: category,
+        $type: type,
         $value: value,
         $description: style.description || void 0,
-        $extensions: {
-          figma: { source: "style", cssName: style.cssName }
-        }
+        $extensions: { figma: figma2 }
       }
     };
   }
@@ -1319,43 +1516,38 @@
     effect: "effect",
     grid: "grid"
   };
-  function buildCategorySection(ds, category) {
+  function buildCategorySection(ds, category, ctx) {
     const variables = ds.variables.filter((v) => v.category === category);
     let entries;
     if (variables.length > 0) {
-      entries = variables.map((v) => variableToLeaf(v, category));
+      entries = variables.map((v) => variableToLeaf(v, ctx));
     } else {
       const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
       const fallbackStyles = fallbackKey ? ds.styles[fallbackKey] : [];
-      entries = fallbackStyles.map((s) => styleToLeaf(s, category));
+      entries = fallbackStyles.map((s) => styleToLeaf(s, category)).filter((e) => e !== null);
     }
     return buildTokenTree(entries, isJsonLeaf);
   }
-  const CATEGORIES = [
-    "color",
-    "typography",
-    "spacing",
-    "effect",
-    "grid",
-    "semantic",
-    "component"
-  ];
   function generateTokensJson(ds) {
     const output = {
-      $schema: "https://designmd.dev/schema/tokens.json",
       metadata: {
         fileName: ds.metadata.fileName,
         generatedAt: ds.metadata.generatedAt,
         pluginVersion: ds.metadata.pluginVersion
       }
     };
+    const ctx = {
+      pathsById: new Map(
+        ds.variables.map((v) => [v.id, [variableSection(v.category), ...variableTreePath(v)]])
+      )
+    };
     for (const category of CATEGORIES) {
-      output[category] = buildCategorySection(ds, category);
+      output[category] = buildCategorySection(ds, category, ctx);
     }
     const otherVariables = ds.variables.filter((v) => !CATEGORIES.includes(v.category));
     if (otherVariables.length > 0) {
       output.other = buildTokenTree(
-        otherVariables.map((v) => variableToLeaf(v, v.category)),
+        otherVariables.map((v) => variableToLeaf(v, ctx)),
         isJsonLeaf
       );
     }
@@ -1381,6 +1573,9 @@
     }
     return Array.from(values);
   }
+  const MIN_COMMON_TOKEN_USERS = 20;
+  const COMMON_TOKEN_FRACTION = 0.25;
+  const MAX_RELATED = 10;
   const STATE_PATTERN = /state/i;
   const SIZE_PATTERN = /size/i;
   function transformComponents(raw) {
@@ -1420,17 +1615,18 @@
         else docsByVariableId.set(variableId, [index]);
       }
     });
+    const commonThreshold = Math.max(MIN_COMMON_TOKEN_USERS, docs.length * COMMON_TOKEN_FRACTION);
     docs.forEach((doc, index) => {
-      if (doc.boundVariableIds.length === 0) return;
-      const relatedIndices = /* @__PURE__ */ new Set();
+      const scores = /* @__PURE__ */ new Map();
       for (const variableId of doc.boundVariableIds) {
-        for (const otherIndex of docsByVariableId.get(variableId) ?? []) {
-          if (otherIndex !== index) relatedIndices.add(otherIndex);
-          if (relatedIndices.size >= 10) break;
+        const sharers = docsByVariableId.get(variableId) ?? [];
+        if (sharers.length > commonThreshold) continue;
+        const weight = 1 / sharers.length;
+        for (const otherIndex of sharers) {
+          if (otherIndex !== index) scores.set(otherIndex, (scores.get(otherIndex) ?? 0) + weight);
         }
-        if (relatedIndices.size >= 10) break;
       }
-      doc.relatedComponentNames = Array.from(relatedIndices).slice(0, 10).map((i) => docs[i].name);
+      doc.relatedComponentNames = Array.from(scores.entries()).sort((a, b) => b[1] - a[1] || docs[a[0]].name.localeCompare(docs[b[0]].name)).slice(0, MAX_RELATED).map(([i]) => docs[i].name);
     });
     return docs;
   }
@@ -1560,6 +1756,29 @@
     if (index <= 0) return values;
     return [values[index], ...values.slice(0, index), ...values.slice(index + 1)];
   }
+  function isCollectionHidden(c) {
+    return c.hiddenFromPublishing || c.name.trim().startsWith(".");
+  }
+  function isVariableHidden(v, collection) {
+    if (v.hiddenFromPublishing) return true;
+    if (collection && isCollectionHidden(collection)) return true;
+    return toPathSegments(v.name).some((segment) => segment.startsWith("."));
+  }
+  function inlineHiddenAliases(variables, hiddenIds) {
+    if (hiddenIds.size === 0) return variables;
+    const byId = new Map(variables.map((v) => [v.id, v]));
+    const resolve = (value, modeId, depth = 0) => {
+      if (value.kind !== "alias" || !hiddenIds.has(value.variableId) || depth > 10) return value;
+      const target = byId.get(value.variableId);
+      if (!target) return value;
+      const next = target.valuesByMode.find((m) => m.modeId === modeId) ?? target.valuesByMode[0];
+      return next ? resolve(next.value, modeId, depth + 1) : { kind: "unknown" };
+    };
+    return variables.map((v) => ({
+      ...v,
+      valuesByMode: v.valuesByMode.map((m) => ({ ...m, value: resolve(m.value, m.modeId) }))
+    }));
+  }
   function transformVariableCollections(raw) {
     return raw.map((c) => ({
       id: c.id,
@@ -1619,6 +1838,20 @@
       )
     }));
   }
+  function mergeStyleBoundVariables(components, styles) {
+    const variableIdsByStyleId = new Map(
+      styles.filter((s) => s.boundVariableIds.length > 0).map((s) => [s.id, s.boundVariableIds])
+    );
+    if (variableIdsByStyleId.size === 0) return components;
+    return components.map((component) => {
+      const extra = (component.styleIds ?? []).flatMap((id) => variableIdsByStyleId.get(id) ?? []);
+      if (extra.length === 0) return component;
+      return {
+        ...component,
+        boundVariableIds: Array.from(/* @__PURE__ */ new Set([...component.boundVariableIds, ...extra]))
+      };
+    });
+  }
   function buildSummary(system) {
     const modeIds = new Set(system.collections.flatMap((c) => c.modes.map((m) => m.modeId)));
     return {
@@ -1638,16 +1871,38 @@
   }
   const PLUGIN_VERSION = "1.0.0";
   function transformToDesignSystem(raw, fileName) {
-    const collections = transformVariableCollections(raw.collections);
+    const allCollections = transformVariableCollections(raw.collections);
+    const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
+    const hiddenVariableIds = new Set(
+      raw.variables.filter((v) => isVariableHidden(v, collectionsById.get(v.variableCollectionId))).map((v) => v.id)
+    );
+    const warnings = [...raw.warnings];
+    if (hiddenVariableIds.size > 0) {
+      warnings.push(
+        `Skipped ${hiddenVariableIds.size} variable(s) hidden from publishing (hidden flag, or a name/group/collection starting with ".").`
+      );
+    }
+    const collections = allCollections.filter((c) => !isCollectionHidden(c)).map((c) => ({ ...c, variableIds: c.variableIds.filter((id) => !hiddenVariableIds.has(id)) }));
     const styles = {
       text: transformTextStyles(raw.textStyles),
       color: transformPaintStyles(raw.paintStyles),
       effect: transformEffectStyles(raw.effectStyles),
       grid: transformGridStyles(raw.gridStyles)
     };
-    const components = transformComponents(raw.components);
+    const rawComponents = mergeStyleBoundVariables(raw.components, [
+      ...raw.textStyles,
+      ...raw.paintStyles,
+      ...raw.effectStyles
+    ]).map((c) => ({
+      ...c,
+      boundVariableIds: c.boundVariableIds.filter((id) => !hiddenVariableIds.has(id))
+    }));
+    const components = transformComponents(rawComponents);
     const variables = computeVariableUsage(
-      transformVariables(raw.variables, collections),
+      inlineHiddenAliases(
+        transformVariables(raw.variables, allCollections),
+        hiddenVariableIds
+      ).filter((v) => !hiddenVariableIds.has(v.id)),
       components
     );
     const base = { collections, variables, styles, components };
@@ -1659,7 +1914,7 @@
       },
       ...base,
       summary: buildSummary(base),
-      warnings: raw.warnings
+      warnings
     };
   }
   function filterDesignSystemByPages(ds, excludedPages) {

@@ -1,6 +1,7 @@
 import type { DesignSystem, VariableToken } from '@shared/types';
 import type { GeneratedFile } from '@shared/messages';
 import { joinSections, mdHeading, mdList, mdTable } from './markdown';
+import { assignComponentDocPaths } from './componentMd';
 import { computeContrastReport, type ContrastPair, type FallbackContrastCheck } from './contrast';
 
 function defaultValueLabel(v: VariableToken): string {
@@ -209,6 +210,7 @@ function componentsSection(ds: DesignSystem): string {
       '_No components or component sets found in this file._\n',
     ]);
   }
+  const docPaths = assignComponentDocPaths(ds.components);
   const rows = ds.components.map((c) => [
     c.name,
     c.isComponentSet ? 'Component Set' : 'Component',
@@ -216,7 +218,7 @@ function componentsSection(ds: DesignSystem): string {
     String(c.variants.length),
     c.states.join(', ') || '—',
     c.sizes.join(', ') || '—',
-    `[${c.name}.md](./components/${c.name.replace(/[\\/:*?"<>|]+/g, '-')}.md)`,
+    `[${docPaths.get(c.id)?.replace(/^components\//, '')}](./${markdownLinkTarget(docPaths.get(c.id) ?? '')})`,
   ]);
   return joinSections([
     mdHeading(2, 'Components'),
@@ -225,6 +227,10 @@ function componentsSection(ds: DesignSystem): string {
     mdHeading(3, 'All Components'),
     mdTable(['Component', 'Type', 'Page', 'Variants', 'States', 'Sizes', 'Docs'], rows),
   ]);
+}
+
+function markdownLinkTarget(path: string): string {
+  return encodeURI(path).replace(/\(/g, '%28').replace(/\)/g, '%29');
 }
 
 function formatUsedBy(names: string[], max = 5): string {
@@ -266,13 +272,16 @@ function tokenUsageSection(ds: DesignSystem): string {
     mdHeading(2, 'Token Usage'),
     `${used.length} of ${ds.variables.length} variables (${percent}%) are referenced by at least one ` +
       "component in this file. Usage is derived from bound variables detected in each component's node " +
-      'tree — Style bindings applied directly to nodes (not via Variables) are not tracked here.\n',
+      'tree, including variables bound inside the text, color, and effect styles those components apply. ' +
+      'Very large components are scanned only up to a layer/depth budget, so usage can be under-reported for them.\n',
     mdHeading(3, 'Referenced Variables'),
     mdTable(['Token', 'CSS Variable', 'Used By', 'Components'], usedRows),
     mdHeading(3, 'Unused Variables'),
     unusedTable,
   ]);
 }
+
+const MAX_FAILING_ROWS = 100;
 
 function formatRatio(ratio: number): string {
   return `${ratio.toFixed(2)}:1`;
@@ -320,14 +329,18 @@ function colorContrastSection(ds: DesignSystem): string {
   }
 
   if (report.pairs.length > 0) {
-    const passingNormal = report.pairs.filter((p) => p.passesAANormal).length;
-    const failing = report.pairs.filter((p) => !p.passesAALarge);
+    const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
     notes.unshift(
-      `Checked ${report.pairs.length} foreground/background token pair(s), inferred from naming ` +
+      `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming ` +
         'conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs ' +
-        `FRAME_FILL/SHAPE_FILL scopes). ${passingNormal} of ${report.pairs.length} pair(s) meet WCAG AA ` +
+        `FRAME_FILL/SHAPE_FILL scopes). ${report.passingNormalCount} of ${report.totalPairs} pair(s) meet WCAG AA ` +
         'for normal text (4.5:1).',
     );
+    if (report.failingLargeCount > failing.length) {
+      notes.push(
+        `Showing the ${failing.length} lowest-contrast of ${report.failingLargeCount} failing pairs.`,
+      );
+    }
     return joinSections([
       mdHeading(3, 'Color Contrast'),
       mdList(notes),

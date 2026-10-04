@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MONOREPO_DIR="/Users/prc/Documents/Personal/.designmd-monorepo"
+MONOREPO_DIR="${DESIGNMD_MONOREPO_DIR:-/Users/prc/Documents/Personal/.designmd-monorepo}"
 COMMIT_MESSAGE="${1:-Update DesignMD}"
 
 if [ ! -d "$MONOREPO_DIR/.git" ]; then
@@ -21,19 +21,31 @@ if [ ! -d "$MONOREPO_DIR/.git" ]; then
 fi
 
 cd "$SOURCE_DIR"
+if ! git ls-files --error-unmatch dist/code.js dist/ui.html >/dev/null 2>&1; then
+  echo "dist/code.js and dist/ui.html must be tracked by git (they are published as-is)."
+  exit 1
+fi
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "Note: uncommitted changes to tracked files are included in this publish."
+fi
 npm run build
 
 cd "$MONOREPO_DIR"
 git checkout main
 git pull --ff-only origin main
 
-rsync -a --delete \
-  --exclude 'node_modules' \
-  --exclude '.git' \
-  --exclude '.claude' \
-  --exclude '.DS_Store' \
-  --exclude '*.log' \
-  "$SOURCE_DIR/" "$MONOREPO_DIR/DesignMD/"
+# Publish exactly the files git tracks here — no coverage/, scratch files, or other untracked
+# leftovers. dist/ is tracked on purpose (see header), so the fresh build above is included.
+DEST="$MONOREPO_DIR/DesignMD"
+rm -rf "$DEST"
+mkdir -p "$DEST"
+(
+  cd "$SOURCE_DIR"
+  git ls-files -z | while IFS= read -r -d '' file; do
+    # A tracked file deleted in the working tree is simply not published.
+    if [ -e "$file" ]; then printf '%s\0' "$file"; fi
+  done | tar --null -T - -cf - | tar -xf - -C "$DEST"
+)
 
 git add DesignMD
 

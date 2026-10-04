@@ -14,6 +14,11 @@ function collectVariantPropertyValues(
   return Array.from(values);
 }
 
+/** Tokens bound by more components than this (and >25% of all components) don't signal relatedness. */
+const MIN_COMMON_TOKEN_USERS = 20;
+const COMMON_TOKEN_FRACTION = 0.25;
+const MAX_RELATED = 10;
+
 const STATE_PATTERN = /state/i;
 const SIZE_PATTERN = /size/i;
 
@@ -49,11 +54,11 @@ export function transformComponents(raw: RawComponent[]): ComponentDoc[] {
     };
   });
 
-  // Two components are "related" if they share at least one bound variable
-  // (i.e. they draw from the same tokens) — a deterministic proxy for
-  // "these probably belong to the same design system family". Built via an
-  // inverted index (variableId -> component indices) rather than an O(n^2)
-  // comparison so this stays fast for design systems with 5,000+ components.
+  // Two components are "related" if they draw from the same tokens — a deterministic proxy for
+  // "these probably belong to the same design system family". Tokens bound by most components
+  // (e.g. color/white) say nothing about family, so they're ignored once the system is big enough,
+  // and the rest are weighted by rarity (1 / number of components binding them). Built via an
+  // inverted index rather than an O(n^2) comparison so this stays fast with 5,000+ components.
   const docsByVariableId = new Map<string, number[]>();
   docs.forEach((doc, index) => {
     for (const variableId of doc.boundVariableIds) {
@@ -62,20 +67,22 @@ export function transformComponents(raw: RawComponent[]): ComponentDoc[] {
       else docsByVariableId.set(variableId, [index]);
     }
   });
+  const commonThreshold = Math.max(MIN_COMMON_TOKEN_USERS, docs.length * COMMON_TOKEN_FRACTION);
 
   docs.forEach((doc, index) => {
-    if (doc.boundVariableIds.length === 0) return;
-    const relatedIndices = new Set<number>();
+    const scores = new Map<number, number>();
     for (const variableId of doc.boundVariableIds) {
-      for (const otherIndex of docsByVariableId.get(variableId) ?? []) {
-        if (otherIndex !== index) relatedIndices.add(otherIndex);
-        if (relatedIndices.size >= 10) break;
+      const sharers = docsByVariableId.get(variableId) ?? [];
+      if (sharers.length > commonThreshold) continue;
+      const weight = 1 / sharers.length;
+      for (const otherIndex of sharers) {
+        if (otherIndex !== index) scores.set(otherIndex, (scores.get(otherIndex) ?? 0) + weight);
       }
-      if (relatedIndices.size >= 10) break;
     }
-    doc.relatedComponentNames = Array.from(relatedIndices)
-      .slice(0, 10)
-      .map((i) => docs[i].name);
+    doc.relatedComponentNames = Array.from(scores.entries())
+      .sort((a, b) => b[1] - a[1] || docs[a[0]].name.localeCompare(docs[b[0]].name))
+      .slice(0, MAX_RELATED)
+      .map(([i]) => docs[i].name);
   });
 
   return docs;

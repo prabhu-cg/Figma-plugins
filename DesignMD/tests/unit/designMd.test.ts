@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { generateComponentDocs } from '../../src/plugin/generators/componentMd';
 import { generateDesignMd } from '../../src/plugin/generators/designMd';
 import { makeDesignSystem } from './fixtures';
 
@@ -85,5 +86,19 @@ describe('generateDesignMd', () => {
     const { content } = generateDesignMd(makeDesignSystem());
     expect(content).toContain('### All Components');
     expect(content).toMatch(/\| Button \| Component Set \| Components \|/);
+  });
+});
+
+describe('generateDesignMd component links', () => {
+  it('links to the exact file names generateComponentDocs produces', () => {
+    const ds = makeDesignSystem();
+    ds.components = [
+      { ...ds.components[0], id: 'a', name: 'Button / Primary' },
+      { ...ds.components[0], id: 'b', name: 'button/primary' },
+    ];
+    const { content } = generateDesignMd(ds);
+    for (const file of generateComponentDocs(ds)) {
+      expect(content).toContain(`](./${file.path})`);
+    }
   });
 });

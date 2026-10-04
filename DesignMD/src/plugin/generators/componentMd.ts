@@ -96,7 +96,29 @@ function relatedComponentsSection(c: ComponentDoc): string {
   return joinSections([mdHeading(2, 'Related Components'), mdList(c.relatedComponentNames)]);
 }
 
-export function generateComponentMd(c: ComponentDoc, ds: DesignSystem): GeneratedFile {
+/**
+ * Assigns each component a unique `components/<Name>.md` path. Uniqueness is checked
+ * case-insensitively because ZIPs are extracted onto case-insensitive filesystems
+ * (macOS, Windows), where `Button.md` and `button.md` would overwrite each other.
+ */
+export function assignComponentDocPaths(components: ComponentDoc[]): Map<string, string> {
+  const paths = new Map<string, string>();
+  const taken = new Set<string>();
+  for (const c of components) {
+    const base = toFileSafeName(c.name);
+    let candidate = base;
+    for (let n = 2; taken.has(candidate.toLowerCase()); n++) candidate = `${base}-${n}`;
+    taken.add(candidate.toLowerCase());
+    paths.set(c.id, `components/${candidate}.md`);
+  }
+  return paths;
+}
+
+export function generateComponentMd(
+  c: ComponentDoc,
+  ds: DesignSystem,
+  path = `components/${toFileSafeName(c.name)}.md`,
+): GeneratedFile {
   const content = joinSections([
     mdHeading(1, c.name),
     c.isComponentSet ? '_Component Set_\n' : '_Component_\n',
@@ -111,18 +133,10 @@ export function generateComponentMd(c: ComponentDoc, ds: DesignSystem): Generate
     relatedComponentsSection(c),
   ]);
 
-  return { path: `components/${toFileSafeName(c.name)}.md`, content };
+  return { path, content };
 }
 
 export function generateComponentDocs(ds: DesignSystem): GeneratedFile[] {
-  const usedPaths = new Map<string, number>();
-  return ds.components.map((c) => {
-    const file = generateComponentMd(c, ds);
-    const count = usedPaths.get(file.path) ?? 0;
-    usedPaths.set(file.path, count + 1);
-    if (count === 0) return file;
-    // Two components sanitized to the same file name (e.g. "Button" and "Button!") — disambiguate.
-    const deduped = file.path.replace(/\.md$/, `-${count + 1}.md`);
-    return { ...file, path: deduped };
-  });
+  const paths = assignComponentDocPaths(ds.components);
+  return ds.components.map((c) => generateComponentMd(c, ds, paths.get(c.id)));
 }
