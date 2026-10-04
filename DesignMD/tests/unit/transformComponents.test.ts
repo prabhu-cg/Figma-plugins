@@ -59,3 +59,11 @@ describe('transformComponents related components', () => {
     expect(first.relatedComponentNames).toHaveLength(10);
   });
 });
+
+describe('transformComponents layout', () => {
+  it('carries the measured layout through to the component doc', () => {
+    const layout = { measuredFrom: 'Button', width: 10, height: 20, layoutMode: 'NONE' as const };
+    const [doc] = transformComponents([makeComponent({ layout })]);
+    expect(doc.layout).toEqual(layout);
+  });
+});

@@ -51,6 +51,7 @@ export function transformComponents(raw: RawComponent[]): ComponentDoc[] {
       boundVariableIds: c.boundVariableIds,
       relatedComponentNames: [],
       pageName: c.pageName,
+      layout: c.layout,
     };
   });
 

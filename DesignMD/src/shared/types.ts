@@ -140,6 +140,21 @@ export interface ComponentVariant {
   description: string;
 }
 
+/** Geometry of a component's default variant, so docs can say how big it is and how it lays out. */
+export interface ComponentLayout {
+  /** Name of the variant the measurements came from. */
+  measuredFrom: string;
+  width: number;
+  height: number;
+  layoutMode: 'NONE' | 'HORIZONTAL' | 'VERTICAL';
+  /** Spacing between children; only for auto-layout components. */
+  gap?: number;
+  /** Auto-layout padding; only for auto-layout components. */
+  padding?: { top: number; right: number; bottom: number; left: number };
+  /** Uniform corner radius; omitted when corners differ or the radius is 0. */
+  cornerRadius?: number;
+}
+
 export interface ComponentDoc {
   id: string;
   key: string;
@@ -153,6 +168,7 @@ export interface ComponentDoc {
   boundVariableIds: string[];
   relatedComponentNames: string[];
   pageName: string;
+  layout?: ComponentLayout;
 }
 
 export interface DesignSystemSummary {

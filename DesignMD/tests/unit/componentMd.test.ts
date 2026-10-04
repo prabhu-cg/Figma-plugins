@@ -74,3 +74,41 @@ describe('component doc file names', () => {
     expect(generateComponentDocs(ds)[0].path).toBe('components/Component.md');
   });
 });
+
+describe('component doc layout section', () => {
+  it('documents size, auto layout, gap, padding, and corner radius', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].layout = {
+      measuredFrom: 'Size=Large, State=Default',
+      width: 120,
+      height: 40,
+      layoutMode: 'HORIZONTAL',
+      gap: 8,
+      padding: { top: 12, right: 16, bottom: 12, left: 16 },
+      cornerRadius: 6,
+    };
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).toContain('## Layout');
+    expect(file.content).toContain(
+      '_Measured from the "Size=Large, State=Default" variant, in px._',
+    );
+    expect(file.content).toContain('| Size | 120 × 40 |');
+    expect(file.content).toContain('| Auto layout | Horizontal |');
+    expect(file.content).toContain('| Gap | 8 |');
+    expect(file.content).toContain('| Padding (top, right, bottom, left) | 12, 16, 12, 16 |');
+    expect(file.content).toContain('| Corner radius | 6 |');
+  });
+
+  it('describes fixed layouts without gap or padding rows', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].layout = { measuredFrom: 'Icon', width: 24, height: 24, layoutMode: 'NONE' };
+    const { content } = generateComponentDocs(ds)[0];
+    expect(content).toContain('| Auto layout | None (fixed layout) |');
+    expect(content).not.toContain('| Gap |');
+  });
+
+  it('omits the section entirely when no layout was measured', () => {
+    const { content } = generateComponentDocs(makeDesignSystem())[0];
+    expect(content).not.toContain('## Layout');
+  });
+});

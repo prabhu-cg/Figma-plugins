@@ -23,6 +23,28 @@ function variantsSection(c: ComponentDoc): string {
   return joinSections([mdHeading(2, 'Variants'), mdTable(['Variant', ...propertyNames], rows)]);
 }
 
+function layoutSection(c: ComponentDoc): string {
+  const layout = c.layout;
+  if (!layout) return '';
+  const rows: string[][] = [['Size', `${layout.width} × ${layout.height}`]];
+  if (layout.layoutMode === 'NONE') {
+    rows.push(['Auto layout', 'None (fixed layout)']);
+  } else {
+    rows.push(['Auto layout', layout.layoutMode === 'HORIZONTAL' ? 'Horizontal' : 'Vertical']);
+    if (layout.gap !== undefined) rows.push(['Gap', String(layout.gap)]);
+    if (layout.padding) {
+      const { top, right, bottom, left } = layout.padding;
+      rows.push(['Padding (top, right, bottom, left)', `${top}, ${right}, ${bottom}, ${left}`]);
+    }
+  }
+  if (layout.cornerRadius !== undefined) rows.push(['Corner radius', String(layout.cornerRadius)]);
+  return joinSections([
+    mdHeading(2, 'Layout'),
+    `_Measured from the "${layout.measuredFrom}" ${c.isComponentSet ? 'variant' : 'component'}, in px._\n`,
+    mdTable(['Property', 'Value'], rows),
+  ]);
+}
+
 function propertiesSection(c: ComponentDoc): string {
   if (c.properties.length === 0) {
     return joinSections([mdHeading(2, 'Properties'), '_No component properties defined._\n']);
@@ -126,6 +148,7 @@ export function generateComponentMd(
     c.description ? `${c.description}\n` : '_No description provided in Figma._\n',
     variantsSection(c),
     sizesAndStatesSection(c),
+    layoutSection(c),
     propertiesSection(c),
     accessibilitySection(c),
     usageGuidelinesSection(c),

@@ -1,5 +1,6 @@
 import { processInBatches, safely } from '../utils/async';
 import { boundVariablesOf } from './styles';
+import type { ComponentLayout } from '@shared/types';
 import type { RawComponent, RawComponentProperty, RawComponentVariant } from './rawTypes';
 
 const COMPONENT_BATCH_SIZE = 100;
@@ -93,6 +94,57 @@ function scanNodeBindings(node: SceneNode): NodeBindings {
   return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
 }
 
+function numberProp(n: SceneNode, key: string): number | undefined {
+  try {
+    const value = (n as unknown as Record<string, unknown>)[key];
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const round = (value: number) => Math.round(value * 100) / 100;
+
+/** Size, auto-layout, and corner radius of a component node (rounded; absent props are omitted). */
+export function readLayout(node: ComponentNode): ComponentLayout | undefined {
+  const width = numberProp(node, 'width');
+  const height = numberProp(node, 'height');
+  if (width === undefined || height === undefined) return undefined;
+
+  const mode = (node as unknown as { layoutMode?: unknown }).layoutMode;
+  const layoutMode = mode === 'HORIZONTAL' || mode === 'VERTICAL' ? mode : 'NONE';
+  const layout: ComponentLayout = {
+    measuredFrom: node.name,
+    width: round(width),
+    height: round(height),
+    layoutMode,
+  };
+
+  if (layoutMode !== 'NONE') {
+    const gap = numberProp(node, 'itemSpacing');
+    if (gap !== undefined) layout.gap = round(gap);
+    const [top, right, bottom, left] = [
+      'paddingTop',
+      'paddingRight',
+      'paddingBottom',
+      'paddingLeft',
+    ].map((key) => numberProp(node, key));
+    if ([top, right, bottom, left].every((p) => p !== undefined)) {
+      layout.padding = {
+        top: round(top!),
+        right: round(right!),
+        bottom: round(bottom!),
+        left: round(left!),
+      };
+    }
+  }
+
+  // figma.mixed (differing corners) is a symbol, so numberProp skips it.
+  const radius = numberProp(node, 'cornerRadius');
+  if (radius !== undefined && radius > 0) layout.cornerRadius = round(radius);
+  return layout;
+}
+
 function mapPropertyDefinitions(
   defs: ComponentPropertyDefinitions | undefined,
 ): RawComponentProperty[] {
@@ -117,6 +169,12 @@ function mapVariant(node: ComponentNode): { variant: RawComponentVariant; bindin
     },
     bindings,
   };
+}
+
+/** The set's default variant when Figma exposes it, otherwise the first one. */
+function defaultVariantOf(set: ComponentSetNode, members: ComponentNode[]): ComponentNode {
+  const declared = (set as unknown as { defaultVariant?: ComponentNode }).defaultVariant;
+  return declared && members.some((m) => m.id === declared.id) ? declared : members[0];
 }
 
 function unionOf(lists: string[][]): string[] {
@@ -180,6 +238,8 @@ export async function extractComponents(
         pageName: findPageName(set),
         properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
         variants: mapped.map((m) => m.variant),
+        layout:
+          variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : undefined,
         boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
         styleIds: unionOf(mapped.map((m) => m.bindings.styleIds)),
       };
@@ -202,6 +262,7 @@ export async function extractComponents(
         pageName: findPageName(node),
         properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
         variants: [variant],
+        layout: readLayout(node),
         boundVariableIds: bindings.variableIds,
         styleIds: bindings.styleIds,
       };

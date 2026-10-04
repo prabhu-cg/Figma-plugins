@@ -228,3 +228,81 @@ describe('extractComponents: scan budget', () => {
     expect(list).toEqual([]);
   });
 });
+
+describe('extractComponents: layout', () => {
+  const mixed = Symbol('mixed');
+
+  it('reads size, auto layout, gap, padding, and corner radius from a standalone component', async () => {
+    const button = component('Button', {
+      width: 120.456,
+      height: 40,
+      layoutMode: 'HORIZONTAL',
+      itemSpacing: 8,
+      paddingTop: 12,
+      paddingRight: 16,
+      paddingBottom: 12,
+      paddingLeft: 16,
+      cornerRadius: 6,
+    });
+    installFakeFigma({ root: document('File', [page('P', [button])]) });
+    const [c] = await extractComponents();
+    expect(c.layout).toEqual({
+      measuredFrom: 'Button',
+      width: 120.46,
+      height: 40,
+      layoutMode: 'HORIZONTAL',
+      gap: 8,
+      padding: { top: 12, right: 16, bottom: 12, left: 16 },
+      cornerRadius: 6,
+    });
+  });
+
+  it('omits gap/padding for fixed layouts and radius when corners differ or are zero', async () => {
+    const fixed = component('Fixed', {
+      width: 24,
+      height: 24,
+      layoutMode: 'NONE',
+      itemSpacing: 4,
+      paddingTop: 1,
+      cornerRadius: mixed,
+    });
+    const square = component('Square', {
+      width: 10,
+      height: 10,
+      layoutMode: 'VERTICAL',
+      cornerRadius: 0,
+    });
+    installFakeFigma({ root: document('File', [page('P', [fixed, square])]) });
+    const [a, b] = await extractComponents();
+    expect(a.layout).toEqual({ measuredFrom: 'Fixed', width: 24, height: 24, layoutMode: 'NONE' });
+    // Auto layout without readable padding or spacing still reports the direction.
+    expect(b.layout).toEqual({
+      measuredFrom: 'Square',
+      width: 10,
+      height: 10,
+      layoutMode: 'VERTICAL',
+    });
+  });
+
+  it('measures a component set from its declared default variant, else the first variant', async () => {
+    const withDefault = componentSet('Chip', [
+      { props: { S: 'small' }, extra: { width: 20, height: 20 } },
+      { props: { S: 'large' }, extra: { width: 40, height: 40 } },
+    ]);
+    withDefault.defaultVariant = withDefault.children![1];
+    const withoutDefault = componentSet('Tag', [
+      { props: { S: 'a' }, extra: { width: 5, height: 5 } },
+      { props: { S: 'b' }, extra: { width: 9, height: 9 } },
+    ]);
+    installFakeFigma({ root: document('File', [page('P', [withDefault, withoutDefault])]) });
+    const [chip, tag] = await extractComponents();
+    expect(chip.layout).toMatchObject({ measuredFrom: 'S=large', width: 40 });
+    expect(tag.layout).toMatchObject({ measuredFrom: 'S=a', width: 5 });
+  });
+
+  it('leaves layout undefined when the node has no dimensions', async () => {
+    installFakeFigma({ root: document('File', [page('P', [component('Bare')])]) });
+    const [c] = await extractComponents();
+    expect(c.layout).toBeUndefined();
+  });
+});

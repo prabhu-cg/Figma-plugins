@@ -277,6 +277,49 @@
     visit(node, 0);
     return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
   }
+  function numberProp(n, key) {
+    try {
+      const value = n[key];
+      return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+    } catch {
+      return void 0;
+    }
+  }
+  const round$1 = (value) => Math.round(value * 100) / 100;
+  function readLayout(node) {
+    const width = numberProp(node, "width");
+    const height = numberProp(node, "height");
+    if (width === void 0 || height === void 0) return void 0;
+    const mode = node.layoutMode;
+    const layoutMode = mode === "HORIZONTAL" || mode === "VERTICAL" ? mode : "NONE";
+    const layout = {
+      measuredFrom: node.name,
+      width: round$1(width),
+      height: round$1(height),
+      layoutMode
+    };
+    if (layoutMode !== "NONE") {
+      const gap = numberProp(node, "itemSpacing");
+      if (gap !== void 0) layout.gap = round$1(gap);
+      const [top, right, bottom, left] = [
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft"
+      ].map((key) => numberProp(node, key));
+      if ([top, right, bottom, left].every((p) => p !== void 0)) {
+        layout.padding = {
+          top: round$1(top),
+          right: round$1(right),
+          bottom: round$1(bottom),
+          left: round$1(left)
+        };
+      }
+    }
+    const radius = numberProp(node, "cornerRadius");
+    if (radius !== void 0 && radius > 0) layout.cornerRadius = round$1(radius);
+    return layout;
+  }
   function mapPropertyDefinitions(defs) {
     if (!defs) return [];
     return Object.entries(defs).map(([name, def]) => ({
@@ -298,6 +341,10 @@
       },
       bindings
     };
+  }
+  function defaultVariantOf(set, members) {
+    const declared = set.defaultVariant;
+    return declared && members.some((m) => m.id === declared.id) ? declared : members[0];
   }
   function unionOf(lists) {
     return Array.from(new Set(lists.flat()));
@@ -348,6 +395,7 @@
           pageName: findPageName(set),
           properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
           variants: mapped.map((m) => m.variant),
+          layout: variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : void 0,
           boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
           styleIds: unionOf(mapped.map((m) => m.bindings.styleIds))
         };
@@ -369,6 +417,7 @@
           pageName: findPageName(node),
           properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
           variants: [variant],
+          layout: readLayout(node),
           boundVariableIds: bindings.variableIds,
           styleIds: bindings.styleIds
         };
@@ -539,6 +588,28 @@
     ]);
     return joinSections([mdHeading(2, "Variants"), mdTable(["Variant", ...propertyNames], rows)]);
   }
+  function layoutSection(c) {
+    const layout = c.layout;
+    if (!layout) return "";
+    const rows = [["Size", `${layout.width} × ${layout.height}`]];
+    if (layout.layoutMode === "NONE") {
+      rows.push(["Auto layout", "None (fixed layout)"]);
+    } else {
+      rows.push(["Auto layout", layout.layoutMode === "HORIZONTAL" ? "Horizontal" : "Vertical"]);
+      if (layout.gap !== void 0) rows.push(["Gap", String(layout.gap)]);
+      if (layout.padding) {
+        const { top, right, bottom, left } = layout.padding;
+        rows.push(["Padding (top, right, bottom, left)", `${top}, ${right}, ${bottom}, ${left}`]);
+      }
+    }
+    if (layout.cornerRadius !== void 0) rows.push(["Corner radius", String(layout.cornerRadius)]);
+    return joinSections([
+      mdHeading(2, "Layout"),
+      `_Measured from the "${layout.measuredFrom}" ${c.isComponentSet ? "variant" : "component"}, in px._
+`,
+      mdTable(["Property", "Value"], rows)
+    ]);
+  }
   function propertiesSection(c) {
     if (c.properties.length === 0) {
       return joinSections([mdHeading(2, "Properties"), "_No component properties defined._\n"]);
@@ -629,6 +700,7 @@
 ` : "_No description provided in Figma._\n",
       variantsSection(c),
       sizesAndStatesSection(c),
+      layoutSection(c),
       propertiesSection(c),
       accessibilitySection$1(c),
       usageGuidelinesSection(c),
@@ -1800,7 +1872,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         sizes: collectVariantPropertyValues(variants, SIZE_PATTERN),
         boundVariableIds: c.boundVariableIds,
         relatedComponentNames: [],
-        pageName: c.pageName
+        pageName: c.pageName,
+        layout: c.layout
       };
     });
     const docsByVariableId = /* @__PURE__ */ new Map();

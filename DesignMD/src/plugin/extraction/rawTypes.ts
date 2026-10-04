@@ -4,6 +4,7 @@
  * turns them into the normalized DesignSystem schema. Keeping this seam
  * means transform functions are pure and unit-testable without a Figma runtime.
  */
+import type { ComponentLayout } from '@shared/types';
 
 export interface RawVariableMode {
   modeId: string;
@@ -114,6 +115,7 @@ export interface RawComponentVariant {
 }
 
 export interface RawComponent {
+  layout?: ComponentLayout;
   /** Ids of local/library styles applied anywhere in the component; resolved to bound variables in transform. */
   styleIds?: string[];
   id: string;
