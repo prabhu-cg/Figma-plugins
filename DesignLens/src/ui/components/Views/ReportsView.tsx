@@ -119,10 +119,10 @@ function ExportCard({
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div className="flex items-center justify-between">
-        <span style={{ fontWeight: 800, fontSize: 14 }}>{title}</span>
+        <span style={{ fontWeight: 800, fontSize: "var(--text-md)" }}>{title}</span>
         <DownloadIcon style={{ width: 16, height: 16, color: "var(--color-text-tertiary)" }} />
       </div>
-      <div className="text-secondary" style={{ fontSize: 12, flex: 1 }}>
+      <div className="text-secondary" style={{ fontSize: "var(--text-sm)", flex: 1 }}>
         {description}
       </div>
       <button className="btn btn-secondary btn-sm" disabled={busy} onClick={() => onExport(format)}>

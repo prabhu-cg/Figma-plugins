@@ -47,3 +47,31 @@ export function computeDashboardMetrics(result: ScanResult): DashboardMetrics {
     stateCoverage
   };
 }
+
+export interface PriorityCategory {
+  category: AuditCategory;
+  score: number;
+  critical: number;
+  warnings: number;
+  /** weight x points lost: how much fixing this category would lift the overall score. */
+  leverage: number;
+}
+
+/**
+ * The categories worth fixing first: ranked by how many overall-score points they cost
+ * (weight x points lost), so a mid-scoring heavy category outranks a low-scoring minor one.
+ * Categories with no critical/warning issues, and zero-weight ones, are never suggested.
+ */
+export function priorityCategories(result: ScanResult, limit = 3): PriorityCategory[] {
+  return result.health.categories
+    .filter((c) => c.weight > 0 && c.criticalCount + c.warningCount > 0 && c.score < 100)
+    .map((c) => ({
+      category: c.category,
+      score: c.score,
+      critical: c.criticalCount,
+      warnings: c.warningCount,
+      leverage: c.weight * (100 - c.score)
+    }))
+    .sort((a, b) => b.leverage - a.leverage)
+    .slice(0, limit);
+}

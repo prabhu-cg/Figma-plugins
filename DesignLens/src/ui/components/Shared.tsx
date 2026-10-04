@@ -1,4 +1,5 @@
 import type { Severity } from "@shared/types";
+import { SCORE_BANDS } from "@shared/scoring";
 
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -39,7 +40,7 @@ export function TrendBadge({ delta }: { delta: number | null }) {
 
 export function LegendRow({ color, label, value }: { color: string; label: string; value: number }) {
   return (
-    <div className="flex items-center justify-between" style={{ fontSize: 12 }}>
+    <div className="flex items-center justify-between" style={{ fontSize: "var(--text-sm)" }}>
       <span className="flex items-center gap-2">
         <span style={{ width: 8, height: 8, borderRadius: 999, background: color, display: "inline-block" }} />
         {label}
@@ -49,10 +50,14 @@ export function LegendRow({ color, label, value }: { color: string; label: strin
   );
 }
 
-/** Fill and text colors for a 0-100 score. Fills use the vivid step; text uses the AA-contrast step. */
+/**
+ * Fill and text colors for a 0-100 score. Fills use the vivid step; text uses the AA-contrast step.
+ * The middle band is the warning amber, not the brand orange: orange means "brand/action" in this
+ * UI, and a score that needs work shouldn't look like a button.
+ */
 export function scoreColors(score: number): { fill: string; text: string } {
-  if (score >= 85) return { fill: "var(--color-success)", text: "var(--color-success-text)" };
-  if (score >= 60) return { fill: "var(--color-primary)", text: "var(--color-primary-text)" };
+  if (score >= SCORE_BANDS.healthy) return { fill: "var(--color-success)", text: "var(--color-success-text)" };
+  if (score >= SCORE_BANDS.needsWork) return { fill: "var(--color-warning)", text: "var(--color-warning-text)" };
   return { fill: "var(--color-critical)", text: "var(--color-critical-text)" };
 }
 
@@ -92,10 +97,10 @@ export function ScoreBar({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
       <div className="flex items-center justify-between">
-        <span style={{ fontWeight: 700, fontSize: 12.5 }}>{label}</span>
+        <span style={{ fontWeight: 700, fontSize: "var(--text-base)" }}>{label}</span>
         <span className="flex items-center gap-2">
           {delta !== undefined && <TrendBadge delta={delta} />}
-          <span style={{ fontWeight: 800, fontSize: 12.5, color: text }}>{right ?? `${score}`}</span>
+          <span style={{ fontWeight: 800, fontSize: "var(--text-base)", color: text }}>{right ?? `${score}`}</span>
         </span>
       </div>
       <ProgressBar value={score} color={fill} />

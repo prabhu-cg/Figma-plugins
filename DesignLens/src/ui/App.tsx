@@ -11,6 +11,7 @@ import { SettingsView } from "./components/Views/SettingsView";
 import { ProgressBar } from "./components/Shared";
 import { useScan } from "./state/useScan";
 import { useTheme } from "./state/useTheme";
+import { DEFAULT_FILTERS } from "./lib/issueView";
 import { useAuditState } from "./state/useAuditState";
 
 export type View = "dashboard" | "audit" | "components" | "variables" | "documentation" | "reports" | "settings";
@@ -64,6 +65,12 @@ export function App() {
                 trend={scan.trend}
                 onRescan={scan.startScan}
                 onNavigate={setView}
+                onReviewCategory={(category) => {
+                  audit.setFilters({ ...DEFAULT_FILTERS, category });
+                  audit.setSelectedId(null);
+                  audit.setChecked(new Set());
+                  setView("audit");
+                }}
                 isScanning={scan.status === "scanning"}
               />
             )}
@@ -120,7 +127,7 @@ function RescanBanner({
         borderBottom: "1px solid var(--color-border)"
       }}
     >
-      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--color-primary-text)" }}>Rescanning… {phase}</span>
+      <span style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--color-primary-text)" }}>Rescanning… {phase}</span>
       <ProgressBar value={pct} label="Rescan progress" width={160} />
       <button className="btn btn-ghost btn-sm" onClick={onCancel}>
         Cancel

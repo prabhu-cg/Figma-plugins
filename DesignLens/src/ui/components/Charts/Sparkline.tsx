@@ -9,7 +9,7 @@ export function Sparkline({ values, width = 200, height = 48, color = "var(--col
   if (values.length < 2) {
     return (
       <div style={{ width, height, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <span className="text-tertiary" style={{ fontSize: 11 }}>
+        <span className="text-tertiary" style={{ fontSize: "var(--text-xs)" }}>
           Not enough history yet
         </span>
       </div>

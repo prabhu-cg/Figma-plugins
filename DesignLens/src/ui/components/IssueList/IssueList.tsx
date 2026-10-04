@@ -62,7 +62,7 @@ export function IssueList({ issues, totalIssues, selectedId, checked, onSelect, 
               <span className="issue-meta">{CATEGORY_LABELS[issue.category]}</span>
             </div>
             <div className="issue-title">{issue.title}</div>
-            <div className="text-secondary" style={{ fontSize: 12 }}>
+            <div className="text-secondary" style={{ fontSize: "var(--text-sm)" }}>
               {issue.description}
             </div>
             {issue.node && <div className="issue-meta">{issue.node.componentName ?? issue.node.name}</div>}

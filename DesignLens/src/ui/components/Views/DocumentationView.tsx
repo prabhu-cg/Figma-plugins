@@ -56,7 +56,7 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
             <div className="card-title" style={{ marginBottom: 8 }}>
               Coverage
             </div>
-            <div style={{ fontSize: 12.5 }}>
+            <div style={{ fontSize: "var(--text-base)" }}>
               {documented.length} of {result.components.length} components have a description set. Each should cover
               usage, do/don't guidance, accessibility notes, and what each property means.
             </div>
@@ -66,7 +66,7 @@ export function DocumentationView({ result, onSelectNode }: DocumentationViewPro
           <div className="card-title" style={{ marginBottom: 8 }}>
             Expected sections
           </div>
-          <div className="text-secondary" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
+          <div className="text-secondary" style={{ fontSize: "var(--text-base)", lineHeight: 1.7 }}>
             Usage · Do · Don't · Accessibility · Properties · Token references
           </div>
         </div>

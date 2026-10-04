@@ -25,10 +25,10 @@ export function ScanGate({ status, progress, errorMessage, onStart, onCancel }: 
         <div style={{ width: 320 }}>
           <ProgressBar value={pct} label="Audit progress" />
           <div className="flex items-center justify-between" style={{ marginTop: 8 }}>
-            <span className="text-tertiary" style={{ fontSize: 11 }}>
+            <span className="text-tertiary" style={{ fontSize: "var(--text-xs)" }}>
               {progress.total > 1 ? `${progress.processed} / ${progress.total}` : "Working…"}
             </span>
-            <span className="text-tertiary" style={{ fontSize: 11 }}>
+            <span className="text-tertiary" style={{ fontSize: "var(--text-xs)" }}>
               {pct}%
             </span>
           </div>

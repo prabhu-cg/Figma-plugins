@@ -72,8 +72,8 @@ export function Donut({ segments, size = 132, thickness = 16, centerLabel, cente
             justifyContent: "center"
           }}
         >
-          {centerLabel && <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em" }}>{centerLabel}</div>}
-          {centerSub && <div style={{ fontSize: 10.5, color: "var(--color-text-secondary)", fontWeight: 600 }}>{centerSub}</div>}
+          {centerLabel && <div style={{ fontSize: "var(--text-lg)", fontWeight: 800, letterSpacing: "-0.02em" }}>{centerLabel}</div>}
+          {centerSub && <div style={{ fontSize: "var(--text-xs)", color: "var(--color-text-secondary)", fontWeight: 600 }}>{centerSub}</div>}
         </div>
       )}
     </div>

@@ -40,7 +40,7 @@ export function Gauge({ score, size = 190, thickness = 18, label }: GaugeProps) 
         {label && (
           <div
             style={{
-              fontSize: 11,
+              fontSize: "var(--text-xs)",
               fontWeight: 700,
               color: "var(--color-text-secondary)",
               textTransform: "uppercase",

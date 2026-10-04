@@ -22,7 +22,7 @@ export function BarList({ items }: BarListProps) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {sorted.map((item) => (
         <div key={item.label}>
-          <div className="flex items-center justify-between" style={{ fontSize: 12, marginBottom: 4 }}>
+          <div className="flex items-center justify-between" style={{ fontSize: "var(--text-sm)", marginBottom: 4 }}>
             <span className="flex items-center gap-2">
               <span style={{ width: 8, height: 8, borderRadius: 999, background: item.color, display: "inline-block" }} />
               {item.label}

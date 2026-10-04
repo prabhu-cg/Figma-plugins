@@ -49,8 +49,8 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, onClose }: Issue
             </button>
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: 15 }}>{issue.title}</div>
-            <div className="text-secondary" style={{ marginTop: 4, fontSize: 12.5 }}>
+            <div style={{ fontWeight: 800, fontSize: "var(--text-md)" }}>{issue.title}</div>
+            <div className="text-secondary" style={{ marginTop: 4, fontSize: "var(--text-base)" }}>
               {issue.description}
             </div>
           </div>
@@ -68,8 +68,8 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, onClose }: Issue
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 12.5 }}>{issue.node.componentName ?? issue.node.name}</div>
-                  <div className="text-tertiary" style={{ fontSize: 11 }}>
+                  <div style={{ fontWeight: 700, fontSize: "var(--text-base)" }}>{issue.node.componentName ?? issue.node.name}</div>
+                  <div className="text-tertiary" style={{ fontSize: "var(--text-xs)" }}>
                     {issue.node.pageName}
                   </div>
                 </div>
@@ -111,7 +111,7 @@ function Field({ label, value }: { label: string; value: string }) {
       <div className="card-title" style={{ marginBottom: 4 }}>
         {label}
       </div>
-      <div style={{ fontSize: 12.5, lineHeight: 1.6 }}>{value}</div>
+      <div style={{ fontSize: "var(--text-base)", lineHeight: 1.6 }}>{value}</div>
     </div>
   );
 }
@@ -120,7 +120,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <div className="card-title">{label}</div>
-      <div style={{ fontWeight: 700, textTransform: "capitalize", fontSize: 12.5 }}>{value}</div>
+      <div style={{ fontWeight: 700, textTransform: "capitalize", fontSize: "var(--text-base)" }}>{value}</div>
     </div>
   );
 }

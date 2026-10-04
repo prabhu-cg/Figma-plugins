@@ -32,7 +32,7 @@ export function StackedBarList({ items, maxItems }: StackedBarListProps) {
         const itemTotal = total(item);
         return (
           <div key={item.label}>
-            <div className="flex items-center justify-between" style={{ fontSize: 12, marginBottom: 4 }}>
+            <div className="flex items-center justify-between" style={{ fontSize: "var(--text-sm)", marginBottom: 4 }}>
               <span>{item.label}</span>
               <span style={{ fontWeight: 700 }}>{itemTotal.toLocaleString()}</span>
             </div>

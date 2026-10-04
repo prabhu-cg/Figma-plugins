@@ -55,7 +55,7 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
           <div className="card-title" style={{ marginBottom: 12 }}>
             Scan
           </div>
-          <div className="text-secondary" style={{ fontSize: 12.5, marginBottom: 12 }}>
+          <div className="text-secondary" style={{ fontSize: "var(--text-base)", marginBottom: 12 }}>
             Re-scan this file to refresh the audit after making changes to components, variants, or variables.
           </div>
           <button className="btn btn-primary btn-sm" onClick={onRescan} disabled={isScanning} aria-busy={isScanning}>
@@ -83,16 +83,16 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span style={{ fontWeight: 800, fontSize: 13 }}>{opt.label}</span>
+                  <span style={{ fontWeight: 800, fontSize: "var(--text-base)" }}>{opt.label}</span>
                   {wcagLevel === opt.id && <span className="badge badge-success">Active</span>}
                 </div>
-                <div className="text-secondary" style={{ fontSize: 12, marginTop: 6 }}>
+                <div className="text-secondary" style={{ fontSize: "var(--text-sm)", marginTop: 6 }}>
                   {opt.description}
                 </div>
               </button>
             ))}
           </div>
-          <div className="text-tertiary" style={{ fontSize: 11.5, marginTop: 10 }}>
+          <div className="text-tertiary" style={{ fontSize: "var(--text-sm)", marginTop: 10 }}>
             Applies to all contrast checks on the next scan.
           </div>
         </div>
@@ -101,7 +101,7 @@ export function SettingsView({ theme, onThemeChange, wcagLevel, onWcagLevelChang
           <div className="card-title" style={{ marginBottom: 12 }}>
             About DesignLens
           </div>
-          <div className="text-secondary" style={{ fontSize: 12.5, lineHeight: 1.8 }}>
+          <div className="text-secondary" style={{ fontSize: "var(--text-base)", lineHeight: 1.8 }}>
             DesignLens is a free, local design system auditor. Every scan and every audit rule runs entirely inside
             this Figma plugin sandbox — no data leaves your file, no network requests are made, and no AI or paid
             APIs are used. Audit rules are organized as independent, pluggable modules covering visual quality,

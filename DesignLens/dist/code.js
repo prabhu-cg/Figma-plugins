@@ -2161,7 +2161,7 @@
     "deprecated"
   ];
 
-  // src/plugin/scoring/healthScore.ts
+  // src/shared/scoring.ts
   var CATEGORY_WEIGHTS = {
     accessibility: 0.15,
     contrast: 0.1,
@@ -2180,6 +2180,8 @@
     warning: 4,
     suggestion: 1
   };
+
+  // src/plugin/scoring/healthScore.ts
   function computeHealthScore(issues, denominators) {
     const counts = /* @__PURE__ */ new Map();
     for (const category of AUDIT_CATEGORIES) counts.set(category, { critical: 0, warning: 0, suggestion: 0 });

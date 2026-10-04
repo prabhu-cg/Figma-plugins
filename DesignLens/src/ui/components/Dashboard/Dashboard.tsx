@@ -5,7 +5,9 @@ import { Gauge } from "../Charts/Gauge";
 import { Donut } from "../Charts/Donut";
 import { Sparkline } from "../Charts/Sparkline";
 import { StackedBarList, type StackedBarItem } from "../Charts/StackedBarList";
-import { LegendRow, ScoreBar, StatCard, TrendBadge } from "../Shared";
+import { LegendRow, ScoreBar, scoreColors, StatCard, TrendBadge } from "../Shared";
+import { PriorityStrip } from "./PriorityStrip";
+import { ScoreExplainer } from "./ScoreExplainer";
 import { Tabs, tabPanelProps } from "../Tabs";
 import { computeDashboardMetrics } from "../../lib/metrics";
 import type { View } from "../../App";
@@ -15,6 +17,8 @@ interface DashboardProps {
   trend: TrendEntry[];
   onRescan: () => void;
   onNavigate: (view: View) => void;
+  /** Opens Audit filtered to one category. */
+  onReviewCategory: (category: AuditCategory) => void;
   isScanning?: boolean;
 }
 
@@ -48,7 +52,7 @@ function toStackedItem(label: string, counts: Record<Severity, number>): Stacked
   };
 }
 
-export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = false }: DashboardProps) {
+export function Dashboard({ result, trend, onRescan, onNavigate, onReviewCategory, isScanning = false }: DashboardProps) {
   const [tab, setTab] = useState<DashboardTab>("categories");
   const metrics = useMemo(() => computeDashboardMetrics(result), [result]);
   const { stats, health } = result;
@@ -85,17 +89,33 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
       .slice(0, 10);
   }, [result.issues]);
 
-  const coverageItems = [
-    { label: "Accessibility Score", score: metrics.accessibilityScore },
-    { label: "Token Coverage", score: metrics.tokenCoverage },
-    { label: "Documentation Coverage", score: metrics.documentationCoverage },
-    { label: "Component Coverage", score: metrics.componentCoverage },
-    { label: "Naming Consistency", score: metrics.namingConsistency },
-    { label: "Typography Score", score: metrics.typographyScore },
-    { label: "Spacing Score", score: metrics.spacingScore },
-    { label: "Variant Coverage", score: metrics.variantCoverage },
-    { label: "State Coverage", score: metrics.stateCoverage }
-  ];
+  // Nine bars in one list is more than anyone scans; three themed groups of three, worst first.
+  const coverageGroups = [
+    {
+      title: "Foundations",
+      items: [
+        { label: "Token Coverage", score: metrics.tokenCoverage },
+        { label: "Typography Score", score: metrics.typographyScore },
+        { label: "Spacing Score", score: metrics.spacingScore }
+      ]
+    },
+    {
+      title: "Components",
+      items: [
+        { label: "Component Coverage", score: metrics.componentCoverage },
+        { label: "Variant Coverage", score: metrics.variantCoverage },
+        { label: "State Coverage", score: metrics.stateCoverage }
+      ]
+    },
+    {
+      title: "Quality and docs",
+      items: [
+        { label: "Accessibility Score", score: metrics.accessibilityScore },
+        { label: "Documentation Coverage", score: metrics.documentationCoverage },
+        { label: "Naming Consistency", score: metrics.namingConsistency }
+      ]
+    }
+  ].map((g) => ({ ...g, items: [...g.items].sort((a, b) => a.score - b.score) }));
 
   const inventoryItems = [
     { label: "Total Components", value: stats.totalComponents + stats.totalComponentSets },
@@ -147,14 +167,17 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
           <div className="card-title" style={{ marginBottom: 8 }}>
             Health Trend
           </div>
-          <Sparkline values={trend.map((t) => t.overall)} width={220} height={56} />
-          <div className="text-tertiary" style={{ fontSize: 11, marginTop: 6 }}>
+          <Sparkline values={trend.map((t) => t.overall)} width={220} height={56} color={scoreColors(health.overall).fill} />
+          <div className="text-tertiary" style={{ fontSize: "var(--text-xs)", marginTop: 6 }}>
             {trend.length > 0
               ? `Last ${trend.length} scan${trend.length === 1 ? "" : "s"}`
               : "Scan again to start tracking trend"}
           </div>
         </div>
       </div>
+
+      <PriorityStrip result={result} onReview={onReviewCategory} />
+      <ScoreExplainer health={health} />
 
       <Tabs tabs={TABS} active={tab} onChange={setTab} idPrefix="dash" label="Dashboard sections" />
 
@@ -220,7 +243,7 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
             {topComponents.length > 0 ? (
               <StackedBarList items={topComponents} />
             ) : (
-              <div className="text-secondary" style={{ fontSize: 12.5 }}>
+              <div className="text-secondary" style={{ fontSize: "var(--text-base)" }}>
                 No issues are tied to a specific component.
               </div>
             )}
@@ -229,17 +252,20 @@ export function Dashboard({ result, trend, onRescan, onNavigate, isScanning = fa
       )}
 
       {tab === "coverage" && (
-        <div className="card" {...tabPanelProps("dash", "coverage")}>
-          <div className="grid grid-cols-2" style={{ rowGap: 16, columnGap: 32 }}>
-            {coverageItems.map((item) => (
-              <ScoreBar
-                key={item.label}
-                label={item.label}
-                score={item.score}
-                right={`${item.score}${item.label.includes("Score") ? "" : "%"}`}
-              />
-            ))}
-          </div>
+        <div className="coverage-grid" {...tabPanelProps("dash", "coverage")}>
+          {coverageGroups.map((group) => (
+            <div key={group.title} className="card" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div className="card-title">{group.title}</div>
+              {group.items.map((item) => (
+                <ScoreBar
+                  key={item.label}
+                  label={item.label}
+                  score={item.score}
+                  right={`${item.score}${item.label.includes("Score") ? "" : "%"}`}
+                />
+              ))}
+            </div>
+          ))}
         </div>
       )}
 
@@ -258,7 +284,7 @@ function SeverityLegend() {
   return (
     <div className="flex items-center gap-3">
       {(["critical", "warning", "suggestion"] as Severity[]).map((s) => (
-        <span key={s} className="flex items-center gap-1" style={{ fontSize: 11 }}>
+        <span key={s} className="flex items-center gap-1" style={{ fontSize: "var(--text-xs)" }}>
           <span style={{ width: 7, height: 7, borderRadius: 999, background: SEVERITY_COLOR[s], display: "inline-block" }} />
           <span className="text-tertiary" style={{ textTransform: "capitalize" }}>
             {s}

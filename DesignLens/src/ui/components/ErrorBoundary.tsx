@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             maxWidth: 480,
             overflow: "auto",
             textAlign: "left",
-            fontSize: 11,
+            fontSize: "var(--text-xs)",
             background: "var(--color-surface-alt)",
             border: "1px solid var(--color-border)",
             borderRadius: "var(--radius-md)",
