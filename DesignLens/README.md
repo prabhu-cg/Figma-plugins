@@ -165,3 +165,14 @@ adding more is mechanical given the pattern above. A few specific caveats:
   typography matters for your use case.
 - Contrast/typography/spacing/visual checks read directly off node geometry and paints; they don't
   attempt to resolve complex nested blend modes or effects beyond simple opacity compositing.
+
+## Figma Community listing assets
+
+`store/` holds everything needed to publish: the 128 px icon, 1920x960 cover art, five gallery
+screenshots, and `listing.md` (name, tagline, description, tags, network/permissions statement,
+release notes, and a pre-publish checklist). The images show the real UI with clearly synthetic
+demo data, and are generated from the built plugin:
+
+```bash
+npm run build && npm run store:assets   # needs a local Chrome (override with CHROME_PATH)
+```
