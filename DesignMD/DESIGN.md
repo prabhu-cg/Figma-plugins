@@ -195,7 +195,7 @@ Warm paper and graphite ink, with one burnt-orange accent. Light and dark are a 
 
 ## Layout
 
-A fixed shell: header, scrolling content, footer, pinned with `position: fixed; inset: 0`. Content is a single flex column with 22px between sections and 24px side gutters (20px top, 24px bottom). Inside sections the rhythm is 8–10px; the summary is a two-column grid with 8px gaps. The panel is a fixed-size plugin window, so there are no breakpoints; narrow widths are handled by `min-width: 0` and ellipsis on long page names.
+A fixed shell: header, tab bar (after a scan), scrolling content, footer, pinned with `position: fixed; inset: 0`. Each tab's content is a single flex column with 22px between sections and 24px side gutters (20px top, 24px bottom). Inside sections the rhythm is 8–10px; the summary is a three-column grid of stat tiles with 8px gaps, so the whole summary fits one screen. The panel is a fixed-size plugin window, so there are no breakpoints; narrow widths are handled by `min-width: 0` and ellipsis on long page names.
 
 ### Named Rules
 
@@ -225,9 +225,13 @@ Softly rounded, one family of radii that grows with the size of the element: 3px
 
 Full-width labels containing icon, title, description and a circular check. Unchecked: Paper with a 1.5px Rule border. Hover and checked: Burnt Orange border. Checked also fills with Orange Wash and fills the circle with Burnt Orange and a white check.
 
+### Tabs
+
+After a scan the panel is split into tabs under the header: Summary (scan scope, stat tiles, warnings, page filter), Contrast (pairs), Export (file name, outputs, ZIP), and Files (appears only once files exist). Tabs are 12px semibold muted text with a 1px Rule baseline; the selected tab turns to Ink with a 2px Burnt Orange underline (the same "chosen" accent as every selection). Counts sit in a small Sunken Paper pill (pairs defined, files generated) and are omitted at zero. Contrast is hidden when the file has fewer than two color tokens. Generating opens Files; a rescan returns to Summary; if the files go stale the Files tab disappears and the user lands on Export. They follow the WAI-ARIA tabs pattern: arrow keys wrap, Home/End jump, only the active tab is in the tab order. The footer action never moves between tabs.
+
 ### Stat tiles
 
-Sunken Paper, 1px Rule border, 10px radius. Bold 18px value over a 10px muted label. They are summary data, shown in a 2-column grid, and are not a navigation structure.
+Sunken Paper, 1px Rule border, 10px radius. Bold 18px value over a 10px muted label. They are summary data, shown in a 3-column grid, and are not a navigation structure.
 
 ### Page filter
 

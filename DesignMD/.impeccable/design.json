@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T16:00:38.477604+00:00",
+  "generatedAt": "2026-10-04T16:10:21.332254+00:00",
   "title": "Design System: DesignMD",
   "extensions": {
     "colorMeta": {
@@ -198,6 +198,14 @@
       "description": "A user-defined foreground/background pair with its live ratio.",
       "html": "<ul class=\"ds-pairs\"><li class=\"ds-pair\"><span><b>Color/Primary/500</b> <span class=\"ds-on\">on</span> <b>Surface/Background</b><span class=\"ds-res\">4.68:1 · passes AA</span></span><button class=\"ds-x\" aria-label=\"Remove pair\">×</button></li></ul>",
       "css": ".ds-pairs{margin:0;padding:0;list-style:none;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;font-family:Inter,-apple-system,sans-serif}.ds-pair{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#fff;font-size:12px}.ds-pair b{font-weight:600}.ds-on{color:#6b6b6b}.ds-res{display:block;font-size:11px;color:#6b6b6b}.ds-x{background:none;border:none;color:inherit;font-size:15px;line-height:1;cursor:pointer}.ds-x:focus-visible{outline:2px solid #c74504;outline-offset:2px}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "segment-selected",
+      "description": "Section tabs with a Burnt Orange underline on the selected one and optional count pills.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\"><button class=\"ds-tab is-on\" role=\"tab\" aria-selected=\"true\">Summary</button><button class=\"ds-tab\" role=\"tab\">Contrast <span class=\"ds-pill\">2</span></button><button class=\"ds-tab\" role=\"tab\">Export</button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;padding:0 20px;border-bottom:1px solid #e5e5e5;font-family:Inter,-apple-system,sans-serif;font-size:12px}.ds-tab{display:inline-flex;align-items:center;gap:6px;padding:10px 8px 9px;margin-bottom:-1px;border:none;border-bottom:2px solid transparent;background:none;color:#6b6b6b;font:inherit;font-weight:600;cursor:pointer}.ds-tab:hover:not(.is-on){color:#1a1a1a}.ds-tab.is-on{color:#1a1a1a;border-bottom-color:#c74504}.ds-tab:focus-visible{outline:2px solid #c74504;outline-offset:-2px;border-radius:6px}.ds-pill{min-width:18px;padding:1px 6px;border-radius:9px;background:#f7f7f7;border:1px solid #e5e5e5;color:#6b6b6b;font-size:11px;font-weight:600;text-align:center}"
     }
   ],
   "narrative": {

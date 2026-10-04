@@ -213,7 +213,7 @@ body {
 
 .dmd-stat-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 
@@ -230,10 +230,6 @@ body {
 .dmd-stat-value {
   font-size: 18px;
   font-weight: 700;
-}
-
-.dmd-stat-tile:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
 }
 
 .dmd-stat-label {
@@ -789,4 +785,61 @@ body {
   flex-basis: 100%;
   font-size: 11px;
   color: var(--dmd-text-secondary);
+}
+
+/* ---------- Tabs ---------- */
+
+.dmd-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dmd-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px 9px;
+  margin-bottom: -1px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--dmd-text-secondary);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dmd-tab:hover:not(.is-selected) {
+  color: var(--dmd-text);
+}
+
+.dmd-tab.is-selected {
+  color: var(--dmd-text);
+  border-bottom-color: var(--dmd-brand);
+}
+
+.dmd-tab:focus-visible {
+  outline: 2px solid var(--dmd-brand);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.dmd-tab-badge {
+  min-width: 18px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--dmd-bg-secondary);
+  border: 1px solid var(--dmd-border);
+  color: var(--dmd-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-align: center;
 }

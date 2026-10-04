@@ -7,6 +7,8 @@ import { PageFilter } from './components/PageFilter';
 import { FilePreview } from './components/FilePreview';
 import { ScopeToggle } from './components/ScopeToggle';
 import { ContrastPairs } from './components/ContrastPairs';
+import { Tabs, panelId, tabId, type TabItem } from './components/Tabs';
+import { listColorTokenNames } from '../plugin/generators/contrast';
 import { ExportSettings } from './components/ExportSettings';
 import { OutputSelection } from './components/OutputSelection';
 import { GenerateButton } from './components/GenerateButton';
@@ -18,6 +20,9 @@ import { postToPlugin, usePluginMessages } from './hooks/usePluginBridge';
 import { downloadAsZip, downloadIndividually } from './zip';
 
 type Status = 'idle' | 'extracting' | 'ready' | 'generating' | 'done';
+type TabId = 'summary' | 'contrast' | 'export' | 'files';
+
+const TAB_PREFIX = 'dmd';
 
 const SELECTABLE_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'designMd',
@@ -46,6 +51,7 @@ export default function App() {
   const [scope, setScope] = useState<ExtractionScope>('file');
   const [selectionCount, setSelectionCount] = useState(0);
   const [contrastPairs, setContrastPairs] = useState<ContrastPairSpec[]>([]);
+  const [activeTab, setActiveTab] = useState<TabId>('summary');
   // Excluded pages remembered for this file, including pages not in the current scan.
   const savedExcludedPages = useRef<string[]>([]);
 
@@ -80,6 +86,7 @@ export default function App() {
           ),
         );
         setStatus('ready');
+        setActiveTab('summary');
         setProgress(null);
         if (!baseNameWasCustomized(baseName)) {
           setBaseName(slugify(message.designSystem.metadata.fileName) || 'designmd-export');
@@ -88,6 +95,7 @@ export default function App() {
       case 'generation-complete':
         setFiles(message.files);
         setStatus('done');
+        setActiveTab('files');
         break;
       case 'error':
         setError(message.message);
@@ -111,6 +119,7 @@ export default function App() {
     setStatus((current) => (current === 'done' ? 'ready' : current));
     setFiles(null);
     setOutdated(true);
+    setActiveTab((current) => (current === 'files' ? 'export' : current));
   }, [files]);
 
   const handleOptionsChange = useCallback(
@@ -181,6 +190,27 @@ export default function App() {
 
   const selectedCount = countSelectedOutputs(options);
 
+  const showTabs = designSystem !== null && status !== 'extracting';
+  const hasContrastTab = designSystem !== null && listColorTokenNames(designSystem).length >= 2;
+  const tabs: TabItem[] = [
+    { id: 'summary', label: 'Summary' },
+    ...(hasContrastTab ? [{ id: 'contrast', label: 'Contrast', badge: contrastPairs.length }] : []),
+    { id: 'export', label: 'Export' },
+    ...(files ? [{ id: 'files', label: 'Files', badge: files.length }] : []),
+  ];
+  // A tab can disappear (no files yet, too few colors); fall back to one that exists.
+  const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'summary';
+
+  const scopeToggle = (
+    <ScopeToggle
+      scope={scope}
+      onChange={setScope}
+      selectionCount={selectionCount}
+      disabled={status === 'generating'}
+      scannedScope={designSystem?.metadata.scope ?? null}
+    />
+  );
+
   return (
     <div className="dmd-app">
       <Header
@@ -189,7 +219,22 @@ export default function App() {
         showRescan={status !== 'idle' && status !== 'extracting'}
       />
 
-      <div className="dmd-content">
+      {designSystem && status !== 'extracting' && (
+        <Tabs
+          tabs={tabs}
+          activeId={currentTab}
+          onChange={(id) => setActiveTab(id as TabId)}
+          idPrefix={TAB_PREFIX}
+          label="Sections"
+        />
+      )}
+
+      <div
+        className="dmd-content"
+        role={showTabs ? 'tabpanel' : undefined}
+        id={showTabs ? panelId(TAB_PREFIX, currentTab) : undefined}
+        aria-labelledby={showTabs ? tabId(TAB_PREFIX, currentTab) : undefined}
+      >
         {error && <ErrorBanner message={error} onDismiss={() => setError(null)} />}
 
         {status === 'idle' && (
@@ -201,24 +246,15 @@ export default function App() {
           </div>
         )}
 
-        {status !== 'extracting' && (
-          <ScopeToggle
-            scope={scope}
-            onChange={setScope}
-            selectionCount={selectionCount}
-            disabled={status === 'generating'}
-            scannedScope={designSystem?.metadata.scope ?? null}
-          />
-        )}
+        {status === 'idle' && scopeToggle}
 
         {status === 'extracting' && progress && (
           <ProgressBar stage={progress.stage} percent={progress.percent} />
         )}
 
-        {status === 'done' && files && <FilePreview files={files} />}
-
-        {designSystem && status !== 'extracting' && (
+        {showTabs && designSystem && currentTab === 'summary' && (
           <>
+            {scopeToggle}
             <SummaryPanel summary={designSystem.summary} />
             <WarningsList warnings={designSystem.warnings} />
             <PageFilter
@@ -226,15 +262,25 @@ export default function App() {
               excludedPages={excludedPages}
               onChange={handleExcludedPagesChange}
             />
-            <ContrastPairs
-              designSystem={designSystem}
-              pairs={contrastPairs}
-              onChange={handleContrastPairsChange}
-            />
+          </>
+        )}
+
+        {showTabs && designSystem && currentTab === 'contrast' && (
+          <ContrastPairs
+            designSystem={designSystem}
+            pairs={contrastPairs}
+            onChange={handleContrastPairsChange}
+          />
+        )}
+
+        {showTabs && currentTab === 'export' && (
+          <>
             <ExportSettings baseName={baseName} onBaseNameChange={setBaseName} />
             <OutputSelection options={options} onChange={handleOptionsChange} />
           </>
         )}
+
+        {showTabs && currentTab === 'files' && files && <FilePreview files={files} />}
       </div>
 
       <footer className="dmd-footer">

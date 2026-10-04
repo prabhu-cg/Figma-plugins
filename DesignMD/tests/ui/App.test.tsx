@@ -21,6 +21,9 @@ const messagesOfType = (type: string) => sent.filter((m) => m.type === type);
 const checkbox = (name: RegExp) =>
   within(screen.getByText(name).closest('label') as HTMLElement).getByRole('checkbox');
 
+const openTab = (name: string) =>
+  fireEvent.click(screen.getByRole('tab', { name: new RegExp(`^${name}`) }));
+
 async function scanAndGenerate(files = [{ path: 'design.md', content: '# Design\n' }]) {
   fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
   fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
@@ -53,8 +56,9 @@ describe('App: startup', () => {
       settings: { options: { ...DEFAULT_EXPORT_OPTIONS, designMd: false, scssFile: true } },
       fileSettings: { excludedPages: [], contrastPairs: [] },
     });
-    // Output choices are shown once a scan has finished.
+    // Output choices live on the Export tab once a scan has finished.
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Export');
     expect(checkbox(/^design\.md$/)).not.toBeChecked();
     expect(checkbox(/^_tokens\.scss$/)).toBeChecked();
   });
@@ -116,6 +120,7 @@ describe('App: saving settings', () => {
   it('saves output choices when they change', () => {
     render(<App />);
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Export');
     fireEvent.click(checkbox(/^tokens\.css$/));
     expect(messagesOfType('save-settings')).toEqual([
       {
@@ -202,6 +207,7 @@ describe('App: stale results', () => {
     await scanAndGenerate();
     expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
 
+    openTab('Export');
     fireEvent.click(checkbox(/^tokens\.css$/));
     expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Generated files' })).not.toBeInTheDocument();
@@ -212,6 +218,7 @@ describe('App: stale results', () => {
   it('keeps the files when only the ZIP option changes', async () => {
     render(<App />);
     await scanAndGenerate();
+    openTab('Export');
     fireEvent.click(checkbox(/^Export all as ZIP$/));
     expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
   });
@@ -286,6 +293,7 @@ describe('App: contrast pairs', () => {
       fileSettings: { excludedPages: [], contrastPairs: [] },
     });
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Contrast');
   }
 
   it('lists color tokens and only enables Add for a new, distinct pair', () => {
@@ -329,6 +337,7 @@ describe('App: contrast pairs', () => {
       fileSettings: { excludedPages: [], contrastPairs: [pair] },
     });
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Contrast');
     expect(screen.getByRole('button', { name: /Remove pair/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     expect(messagesOfType('generate')[0]).toMatchObject({ contrastPairs: [pair] });
@@ -345,6 +354,7 @@ describe('App: contrast pairs', () => {
       },
     });
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Contrast');
     expect(screen.getByText('Token not found')).toBeInTheDocument();
   });
 
@@ -352,9 +362,138 @@ describe('App: contrast pairs', () => {
     openWithTokens();
     fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
     fromPlugin({ type: 'generation-complete', files: [{ path: 'design.md', content: '#' }] });
+    openTab('Contrast');
     choose('Text', 'Color/Primary/500');
     choose('Background', 'Surface/Background');
     fireEvent.click(screen.getByRole('button', { name: 'Add pair' }));
     expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('App: tabs', () => {
+  const names = () => screen.getAllByRole('tab').map((t) => t.textContent);
+
+  function scanned() {
+    render(<App />);
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+  }
+
+  it('shows no tabs before a scan, then Summary, Contrast and Export', () => {
+    render(<App />);
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    expect(names()).toEqual(['Summary', 'Contrast', 'Export']);
+    expect(screen.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('puts scope, summary, and pages on Summary; outputs on Export; pairs on Contrast', () => {
+    scanned();
+    expect(screen.getByRole('heading', { name: 'Design system summary' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Whole file' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Contrast pairs' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Choose export outputs' }),
+    ).not.toBeInTheDocument();
+
+    openTab('Contrast');
+    expect(screen.getByRole('heading', { name: 'Contrast pairs' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Design system summary' }),
+    ).not.toBeInTheDocument();
+
+    openTab('Export');
+    expect(screen.getByRole('heading', { name: 'Choose export outputs' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Export file name')).toBeInTheDocument();
+  });
+
+  it('links each tab to its panel for assistive technology', () => {
+    scanned();
+    openTab('Export');
+    const tab = screen.getByRole('tab', { name: 'Export' });
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).toHaveAttribute('id', tab.getAttribute('aria-controls'));
+    expect(panel).toHaveAttribute('aria-labelledby', tab.id);
+  });
+
+  it('supports arrow keys, Home and End with a roving tabindex', () => {
+    scanned();
+    const summary = screen.getByRole('tab', { name: 'Summary' });
+    expect(summary).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'Export' })).toHaveAttribute('tabindex', '-1');
+
+    fireEvent.keyDown(summary, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'Contrast' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Contrast' }), { key: 'End' });
+    expect(screen.getByRole('tab', { name: 'Export' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Export' }), { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Summary' }), { key: 'ArrowLeft' });
+    expect(screen.getByRole('tab', { name: 'Export' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Export' }), { key: 'Home' });
+    expect(screen.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('hides the Contrast tab when the file has fewer than two color tokens', () => {
+    render(<App />);
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = ds.styles.color.slice(0, 1);
+    fromPlugin({ type: 'extraction-complete', designSystem: ds });
+    expect(names()).toEqual(['Summary', 'Export']);
+  });
+
+  it('counts defined pairs on the Contrast tab', () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: {
+        excludedPages: [],
+        contrastPairs: [{ foreground: 'Color/Primary/500', background: 'Surface/Background' }],
+      },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    expect(screen.getByRole('tab', { name: /^Contrast/ })).toHaveTextContent('Contrast1');
+  });
+
+  it('adds a Files tab with a count and opens it when generation finishes', async () => {
+    render(<App />);
+    await scanAndGenerate([
+      { path: 'design.md', content: '#' },
+      { path: 'tokens.css', content: ':root {}' },
+    ]);
+    expect(names()).toEqual(['Summary', 'Contrast', 'Export', 'Files2']);
+    expect(screen.getByRole('tab', { name: /^Files/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('heading', { name: 'Generated files' })).toBeInTheDocument();
+  });
+
+  it('drops the Files tab and lands on Export when settings change', async () => {
+    render(<App />);
+    await scanAndGenerate();
+    openTab('Export');
+    fireEvent.click(checkbox(/^tokens\.css$/));
+    expect(names()).toEqual(['Summary', 'Contrast', 'Export']);
+    expect(screen.getByRole('tab', { name: 'Export' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('moves a user who is on Files to Export when the files go stale', async () => {
+    render(<App />);
+    await scanAndGenerate();
+    expect(screen.getByRole('tab', { name: /^Files/ })).toHaveAttribute('aria-selected', 'true');
+    openTab('Contrast');
+    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'Color/Primary/500' } });
+    fireEvent.change(screen.getByLabelText('Background'), {
+      target: { value: 'Surface/Background' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add pair' }));
+    expect(screen.queryByRole('tab', { name: /^Files/ })).not.toBeInTheDocument();
+  });
+
+  it('returns to Summary after a rescan', async () => {
+    render(<App />);
+    await scanAndGenerate();
+    fireEvent.click(screen.getByRole('button', { name: /Rescan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    expect(screen.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
   });
 });

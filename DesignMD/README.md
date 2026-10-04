@@ -21,7 +21,7 @@ Color contrast in `design.md` is checked separately for every color mode (Light,
 component docs include a Layout section (size, auto layout, gap, padding, corner radius) measured
 from the default variant.
 
-In the plugin you can scan the **whole file** or only the **selected layers** (components inside
+In the plugin (Summary, Contrast, Export and Files tabs) you can scan the **whole file** or only the **selected layers** (components inside
 the selection; variables and styles stay file-wide), preview and copy any generated file before
 downloading, and your output choices are remembered between sessions.
 
