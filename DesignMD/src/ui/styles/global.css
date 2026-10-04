@@ -828,13 +828,13 @@ body {
 .dmd-tab:focus-visible {
   outline: 2px solid var(--dmd-brand);
   outline-offset: -2px;
-  border-radius: 6px;
+  border-radius: 8px;
 }
 
 .dmd-tab-badge {
   min-width: 18px;
   padding: 1px 6px;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--dmd-bg-secondary);
   border: 1px solid var(--dmd-border);
   color: var(--dmd-text-secondary);
