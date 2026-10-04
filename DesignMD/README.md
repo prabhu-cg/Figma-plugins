@@ -74,3 +74,22 @@ terminals, then reload the plugin in Figma after each change.
 - `tsconfig.json` covers the UI (DOM lib); `tsconfig.plugin.json` covers the plugin
   sandbox (`@figma/plugin-typings`, no DOM) — kept separate because the two runtimes
   have incompatible global types.
+
+### Testing against a fake Figma
+
+The extraction layer and the plugin controller (`src/plugin/main.ts`) are tested without Figma
+using an in-memory stand-in for the Plugin API: `tests/unit/helpers/fakeFigma.ts`. Build a
+document with `document` / `page` / `frame` / `component` / `componentSet`, add variables, styles
+and optional `failures`, then call `installFakeFigma(...)` — it exposes the global `figma`, and the
+real extraction code runs against it:
+
+```ts
+const handle = installFakeFigma({
+  root: document('My File', [page('Buttons', [componentSet('Button', [{ props: { Size: 'L' } }])])]),
+  collections: [fakeCollection({ variableIds: ['v1'] })],
+  variables: [fakeVariable({ id: 'v1' })],
+});
+const raw = await extractDesignSystem();
+```
+
+Call `vi.unstubAllGlobals()` in `afterEach`, and build a fresh document per test (the tree is mutable).
