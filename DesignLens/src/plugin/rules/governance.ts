@@ -130,16 +130,9 @@ const variableNamingConventionRule: AuditRule = {
   severity: "suggestion",
   evaluate(context: RuleContext): RuleFinding[] {
     const findings: RuleFinding[] = [];
-    const byCollection = new Map<string, Variable[]>();
-    for (const v of context.variables) {
-      const list = byCollection.get(v.variableCollectionId) ?? [];
-      list.push(v);
-      byCollection.set(v.variableCollectionId, list);
-    }
-
-    for (const [collectionId, vars] of byCollection) {
+    for (const [collectionId, vars] of context.variablesByCollection) {
       if (vars.length < 4) continue;
-      const collectionName = context.variableCollections.find((c) => c.id === collectionId)?.name;
+      const collectionName = context.collectionNameById.get(collectionId);
       const namespaced = vars.filter((v) => v.name.includes("/"));
       const flat = vars.filter((v) => !v.name.includes("/"));
       if (namespaced.length === 0 || flat.length === 0) continue;

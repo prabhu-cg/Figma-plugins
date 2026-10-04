@@ -49,7 +49,7 @@ function toStackedItem(label: string, counts: Record<Severity, number>): Stacked
 
 export function Dashboard({ result, trend, onRescan, onNavigate }: DashboardProps) {
   const [tab, setTab] = useState<DashboardTab>("categories");
-  const metrics = computeDashboardMetrics(result);
+  const metrics = useMemo(() => computeDashboardMetrics(result), [result]);
   const { stats, health } = result;
   const scannedAt = new Date(result.scannedAt);
 

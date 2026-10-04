@@ -35,8 +35,13 @@ the plugin in Figma (`Cmd/Ctrl+Alt+P` or right-click → Re-run) to pick up chan
 hot-reload plugin code automatically.
 
 ```bash
-npm run typecheck   # both the UI and plugin-sandbox TS projects
+npm run typecheck   # UI, plugin-sandbox and test TS projects
+npm run lint
+npm test            # vitest unit tests (tests/): contrast math, rule helpers, scoring, registry, token rules
 ```
+
+Tests run in plain Node with a tiny stand-in for Figma nodes (`tests/fakes.ts`), so rule logic can be
+verified without opening Figma.
 
 ## How a scan works
 

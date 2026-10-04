@@ -1,18 +1,6 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
 import { componentRef, toNodeRef } from "./helpers";
-
-const MAX_COMBINATION_SPACE = 200;
-
-function cartesianProduct(valuesByProp: [string, string[]][]): Record<string, string>[] {
-  return valuesByProp.reduce<Record<string, string>[]>(
-    (acc, [prop, values]) => acc.flatMap((combo) => values.map((value) => ({ ...combo, [prop]: value }))),
-    [{}]
-  );
-}
-
-function comboKey(combo: Record<string, string>): string {
-  return JSON.stringify(Object.entries(combo).sort());
-}
+import { cartesianProduct, comboKey, MAX_COMBINATION_SPACE } from "./variantMatrix";
 
 const missingDescriptionRule: AuditRule = {
   id: "components-missing-description",

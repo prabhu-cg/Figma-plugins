@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.plugin.json",
+  "compilerOptions": {
+    "typeRoots": ["./node_modules/@figma", "./node_modules/@types"],
+    "types": ["node", "plugin-typings"],
+    "lib": ["ES2019"],
+    "skipLibCheck": true
+  },
+  "include": ["src/plugin", "src/shared", "tests", "vitest.config.ts"]
+}

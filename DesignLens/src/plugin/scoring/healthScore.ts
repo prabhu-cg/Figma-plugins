@@ -29,11 +29,16 @@ const SEVERITY_PENALTY: Record<Issue["severity"], number> = {
 };
 
 export function computeHealthScore(issues: Issue[], denominators: Record<AuditCategory, number>): HealthScore {
+  // One pass over the issue list instead of re-filtering it per category and severity.
+  const counts = new Map<AuditCategory, Record<Issue["severity"], number>>();
+  for (const category of AUDIT_CATEGORIES) counts.set(category, { critical: 0, warning: 0, suggestion: 0 });
+  for (const issue of issues) {
+    const bucket = counts.get(issue.category);
+    if (bucket) bucket[issue.severity] += 1;
+  }
+
   const categories: CategoryScore[] = AUDIT_CATEGORIES.map((category) => {
-    const categoryIssues = issues.filter((i) => i.category === category);
-    const criticalCount = categoryIssues.filter((i) => i.severity === "critical").length;
-    const warningCount = categoryIssues.filter((i) => i.severity === "warning").length;
-    const suggestionCount = categoryIssues.filter((i) => i.severity === "suggestion").length;
+    const { critical: criticalCount, warning: warningCount, suggestion: suggestionCount } = counts.get(category)!;
     const denominator = Math.max(1, denominators[category] ?? 1);
 
     const penalty =
@@ -61,9 +66,9 @@ export function computeHealthScore(issues: Issue[], denominators: Record<AuditCa
   return {
     overall,
     categories,
-    totalCritical: issues.filter((i) => i.severity === "critical").length,
-    totalWarnings: issues.filter((i) => i.severity === "warning").length,
-    totalSuggestions: issues.filter((i) => i.severity === "suggestion").length,
+    totalCritical: categories.reduce((sum, c) => sum + c.criticalCount, 0),
+    totalWarnings: categories.reduce((sum, c) => sum + c.warningCount, 0),
+    totalSuggestions: categories.reduce((sum, c) => sum + c.suggestionCount, 0),
     totalSuccesses: categories.reduce((sum, c) => sum + c.passCount, 0)
   };
 }

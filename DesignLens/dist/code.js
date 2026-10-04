@@ -771,7 +771,6 @@
     whyItMatters: "Unused tokens bloat the library, confuse consumers choosing between similar-looking variables, and make it unclear which tokens are actually safe to remove.",
     severity: "suggestion",
     evaluate(context) {
-      var _a;
       const usedIds = /* @__PURE__ */ new Set();
       const collect = (value) => {
         if (Array.isArray(value)) {
@@ -800,7 +799,7 @@
       const findings = [];
       for (const variable of context.variables) {
         if (!usedIds.has(variable.id)) {
-          const collection = (_a = context.variableCollections.find((c) => c.id === variable.variableCollectionId)) == null ? void 0 : _a.name;
+          const collection = context.collectionNameById.get(variable.variableCollectionId);
           findings.push({
             key: `${collection != null ? collection : ""}/${variable.name}`,
             message: `Variable "${variable.name}" is not referenced by any bound property in the audited components (usage outside these components is not visible to this scan).`,
@@ -826,32 +825,27 @@
     whyItMatters: "Duplicate tokens create ambiguity about which one to use, and teams end up splitting usage between them inconsistently.",
     severity: "suggestion",
     evaluate(context) {
-      var _a, _b;
       const findings = [];
-      const byCollection = /* @__PURE__ */ new Map();
-      for (const v of context.variables) {
-        const list = (_a = byCollection.get(v.variableCollectionId)) != null ? _a : [];
-        list.push(v);
-        byCollection.set(v.variableCollectionId, list);
-      }
-      for (const [collectionId, vars] of byCollection) {
-        const collectionName = (_b = context.variableCollections.find((c) => c.id === collectionId)) == null ? void 0 : _b.name;
-        for (let i = 0; i < vars.length; i++) {
-          for (let j = i + 1; j < vars.length; j++) {
-            if (vars[i].resolvedType !== vars[j].resolvedType) continue;
-            const a = JSON.stringify(vars[i].valuesByMode);
-            const b = JSON.stringify(vars[j].valuesByMode);
-            if (a === b) {
-              findings.push({
-                message: `"${vars[i].name}" and "${vars[j].name}" resolve to the same value in every mode.`,
-                severity: "suggestion",
-                impact: "low",
-                effort: "medium",
-                collection: collectionName,
-                key: `${vars[i].name}|${vars[j].name}`,
-                meta: { a: vars[i].name, b: vars[j].name }
-              });
-            }
+      for (const [collectionId, vars] of context.variablesByCollection) {
+        const collectionName = context.collectionNameById.get(collectionId);
+        const buckets = /* @__PURE__ */ new Map();
+        for (const v of vars) {
+          const bucketKey = `${v.resolvedType}|${JSON.stringify(v.valuesByMode)}`;
+          const bucket = buckets.get(bucketKey);
+          if (bucket) bucket.push(v);
+          else buckets.set(bucketKey, [v]);
+        }
+        for (const bucket of buckets.values()) {
+          for (let i = 1; i < bucket.length; i++) {
+            findings.push({
+              message: `"${bucket[0].name}" and "${bucket[i].name}" resolve to the same value in every mode.`,
+              severity: "suggestion",
+              impact: "low",
+              effort: "medium",
+              collection: collectionName,
+              key: `${bucket[0].name}|${bucket[i].name}`,
+              meta: { a: bucket[0].name, b: bucket[i].name }
+            });
           }
         }
       }
@@ -943,7 +937,6 @@
     whyItMatters: "Broken alias chains silently fall back to an undefined or stale value, which is one of the hardest token bugs to spot visually.",
     severity: "critical",
     async evaluate(context) {
-      var _a;
       const knownIds = new Set(context.variables.map((v) => v.id));
       const resolved = /* @__PURE__ */ new Map();
       const exists = async (id) => {
@@ -961,7 +954,7 @@
       };
       const findings = [];
       for (const variable of context.variables) {
-        const collection = (_a = context.variableCollections.find((c) => c.id === variable.variableCollectionId)) == null ? void 0 : _a.name;
+        const collection = context.collectionNameById.get(variable.variableCollectionId);
         for (const [modeId, value] of Object.entries(variable.valuesByMode)) {
           if (value && typeof value === "object" && value.type === "VARIABLE_ALIAS") {
             const aliasId = value.id;
@@ -995,7 +988,7 @@
     brokenAliasRule
   ];
 
-  // src/plugin/rules/components.ts
+  // src/plugin/rules/variantMatrix.ts
   var MAX_COMBINATION_SPACE = 200;
   function cartesianProduct(valuesByProp) {
     return valuesByProp.reduce(
@@ -1006,6 +999,8 @@
   function comboKey(combo) {
     return JSON.stringify(Object.entries(combo).sort());
   }
+
+  // src/plugin/rules/components.ts
   var missingDescriptionRule = {
     id: "components-missing-description",
     category: "components",
@@ -1709,17 +1704,10 @@
     whyItMatters: "A mixed naming convention inside one collection makes the variables panel's grouping unpredictable and complicates any tooling that parses variable names for semantic meaning.",
     severity: "suggestion",
     evaluate(context) {
-      var _a, _b;
       const findings = [];
-      const byCollection = /* @__PURE__ */ new Map();
-      for (const v of context.variables) {
-        const list = (_a = byCollection.get(v.variableCollectionId)) != null ? _a : [];
-        list.push(v);
-        byCollection.set(v.variableCollectionId, list);
-      }
-      for (const [collectionId, vars] of byCollection) {
+      for (const [collectionId, vars] of context.variablesByCollection) {
         if (vars.length < 4) continue;
-        const collectionName = (_b = context.variableCollections.find((c) => c.id === collectionId)) == null ? void 0 : _b.name;
+        const collectionName = context.collectionNameById.get(collectionId);
         const namespaced = vars.filter((v) => v.name.includes("/"));
         const flat = vars.filter((v) => !v.name.includes("/"));
         if (namespaced.length === 0 || flat.length === 0) continue;
@@ -2152,12 +2140,15 @@
     suggestion: 1
   };
   function computeHealthScore(issues, denominators) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const category of AUDIT_CATEGORIES) counts.set(category, { critical: 0, warning: 0, suggestion: 0 });
+    for (const issue of issues) {
+      const bucket = counts.get(issue.category);
+      if (bucket) bucket[issue.severity] += 1;
+    }
     const categories = AUDIT_CATEGORIES.map((category) => {
       var _a;
-      const categoryIssues = issues.filter((i) => i.category === category);
-      const criticalCount = categoryIssues.filter((i) => i.severity === "critical").length;
-      const warningCount = categoryIssues.filter((i) => i.severity === "warning").length;
-      const suggestionCount = categoryIssues.filter((i) => i.severity === "suggestion").length;
+      const { critical: criticalCount, warning: warningCount, suggestion: suggestionCount } = counts.get(category);
       const denominator = Math.max(1, (_a = denominators[category]) != null ? _a : 1);
       const penalty = (criticalCount * SEVERITY_PENALTY.critical + warningCount * SEVERITY_PENALTY.warning + suggestionCount * SEVERITY_PENALTY.suggestion) / denominator;
       const score = Math.max(0, Math.min(100, Math.round(100 - penalty)));
@@ -2176,9 +2167,9 @@
     return {
       overall,
       categories,
-      totalCritical: issues.filter((i) => i.severity === "critical").length,
-      totalWarnings: issues.filter((i) => i.severity === "warning").length,
-      totalSuggestions: issues.filter((i) => i.severity === "suggestion").length,
+      totalCritical: categories.reduce((sum, c) => sum + c.criticalCount, 0),
+      totalWarnings: categories.reduce((sum, c) => sum + c.warningCount, 0),
+      totalSuggestions: categories.reduce((sum, c) => sum + c.suggestionCount, 0),
       totalSuccesses: categories.reduce((sum, c) => sum + c.passCount, 0)
     };
   }
@@ -2212,13 +2203,23 @@
     };
   }
   async function runScan(onProgress, isCancelled, wcagLevel) {
+    var _a;
     const startTime = Date.now();
     const collected = await collectDocument(onProgress, isCancelled);
     if (isCancelled()) throw new ScanCancelledError();
+    const collectionNameById = new Map(collected.variableCollections.map((c) => [c.id, c.name]));
+    const variablesByCollection = /* @__PURE__ */ new Map();
+    for (const v of collected.variables) {
+      const list = variablesByCollection.get(v.variableCollectionId);
+      if (list) list.push(v);
+      else variablesByCollection.set(v.variableCollectionId, [v]);
+    }
     const context = {
       components: collected.components,
       variables: collected.variables,
       variableCollections: collected.variableCollections,
+      collectionNameById,
+      variablesByCollection,
       paintStyles: collected.paintStyles,
       textStyles: collected.textStyles,
       effectStyles: collected.effectStyles,
@@ -2247,29 +2248,35 @@
       deprecatedComponents,
       scanDurationMs: Date.now() - startTime
     };
+    const countByRule = /* @__PURE__ */ new Map();
+    for (const issue of issues) countByRule.set(issue.ruleId, ((_a = countByRule.get(issue.ruleId)) != null ? _a : 0) + 1);
+    const countOf = (ruleId) => {
+      var _a2;
+      return (_a2 = countByRule.get(ruleId)) != null ? _a2 : 0;
+    };
     const tokenStats = {
       totalVariables: collected.variables.length,
       totalCollections: collected.variableCollections.length,
       totalStyles,
-      hardcodedColorCount: issues.filter((i) => i.ruleId === "tokens-hardcoded-color").length,
-      hardcodedTypographyCount: issues.filter((i) => i.ruleId === "typography-hardcoded-style").length,
-      hardcodedSpacingCount: issues.filter((i) => i.ruleId === "spacing-off-grid").length,
-      hardcodedRadiusCount: issues.filter((i) => i.ruleId === "tokens-hardcoded-radius").length,
-      hardcodedShadowCount: issues.filter((i) => i.ruleId === "tokens-hardcoded-shadow").length,
-      hardcodedOpacityCount: issues.filter((i) => i.ruleId === "tokens-hardcoded-opacity").length,
-      unusedVariableCount: issues.filter((i) => i.ruleId === "tokens-unused-variable").length,
-      duplicateVariableCount: issues.filter((i) => i.ruleId === "tokens-duplicate-variable").length,
-      brokenAliasCount: issues.filter((i) => i.ruleId === "tokens-broken-alias").length
+      hardcodedColorCount: countOf("tokens-hardcoded-color"),
+      hardcodedTypographyCount: countOf("typography-hardcoded-style"),
+      hardcodedSpacingCount: countOf("spacing-off-grid"),
+      hardcodedRadiusCount: countOf("tokens-hardcoded-radius"),
+      hardcodedShadowCount: countOf("tokens-hardcoded-shadow"),
+      hardcodedOpacityCount: countOf("tokens-hardcoded-opacity"),
+      unusedVariableCount: countOf("tokens-unused-variable"),
+      duplicateVariableCount: countOf("tokens-duplicate-variable"),
+      brokenAliasCount: countOf("tokens-broken-alias")
     };
     const denominators = buildDenominators(collected, totalComponents + totalComponentSets);
     const health = computeHealthScore(issues, denominators);
     const variables = collected.variables.map((v) => {
-      var _a, _b;
+      var _a2;
       return {
         id: v.id,
         name: v.name,
         collectionId: v.variableCollectionId,
-        collectionName: (_b = (_a = collected.variableCollections.find((c) => c.id === v.variableCollectionId)) == null ? void 0 : _a.name) != null ? _b : "Unknown collection",
+        collectionName: (_a2 = collectionNameById.get(v.variableCollectionId)) != null ? _a2 : "Unknown collection",
         resolvedType: v.resolvedType,
         isAlias: Object.values(v.valuesByMode).some(
           (value) => typeof value === "object" && value !== null && value.type === "VARIABLE_ALIAS"

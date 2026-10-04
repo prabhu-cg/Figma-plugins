@@ -12,6 +12,10 @@ export interface RuleContext {
   components: ComponentRecord[];
   variables: Variable[];
   variableCollections: VariableCollection[];
+  /** Collection id -> name, prebuilt so rules don't linear-scan variableCollections per variable. */
+  collectionNameById: Map<string, string>;
+  /** Collection id -> its variables, prebuilt for per-collection rules. */
+  variablesByCollection: Map<string, Variable[]>;
   paintStyles: PaintStyle[];
   textStyles: TextStyle[];
   effectStyles: EffectStyle[];

@@ -135,7 +135,7 @@ const unusedVariableRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const variable of context.variables) {
       if (!usedIds.has(variable.id)) {
-        const collection = context.variableCollections.find((c) => c.id === variable.variableCollectionId)?.name;
+        const collection = context.collectionNameById.get(variable.variableCollectionId);
         findings.push({
           key: `${collection ?? ""}/${variable.name}`,
           message: `Variable "${variable.name}" is not referenced by any bound property in the audited components (usage outside these components is not visible to this scan).`,
@@ -164,31 +164,28 @@ const duplicateVariableRule: AuditRule = {
   severity: "suggestion",
   evaluate(context: RuleContext): RuleFinding[] {
     const findings: RuleFinding[] = [];
-    const byCollection = new Map<string, Variable[]>();
-    for (const v of context.variables) {
-      const list = byCollection.get(v.variableCollectionId) ?? [];
-      list.push(v);
-      byCollection.set(v.variableCollectionId, list);
-    }
-
-    for (const [collectionId, vars] of byCollection) {
-      const collectionName = context.variableCollections.find((c) => c.id === collectionId)?.name;
-      for (let i = 0; i < vars.length; i++) {
-        for (let j = i + 1; j < vars.length; j++) {
-          if (vars[i].resolvedType !== vars[j].resolvedType) continue;
-          const a = JSON.stringify(vars[i].valuesByMode);
-          const b = JSON.stringify(vars[j].valuesByMode);
-          if (a === b) {
-            findings.push({
-              message: `"${vars[i].name}" and "${vars[j].name}" resolve to the same value in every mode.`,
-              severity: "suggestion",
-              impact: "low",
-              effort: "medium",
-              collection: collectionName,
-              key: `${vars[i].name}|${vars[j].name}`,
-              meta: { a: vars[i].name, b: vars[j].name }
-            });
-          }
+    for (const [collectionId, vars] of context.variablesByCollection) {
+      const collectionName = context.collectionNameById.get(collectionId);
+      // Bucket by type + serialized values so only genuine duplicates are compared (O(n) not O(n²)).
+      const buckets = new Map<string, Variable[]>();
+      for (const v of vars) {
+        const bucketKey = `${v.resolvedType}|${JSON.stringify(v.valuesByMode)}`;
+        const bucket = buckets.get(bucketKey);
+        if (bucket) bucket.push(v);
+        else buckets.set(bucketKey, [v]);
+      }
+      for (const bucket of buckets.values()) {
+        for (let i = 1; i < bucket.length; i++) {
+          // Pair each later duplicate with the first, so N copies yield N-1 findings, not N(N-1)/2.
+          findings.push({
+            message: `"${bucket[0].name}" and "${bucket[i].name}" resolve to the same value in every mode.`,
+            severity: "suggestion",
+            impact: "low",
+            effort: "medium",
+            collection: collectionName,
+            key: `${bucket[0].name}|${bucket[i].name}`,
+            meta: { a: bucket[0].name, b: bucket[i].name }
+          });
         }
       }
     }
@@ -302,7 +299,7 @@ const brokenAliasRule: AuditRule = {
     const findings: RuleFinding[] = [];
 
     for (const variable of context.variables) {
-      const collection = context.variableCollections.find((c) => c.id === variable.variableCollectionId)?.name;
+      const collection = context.collectionNameById.get(variable.variableCollectionId);
       for (const [modeId, value] of Object.entries(variable.valuesByMode)) {
         if (value && typeof value === "object" && (value as { type?: string }).type === "VARIABLE_ALIAS") {
           const aliasId = (value as VariableAlias).id;
