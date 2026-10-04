@@ -204,7 +204,7 @@ export function AuditView({ result, audit, onSelectNode, onSetIssueStatuses }: A
 
       <div className="audit-scroll" ref={scrollRef} tabIndex={-1} onKeyDown={onKeyDown}>
         <div className="audit-grid">
-          <div style={{ minWidth: 0 }}>
+          <div className="audit-list-col">
             {sortedIssues.length > 0 && (
               <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
                 <label className="bulk-all">

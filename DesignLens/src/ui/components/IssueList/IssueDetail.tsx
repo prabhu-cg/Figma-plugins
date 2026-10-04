@@ -27,7 +27,7 @@ export function IssueDetail({ issue, onSelectNode, onSetStatus, onClose }: Issue
         padding — the inner layer below always keeps identical padding on all four sides,
         whether or not the scrollbar is actually showing.
       */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+      <div className="detail-scroll">
         <div
           style={{
             display: "flex",
