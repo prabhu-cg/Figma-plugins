@@ -204,7 +204,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 32px 8px;
+  padding: 20px 8px 4px;
   text-align: center;
   color: var(--dmd-text-secondary);
 }
@@ -230,6 +230,10 @@ body {
 .dmd-stat-value {
   font-size: 18px;
   font-weight: 700;
+}
+
+.dmd-stat-tile:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .dmd-stat-label {
@@ -502,4 +506,210 @@ body {
 .dmd-warnings ul {
   margin: 6px 0 0;
   padding-left: 16px;
+}
+
+/* ---------- Output groups ---------- */
+
+.dmd-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dmd-group-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-option-card {
+  padding: 12px 14px;
+}
+
+/* ---------- Scan scope ---------- */
+
+.dmd-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.dmd-scope-legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dmd-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--dmd-border);
+  background: var(--dmd-bg-secondary);
+}
+
+.dmd-segment {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dmd-text-secondary);
+  cursor: pointer;
+}
+
+.dmd-segment input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.dmd-segment:hover:not(.is-selected):not(.is-unavailable) {
+  color: var(--dmd-text);
+}
+
+.dmd-segment.is-selected {
+  background: var(--dmd-brand-bg);
+  border-color: var(--dmd-brand);
+  color: var(--dmd-text);
+}
+
+.dmd-segment:has(input:focus-visible) {
+  outline: 2px solid var(--dmd-brand);
+  outline-offset: 2px;
+}
+
+.dmd-segment.is-unavailable {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.dmd-scope-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}
+
+/* ---------- Generated file preview ---------- */
+
+.dmd-file-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 148px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--dmd-border);
+  scrollbar-width: thin;
+  scrollbar-color: var(--dmd-border-strong) transparent;
+}
+
+.dmd-file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: var(--dmd-bg);
+  color: var(--dmd-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dmd-file-row:not(:last-child) {
+  border-bottom: 1px solid var(--dmd-border);
+}
+
+.dmd-file-row:hover:not(.is-selected) {
+  background: var(--dmd-bg-secondary);
+}
+
+.dmd-file-row.is-selected {
+  background: var(--dmd-brand-bg);
+}
+
+.dmd-file-row:focus-visible {
+  outline: 2px solid var(--dmd-brand);
+  outline-offset: -2px;
+}
+
+.dmd-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dmd-file-size {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.dmd-preview-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dmd-copy-status {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-copy-status:empty {
+  display: none;
+}
+
+.dmd-preview {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--dmd-border);
+  background: var(--dmd-bg-secondary);
+  color: var(--dmd-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  tab-size: 2;
+  white-space: pre;
+  scrollbar-width: thin;
+  scrollbar-color: var(--dmd-border-strong) transparent;
+}
+
+.dmd-preview:focus-visible {
+  outline: 2px solid var(--dmd-brand);
+  outline-offset: 1px;
 }

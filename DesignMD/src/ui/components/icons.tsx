@@ -51,6 +51,30 @@ export function HashIcon({ className }: IconProps) {
   );
 }
 
+export function CodeIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 5l-3 14" />
+    </svg>
+  );
+}
+
+export function SassIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M12 3.5v17M16 8c0-1.5-1.8-2.5-4-2.5S8 6.5 8 8s1.8 2.3 4 2.5 4 1.2 4 2.7-1.8 2.8-4 2.8-4-1.2-4-2.8" />
+    </svg>
+  );
+}
+
+export function WindIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <path d="M3 9h11a2.5 2.5 0 1 0-2.5-2.5M3 13h15a2.5 2.5 0 1 1-2.5 2.5M3 17h7" />
+    </svg>
+  );
+}
+
 export function ArchiveIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>

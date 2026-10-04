@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T15:12:54.768456+00:00",
+  "generatedAt": "2026-10-04T15:50:30.142296+00:00",
   "title": "Design System: DesignMD",
   "extensions": {
     "colorMeta": {
@@ -97,6 +97,10 @@
       "caption": {
         "displayName": "Caption",
         "purpose": "Counts, progress, warnings."
+      },
+      "code": {
+        "displayName": "Code",
+        "purpose": "File preview contents only."
       }
     },
     "shadows": [],
@@ -170,6 +174,22 @@
       "description": "Scan progress track and fill.",
       "html": "<div class=\"ds-progress\"><div class=\"ds-progress-label\">Reading variables… 60%</div><div class=\"ds-progress-track\"><div class=\"ds-progress-fill\" style=\"width:60%\"></div></div></div>",
       "css": ".ds-progress{display:flex;flex-direction:column;gap:6px;font-family:Inter,-apple-system,sans-serif}.ds-progress-label{font-size:11px;color:#6b6b6b}.ds-progress-track{height:6px;border-radius:3px;background:#f7f7f7;overflow:hidden}.ds-progress-fill{height:100%;background:#c74504}"
+    },
+    {
+      "name": "Scope Toggle",
+      "kind": "custom",
+      "refersTo": "segment-selected",
+      "description": "Two-segment radio group choosing whole file or the Figma selection.",
+      "html": "<div class=\"ds-seg\"><label class=\"ds-seg-item is-on\"><input type=\"radio\" name=\"s\" checked><span>Whole file</span></label><label class=\"ds-seg-item\"><input type=\"radio\" name=\"s\"><span>Selection (3)</span></label></div>",
+      "css": ".ds-seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:3px;border-radius:10px;border:1px solid #e5e5e5;background:#f7f7f7;font-family:Inter,-apple-system,sans-serif}.ds-seg-item{position:relative;display:flex;justify-content:center;padding:7px 10px;border-radius:8px;border:1px solid transparent;font-size:12px;font-weight:600;color:#6b6b6b;cursor:pointer}.ds-seg-item input{position:absolute;inset:0;opacity:0;margin:0;cursor:pointer}.ds-seg-item.is-on{background:#faeee8;border-color:#c74504;color:#1a1a1a}.ds-seg-item:hover:not(.is-on){color:#1a1a1a}.ds-seg-item:has(input:focus-visible){outline:2px solid #c74504;outline-offset:2px}"
+    },
+    {
+      "name": "File Preview",
+      "kind": "custom",
+      "refersTo": "code-preview",
+      "description": "Selected generated file shown as scrollable code with a Copy action.",
+      "html": "<div class=\"ds-prev\"><div class=\"ds-prev-head\"><span class=\"ds-prev-name\">tokens.css</span><button class=\"ds-prev-copy\">Copy</button></div><pre class=\"ds-prev-code\">:root {\n  --color-primary-500: #3366ff;\n}</pre></div>",
+      "css": ".ds-prev{display:flex;flex-direction:column;gap:8px;font-family:Inter,-apple-system,sans-serif}.ds-prev-head{display:flex;align-items:center;gap:8px}.ds-prev-name{flex:1;font-size:12px;font-weight:600}.ds-prev-copy{padding:6px 12px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b6b6b;font:600 12px Inter,-apple-system,sans-serif;cursor:pointer}.ds-prev-copy:hover{color:#1a1a1a;border-color:#d8d8d8}.ds-prev-copy:focus-visible{outline:2px solid #c74504;outline-offset:2px}.ds-prev-code{margin:0;padding:10px 12px;border-radius:10px;border:1px solid #e5e5e5;background:#f7f7f7;color:#1a1a1a;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow:auto}"
     }
   ],
   "narrative": {
@@ -209,6 +229,7 @@
       "Do theme native controls and browser surfaces (focus rings, selection, scrollbar) from the palette.",
       "Do carry every neutral through the light/dark pair via prefers-color-scheme.",
       "Do use role=status for the footer line and role=progressbar for scan progress.",
+      "Do keep monospace to file contents the user may copy; everything else is Inter.",
       "Do keep copy plain and specific: controls name their action, errors name the problem."
     ],
     "donts": [
@@ -216,7 +237,7 @@
       "Don't add a second accent color or a success green.",
       "Don't put icon-heading-text cards in a repeating grid as page structure; the summary tiles are the one exception and stay data-only.",
       "Don't add a colored side-stripe border to cards or banners.",
-      "Don't introduce a font size off the documented ramp or a second typeface."
+      "Don't introduce a font size off the documented ramp, or any typeface other than Inter and the code-preview monospace."
     ]
   }
 }

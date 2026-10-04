@@ -1,9 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type GeneratedFile } from '@shared/messages';
-import type { DesignSystem } from '@shared/types';
+import type { DesignSystem, ExtractionScope } from '@shared/types';
 import { Header } from './components/Header';
 import { SummaryPanel } from './components/SummaryPanel';
 import { PageFilter } from './components/PageFilter';
+import { FilePreview } from './components/FilePreview';
+import { ScopeToggle } from './components/ScopeToggle';
 import { ExportSettings } from './components/ExportSettings';
 import { OutputSelection } from './components/OutputSelection';
 import { GenerateButton } from './components/GenerateButton';
@@ -21,6 +23,9 @@ const SELECTABLE_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'componentDocs',
   'tokensJson',
   'cssTokensJson',
+  'cssFile',
+  'scssFile',
+  'tailwindPreset',
 ];
 
 function countSelectedOutputs(options: ExportOptions): number {
@@ -37,9 +42,24 @@ export default function App() {
   const [baseName, setBaseName] = useState('designmd-export');
   const [error, setError] = useState<string | null>(null);
   const [outdated, setOutdated] = useState(false);
+  const [scope, setScope] = useState<ExtractionScope>('file');
+  const [selectionCount, setSelectionCount] = useState(0);
+
+  // Tell the plugin the UI is listening so it can send the selection and saved settings.
+  useEffect(() => {
+    postToPlugin({ type: 'ready' });
+  }, []);
 
   usePluginMessages((message) => {
     switch (message.type) {
+      case 'selection':
+        setSelectionCount(message.count);
+        // An emptied selection can no longer be scanned; fall back to the whole file.
+        if (message.count === 0) setScope('file');
+        break;
+      case 'settings':
+        if (message.settings) setOptions(message.settings.options);
+        break;
       case 'progress':
         setProgress({ stage: message.stage, percent: message.percent });
         break;
@@ -69,8 +89,8 @@ export default function App() {
     setStatus('extracting');
     setOutdated(false);
     setProgress({ stage: 'variables', percent: 0 });
-    postToPlugin({ type: 'extract' });
-  }, []);
+    postToPlugin({ type: 'extract', scope });
+  }, [scope]);
 
   // Outputs were generated from the previous settings; changing them invalidates the result.
   const invalidateGenerated = useCallback(() => {
@@ -83,6 +103,7 @@ export default function App() {
   const handleOptionsChange = useCallback(
     (next: ExportOptions) => {
       setOptions(next);
+      postToPlugin({ type: 'save-settings', settings: { options: next } });
       // `zip` only affects how files are downloaded, not what is generated.
       if (SELECTABLE_KEYS.some((key) => next[key] !== options[key])) invalidateGenerated();
     },
@@ -135,9 +156,21 @@ export default function App() {
           </div>
         )}
 
+        {status !== 'extracting' && (
+          <ScopeToggle
+            scope={scope}
+            onChange={setScope}
+            selectionCount={selectionCount}
+            disabled={status === 'generating'}
+            scannedScope={designSystem?.metadata.scope ?? null}
+          />
+        )}
+
         {status === 'extracting' && progress && (
           <ProgressBar stage={progress.stage} percent={progress.percent} />
         )}
+
+        {status === 'done' && files && <FilePreview files={files} />}
 
         {designSystem && status !== 'extracting' && (
           <>
@@ -157,7 +190,7 @@ export default function App() {
       <footer className="dmd-footer">
         {status === 'idle' && (
           <button className="dmd-btn dmd-btn-primary dmd-btn-full" onClick={handleScan}>
-            Scan Design System
+            {scope === 'selection' ? 'Scan Selection' : 'Scan Design System'}
           </button>
         )}
 

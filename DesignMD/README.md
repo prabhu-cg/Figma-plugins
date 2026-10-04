@@ -7,12 +7,23 @@ forever with no feature gating.
 
 ## What it generates
 
-| File              | Contents                                                                                                                              |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `design.md`       | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, accessibility notes, naming conventions |
-| `components/*.md` | One Markdown file per component/component set — variants, sizes, states, properties, token references, related components             |
-| `tokens.json`     | Normalized, nested token export (DTCG-style `$type`/`$value`), grouped by color/typography/spacing/effect/grid/semantic/component     |
-| `css-tokens.json` | CSS custom-property-ready export (`--color-primary-500`, etc.), including per-mode overrides                                          |
+| File                 | Contents                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `design.md`          | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, accessibility notes, naming conventions |
+| `components/*.md`    | One Markdown file per component/component set — variants, sizes, states, properties, token references, related components             |
+| `tokens.json`        | Normalized, nested token export (DTCG-style `$type`/`$value`), grouped by color/typography/spacing/effect/grid/semantic/component     |
+| `css-tokens.json`    | CSS custom-property-ready export (`--color-primary-500`, etc.), including per-mode overrides                                          |
+| `tokens.css`         | The same custom properties as a ready-to-import stylesheet: `:root` defaults plus a `[data-theme="<mode>"]` block per extra mode      |
+| `_tokens.scss`       | Sass variables (aliases stay references) plus a `$modes` map of per-mode differences                                                  |
+| `tailwind.tokens.js` | A Tailwind preset whose theme values are `var(--token)` references, so modes switch through `tokens.css`                              |
+
+Color contrast in `design.md` is checked separately for every color mode (Light, Dark, …), and
+component docs include a Layout section (size, auto layout, gap, padding, corner radius) measured
+from the default variant.
+
+In the plugin you can scan the **whole file** or only the **selected layers** (components inside
+the selection; variables and styles stay file-wide), preview and copy any generated file before
+downloading, and your output choices are remembered between sessions.
 
 Variables are the source of truth; when a category has no variables (e.g. no color
 variables), the corresponding Styles (Paint/Text/Effect/Grid) are used as a fallback and

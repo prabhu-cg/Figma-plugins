@@ -54,6 +54,11 @@ typography:
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     fontSize: '11px'
     fontWeight: 400
+  code:
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+    fontSize: '11px'
+    fontWeight: 400
+    lineHeight: 1.5
   label:
     fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     fontSize: '10px'
@@ -101,6 +106,17 @@ components:
     textColor: '{colors.ink}'
     rounded: '{rounded.md}'
     padding: '9px 10px'
+  segment-selected:
+    backgroundColor: '{colors.orange-wash}'
+    textColor: '{colors.ink}'
+    rounded: '{rounded.sm}'
+    padding: '7px 10px'
+  code-preview:
+    backgroundColor: '{colors.paper-sunken}'
+    textColor: '{colors.ink}'
+    typography: '{typography.code}'
+    rounded: '{rounded.md}'
+    padding: '10px 12px'
   error-banner:
     backgroundColor: '{colors.error-wash}'
     textColor: '{colors.error-ink}'
@@ -157,9 +173,9 @@ Warm paper and graphite ink, with one burnt-orange accent. Light and dark are a 
 
 ## Typography
 
-**Font:** Inter, falling back to the system sans (-apple-system, Segoe UI).
+**Font:** Inter, falling back to the system sans (-apple-system, Segoe UI). **Code:** the system monospace stack (ui-monospace, SF Mono, Menlo, Consolas), used only inside code previews.
 
-**Character:** One family at small sizes. Bold weights separate title, section and control labels from 12px regular body; there is no second face and no mono.
+**Character:** One family at small sizes. Bold weights separate title, section and control labels from 12px regular body. The only other face is the system monospace, reserved for generated file contents.
 
 ### Hierarchy
 
@@ -171,6 +187,7 @@ Warm paper and graphite ink, with one burnt-orange accent. Light and dark are a 
 - **Stat** (700, 18px): summary tile values.
 - **Caption** (400–600, 11px): page counts, progress text, warnings.
 - **Label** (400, 10px): stat tile labels.
+- **Code** (400, 11px, 1.5, system mono): the file preview. Never used for labels, buttons or decoration.
 
 ### Named Rules
 
@@ -228,9 +245,21 @@ A bordered list (12px radius) of rows separated by hairlines: checkbox (accent B
 
 Error Wash with Error Ink text, 10px radius, `role="alert"`, with a dismiss (×) button that has an accessible name.
 
+### Scan scope toggle
+
+A two-segment radio group (Whole file, Selection with its layer count) in a Sunken Paper track with a 1px Rule border and 10px radius. The selected segment takes Orange Wash with a Burnt Orange border (the same "chosen" language as option cards). Selection is disabled, at 50% opacity, until layers are selected in Figma. A one-line caption states what the scope covers, and switches to "Rescan to apply this scope." when it differs from the data on screen.
+
+### Output groups
+
+Outputs are grouped under quiet 12px semibold headings, Documentation and Tokens and code, each a list of option cards. Group headings are muted ink, not accent, and carry no counts or numbering.
+
+### Generated file preview
+
+After generating, the result leads the screen. A bordered list of files (path, size) works like the page filter, with the selected row in Orange Wash. Below it, the file name, a text-button Copy with a polite status ("Copied" or "Copy blocked — select the text instead"), and a scrollable code preview on Sunken Paper capped at 300 lines. The note about hidden lines appears only when the file is longer; Copy always copies the full file.
+
 ### Generate → Download flow
 
-The footer is a small state machine: Scan → Scanning… → Generate → Download. Changing any output selection or the excluded pages after generating clears the files and returns to Generate, with the status line switching to "Settings changed — generate again to refresh your files". Toggling ZIP does not reset, since it only changes how files are downloaded.
+The footer is a small state machine: Scan → Scanning… → Generate → Download. The choice of outputs is remembered between sessions. Changing any output selection or the excluded pages after generating clears the files and returns to Generate, with the status line switching to "Settings changed — generate again to refresh your files". Toggling ZIP does not reset, since it only changes how files are downloaded.
 
 ## Do's and Don'ts
 
@@ -240,6 +269,7 @@ The footer is a small state machine: Scan → Scanning… → Generate → Downl
 - **Do** theme native controls and browser surfaces (focus rings, selection, scrollbar) from the palette.
 - **Do** carry every neutral through the light/dark pair via `prefers-color-scheme`.
 - **Do** use `role="status"` for the footer line and `role="progressbar"` for scan progress.
+- **Do** keep monospace to file contents the user may copy; everything else is Inter.
 - **Do** keep copy plain and specific: controls name their action, errors name the problem.
 
 ### Don't:
@@ -248,4 +278,4 @@ The footer is a small state machine: Scan → Scanning… → Generate → Downl
 - **Don't** add a second accent color or a success green.
 - **Don't** put icon-heading-text cards in a repeating grid as page structure; the summary tiles are the one exception and stay data-only.
 - **Don't** add a colored side-stripe border to cards or banners.
-- **Don't** introduce a font size off the documented ramp or a second typeface.
+- **Don't** introduce a font size off the documented ramp, or any typeface other than Inter and the code-preview monospace.
