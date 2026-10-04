@@ -257,6 +257,10 @@ Outputs are grouped under quiet 12px semibold headings, Documentation and Tokens
 
 After generating, the result leads the screen. A bordered list of files (path, size) works like the page filter, with the selected row in Orange Wash. Below it, the file name, a text-button Copy with a polite status ("Copied" or "Copy blocked — select the text instead"), and a scrollable code preview on Sunken Paper capped at 300 lines. The note about hidden lines appears only when the file is longer; Copy always copies the full file.
 
+### Contrast pairs
+
+Two labelled selects (Text, Background) in a two-column grid, with a text-button Add pair that stays disabled until the pair is complete, distinct and new. Added pairs form a bordered list like the page filter: bold token names joined by a muted "on", a caption line with the live ratio and a plain verdict ("4.68:1 · passes AA", "large text only", "fails AA", "Token not found"), and an × remove button with a descriptive accessible name. Verdicts use ink and muted ink only; there is no pass/fail color. Pairs and excluded pages are remembered per file.
+
 ### Generate → Download flow
 
 The footer is a small state machine: Scan → Scanning… → Generate → Download. The choice of outputs is remembered between sessions. Changing any output selection or the excluded pages after generating clears the files and returns to Generate, with the status line switching to "Settings changed — generate again to refresh your files". Toggling ZIP does not reset, since it only changes how files are downloaded.

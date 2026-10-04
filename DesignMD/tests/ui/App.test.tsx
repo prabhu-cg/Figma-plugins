@@ -51,6 +51,7 @@ describe('App: startup', () => {
     fromPlugin({
       type: 'settings',
       settings: { options: { ...DEFAULT_EXPORT_OPTIONS, designMd: false, scssFile: true } },
+      fileSettings: { excludedPages: [], contrastPairs: [] },
     });
     // Output choices are shown once a scan has finished.
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
@@ -60,7 +61,11 @@ describe('App: startup', () => {
 
   it('keeps defaults when there are no saved settings', () => {
     render(<App />);
-    fromPlugin({ type: 'settings', settings: null });
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: { excludedPages: [], contrastPairs: [] },
+    });
     expect(screen.getByRole('button', { name: /Scan/ })).toBeInTheDocument();
   });
 });
@@ -217,5 +222,139 @@ describe('App: stale results', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Select at least one layer.');
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('App: per-file settings', () => {
+  function twoPageSystem() {
+    const ds = makeDesignSystem();
+    ds.components.push({ ...ds.components[0], id: 'c2', name: 'Card', pageName: 'Drafts' });
+    return ds;
+  }
+
+  it('restores excluded pages for this file, ignoring pages that no longer exist', () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: { excludedPages: ['Drafts', 'Deleted page'], contrastPairs: [] },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: twoPageSystem() });
+    expect(
+      within(
+        screen.getByText('Drafts', { selector: '.dmd-page-name' }).closest('label') as HTMLElement,
+      ).getByRole('checkbox'),
+    ).not.toBeChecked();
+    expect(
+      within(
+        screen
+          .getByText('Components', { selector: '.dmd-page-name' })
+          .closest('label') as HTMLElement,
+      ).getByRole('checkbox'),
+    ).toBeChecked();
+  });
+
+  it('saves excluded pages, keeping remembered ones from pages outside this scan', () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: { excludedPages: ['Elsewhere'], contrastPairs: [] },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: twoPageSystem() });
+    fireEvent.click(
+      within(
+        screen.getByText('Drafts', { selector: '.dmd-page-name' }).closest('label') as HTMLElement,
+      ).getByRole('checkbox'),
+    );
+    expect(messagesOfType('save-file-settings').at(-1)).toEqual({
+      type: 'save-file-settings',
+      fileSettings: { excludedPages: ['Elsewhere', 'Drafts'], contrastPairs: [] },
+    });
+  });
+});
+
+describe('App: contrast pairs', () => {
+  const choose = (label: string, value: string) =>
+    fireEvent.change(screen.getByLabelText(label), { target: { value } });
+
+  function openWithTokens() {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: { excludedPages: [], contrastPairs: [] },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+  }
+
+  it('lists color tokens and only enables Add for a new, distinct pair', () => {
+    openWithTokens();
+    const add = screen.getByRole('button', { name: 'Add pair' });
+    expect(add).toBeDisabled();
+    choose('Text', 'Color/Primary/500');
+    expect(add).toBeDisabled();
+    choose('Background', 'Color/Primary/500');
+    expect(add).toBeDisabled();
+    choose('Background', 'Surface/Background');
+    expect(add).toBeEnabled();
+  });
+
+  it('adds a pair with its ratio, saves it for the file, and can remove it', () => {
+    openWithTokens();
+    choose('Text', 'Color/Primary/500');
+    choose('Background', 'Surface/Background');
+    fireEvent.click(screen.getByRole('button', { name: 'Add pair' }));
+
+    expect(screen.getByText(/:1 · /)).toBeInTheDocument();
+    expect(messagesOfType('save-file-settings').at(-1)).toMatchObject({
+      fileSettings: {
+        contrastPairs: [{ foreground: 'Color/Primary/500', background: 'Surface/Background' }],
+      },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Remove pair/ }));
+    expect(screen.queryByText(/:1 · /)).not.toBeInTheDocument();
+    expect(messagesOfType('save-file-settings').at(-1)).toMatchObject({
+      fileSettings: { contrastPairs: [] },
+    });
+  });
+
+  it('restores saved pairs and sends them when generating', () => {
+    render(<App />);
+    const pair = { foreground: 'Color/Primary/500', background: 'Surface/Background' };
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: { excludedPages: [], contrastPairs: [pair] },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    expect(screen.getByRole('button', { name: /Remove pair/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    expect(messagesOfType('generate')[0]).toMatchObject({ contrastPairs: [pair] });
+  });
+
+  it('says so when a saved pair points at a token that no longer exists', () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: null,
+      fileSettings: {
+        excludedPages: [],
+        contrastPairs: [{ foreground: 'Gone', background: 'Surface/Background' }],
+      },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    expect(screen.getByText('Token not found')).toBeInTheDocument();
+  });
+
+  it('changing pairs invalidates generated files', async () => {
+    openWithTokens();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fromPlugin({ type: 'generation-complete', files: [{ path: 'design.md', content: '#' }] });
+    choose('Text', 'Color/Primary/500');
+    choose('Background', 'Surface/Background');
+    fireEvent.click(screen.getByRole('button', { name: 'Add pair' }));
+    expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
   });
 });

@@ -713,3 +713,80 @@ body {
   outline: 2px solid var(--dmd-brand);
   outline-offset: 1px;
 }
+
+/* ---------- Contrast pairs ---------- */
+
+.dmd-pair-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+
+.dmd-pair-form .dmd-text-btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.dmd-field select {
+  min-width: 0;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--dmd-border);
+  background: var(--dmd-bg);
+  color: inherit;
+  font-size: 12px;
+}
+
+.dmd-field select:focus-visible {
+  outline: 2px solid var(--dmd-brand);
+  outline-offset: 1px;
+  border-color: var(--dmd-brand);
+}
+
+.dmd-pair-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: 12px;
+  border: 1px solid var(--dmd-border);
+  overflow: hidden;
+}
+
+.dmd-pair-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--dmd-bg);
+}
+
+.dmd-pair-row:not(:last-child) {
+  border-bottom: 1px solid var(--dmd-border);
+}
+
+.dmd-pair-names {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 4px;
+  font-size: 12px;
+}
+
+.dmd-pair-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.dmd-pair-on {
+  color: var(--dmd-text-secondary);
+}
+
+.dmd-pair-result {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--dmd-text-secondary);
+}

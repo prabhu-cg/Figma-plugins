@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T15:50:30.142296+00:00",
+  "generatedAt": "2026-10-04T16:00:38.477604+00:00",
   "title": "Design System: DesignMD",
   "extensions": {
     "colorMeta": {
@@ -190,6 +190,14 @@
       "description": "Selected generated file shown as scrollable code with a Copy action.",
       "html": "<div class=\"ds-prev\"><div class=\"ds-prev-head\"><span class=\"ds-prev-name\">tokens.css</span><button class=\"ds-prev-copy\">Copy</button></div><pre class=\"ds-prev-code\">:root {\n  --color-primary-500: #3366ff;\n}</pre></div>",
       "css": ".ds-prev{display:flex;flex-direction:column;gap:8px;font-family:Inter,-apple-system,sans-serif}.ds-prev-head{display:flex;align-items:center;gap:8px}.ds-prev-name{flex:1;font-size:12px;font-weight:600}.ds-prev-copy{padding:6px 12px;border-radius:8px;border:1px solid #e5e5e5;background:#fff;color:#6b6b6b;font:600 12px Inter,-apple-system,sans-serif;cursor:pointer}.ds-prev-copy:hover{color:#1a1a1a;border-color:#d8d8d8}.ds-prev-copy:focus-visible{outline:2px solid #c74504;outline-offset:2px}.ds-prev-code{margin:0;padding:10px 12px;border-radius:10px;border:1px solid #e5e5e5;background:#f7f7f7;color:#1a1a1a;font:11px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre;overflow:auto}"
+    },
+    {
+      "name": "Contrast Pair Row",
+      "kind": "custom",
+      "refersTo": "text-field",
+      "description": "A user-defined foreground/background pair with its live ratio.",
+      "html": "<ul class=\"ds-pairs\"><li class=\"ds-pair\"><span><b>Color/Primary/500</b> <span class=\"ds-on\">on</span> <b>Surface/Background</b><span class=\"ds-res\">4.68:1 · passes AA</span></span><button class=\"ds-x\" aria-label=\"Remove pair\">×</button></li></ul>",
+      "css": ".ds-pairs{margin:0;padding:0;list-style:none;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;font-family:Inter,-apple-system,sans-serif}.ds-pair{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:#fff;font-size:12px}.ds-pair b{font-weight:600}.ds-on{color:#6b6b6b}.ds-res{display:block;font-size:11px;color:#6b6b6b}.ds-x{background:none;border:none;color:inherit;font-size:15px;line-height:1;cursor:pointer}.ds-x:focus-visible{outline:2px solid #c74504;outline-offset:2px}"
     }
   ],
   "narrative": {

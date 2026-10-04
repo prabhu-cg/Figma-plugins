@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type GeneratedFile } from '@shared/messages';
-import type { DesignSystem, ExtractionScope } from '@shared/types';
+import type { ContrastPairSpec, DesignSystem, ExtractionScope } from '@shared/types';
 import { Header } from './components/Header';
 import { SummaryPanel } from './components/SummaryPanel';
 import { PageFilter } from './components/PageFilter';
 import { FilePreview } from './components/FilePreview';
 import { ScopeToggle } from './components/ScopeToggle';
+import { ContrastPairs } from './components/ContrastPairs';
 import { ExportSettings } from './components/ExportSettings';
 import { OutputSelection } from './components/OutputSelection';
 import { GenerateButton } from './components/GenerateButton';
@@ -44,6 +45,9 @@ export default function App() {
   const [outdated, setOutdated] = useState(false);
   const [scope, setScope] = useState<ExtractionScope>('file');
   const [selectionCount, setSelectionCount] = useState(0);
+  const [contrastPairs, setContrastPairs] = useState<ContrastPairSpec[]>([]);
+  // Excluded pages remembered for this file, including pages not in the current scan.
+  const savedExcludedPages = useRef<string[]>([]);
 
   // Tell the plugin the UI is listening so it can send the selection and saved settings.
   useEffect(() => {
@@ -59,13 +63,22 @@ export default function App() {
         break;
       case 'settings':
         if (message.settings) setOptions(message.settings.options);
+        savedExcludedPages.current = message.fileSettings.excludedPages;
+        setContrastPairs(message.fileSettings.contrastPairs);
         break;
       case 'progress':
         setProgress({ stage: message.stage, percent: message.percent });
         break;
       case 'extraction-complete':
         setDesignSystem(message.designSystem);
-        setExcludedPages(new Set());
+        // Restore this file's excluded pages, keeping only pages that exist in this scan.
+        setExcludedPages(
+          new Set(
+            savedExcludedPages.current.filter((name) =>
+              message.designSystem.components.some((c) => c.pageName === name),
+            ),
+          ),
+        );
         setStatus('ready');
         setProgress(null);
         if (!baseNameWasCustomized(baseName)) {
@@ -110,20 +123,52 @@ export default function App() {
     [invalidateGenerated, options],
   );
 
+  const saveFileSettings = useCallback(
+    (excluded: Set<string>, pairs: ContrastPairSpec[]) => {
+      // Keep remembered exclusions for pages that aren't part of the current scan.
+      const scanned = new Set(designSystem?.components.map((c) => c.pageName));
+      const excludedPages = [
+        ...savedExcludedPages.current.filter((name) => !scanned.has(name)),
+        ...excluded,
+      ];
+      savedExcludedPages.current = excludedPages;
+      postToPlugin({
+        type: 'save-file-settings',
+        fileSettings: { excludedPages, contrastPairs: pairs },
+      });
+    },
+    [designSystem],
+  );
+
   const handleExcludedPagesChange = useCallback(
     (next: Set<string>) => {
       setExcludedPages(next);
+      saveFileSettings(next, contrastPairs);
       invalidateGenerated();
     },
-    [invalidateGenerated],
+    [invalidateGenerated, saveFileSettings, contrastPairs],
+  );
+
+  const handleContrastPairsChange = useCallback(
+    (next: ContrastPairSpec[]) => {
+      setContrastPairs(next);
+      saveFileSettings(excludedPages, next);
+      invalidateGenerated();
+    },
+    [invalidateGenerated, saveFileSettings, excludedPages],
   );
 
   const handleGenerate = useCallback(() => {
     setError(null);
     setStatus('generating');
     setOutdated(false);
-    postToPlugin({ type: 'generate', options, excludedPages: Array.from(excludedPages) });
-  }, [options, excludedPages]);
+    postToPlugin({
+      type: 'generate',
+      options,
+      excludedPages: Array.from(excludedPages),
+      contrastPairs,
+    });
+  }, [options, excludedPages, contrastPairs]);
 
   const handleDownload = useCallback(async () => {
     if (!files) return;
@@ -180,6 +225,11 @@ export default function App() {
               components={designSystem.components}
               excludedPages={excludedPages}
               onChange={handleExcludedPagesChange}
+            />
+            <ContrastPairs
+              designSystem={designSystem}
+              pairs={contrastPairs}
+              onChange={handleContrastPairsChange}
             />
             <ExportSettings baseName={baseName} onBaseNameChange={setBaseName} />
             <OutputSelection options={options} onChange={handleOptionsChange} />
