@@ -102,7 +102,7 @@ plugin sandbox. Nothing is uploaded anywhere.
 ## Cover / icon / screenshot assets
 
 - `icon.png` — 128×128 plugin icon
-- `thumbnail.png` — 1920×960 Community cover image
+- `thumbnail.png` — 1920×960 Community cover image (headline, feature list, and the tabbed plugin UI)
 - `screenshot-1.png` — 1600×1300 gallery screenshot of the tabbed plugin UI (Summary tab, with realistic sample numbers)
 - `screenshot-2.png` — Contrast tab: user-defined pairs with live ratios and a failing pair
 - `screenshot-3.png` — Files tab: the generated file list with a `tokens.css` preview and Copy
