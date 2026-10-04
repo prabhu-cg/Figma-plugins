@@ -103,7 +103,7 @@ plugin sandbox. Nothing is uploaded anywhere.
 
 - `icon.png` — 128×128 plugin icon
 - `thumbnail.png` — 1920×960 Community cover image
-- `screenshot-1.png` — gallery screenshot of the plugin UI. **Out of date:** it predates the tabbed UI (Summary, Contrast, Export, Files); retake it before the next Community update
+- `screenshot-1.png` — 1600×1300 gallery screenshot of the tabbed plugin UI (Summary tab, with realistic sample numbers)
 
 All three were generated to match the plugin's actual UI (same colors, same component
 styling) so the listing accurately represents what using the plugin looks like.
