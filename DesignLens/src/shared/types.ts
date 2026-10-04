@@ -75,6 +75,8 @@ export interface Issue {
   /** Variable collection this issue relates to, if any — powers the Collection filter. */
   collection?: string;
   status: IssueStatus;
+  /** Disambiguates several issues from one rule on the same node (or with no node), so status tracking stays per-issue. */
+  discriminator?: string;
   meta?: Record<string, string | number | boolean | undefined>;
 }
 

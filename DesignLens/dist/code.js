@@ -39,7 +39,7 @@
       return Array.from(this.rules.values());
     }
     async runAll(context, onProgress) {
-      var _a, _b, _c;
+      var _a, _b, _c, _d;
       const issues = [];
       const all = this.getAll();
       let issueSeq = 0;
@@ -75,6 +75,7 @@
             node: finding.node,
             collection: finding.collection,
             status: "open",
+            discriminator: (_d = finding.key) != null ? _d : finding.node ? void 0 : finding.message,
             meta: finding.meta
           });
         }
@@ -108,13 +109,13 @@
     const { r, g, b } = paint.color;
     return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
   }
-  function compositeOnBackground(paints, background) {
+  function compositeOnBackground(paints, background, extraOpacity = 1) {
     var _a;
     let result = background;
     for (const paint of paints) {
       const rgb = paintToRgb(paint);
       if (!rgb) continue;
-      const alpha = (_a = paint.opacity) != null ? _a : 1;
+      const alpha = ((_a = paint.opacity) != null ? _a : 1) * extraOpacity;
       result = {
         r: rgb.r * alpha + result.r * (1 - alpha),
         g: rgb.g * alpha + result.g * (1 - alpha),
@@ -123,6 +124,17 @@
     }
     return result;
   }
+  function effectiveOpacity(node) {
+    let opacity = 1;
+    let current = node;
+    while (current && current.type !== "PAGE" && current.type !== "DOCUMENT") {
+      if ("opacity" in current && typeof current.opacity === "number") {
+        opacity *= current.opacity;
+      }
+      current = current.parent;
+    }
+    return opacity;
+  }
   var WCAG_THRESHOLDS = {
     AA: { normalText: 4.5, largeText: 3, uiComponent: 3 },
     AAA: { normalText: 7, largeText: 4.5, uiComponent: 3 }
@@ -130,33 +142,54 @@
   function isLargeText(fontSize, fontWeight) {
     return fontSize >= 24 || fontSize >= 18.66 && fontWeight >= 700;
   }
-  function findFirstSolidFill(node) {
+  function findTopSolidFill(node) {
     if (!("fills" in node)) return null;
     const fills = node.fills;
     if (fills === figma.mixed || !Array.isArray(fills)) return null;
-    for (const paint of fills) {
-      const rgb = paintToRgb(paint);
+    for (let i = fills.length - 1; i >= 0; i--) {
+      const rgb = paintToRgb(fills[i]);
+      if (rgb) return rgb;
+    }
+    return null;
+  }
+  function findTopSolidStroke(node) {
+    if (!("strokes" in node)) return null;
+    const strokes = node.strokes;
+    for (let i = strokes.length - 1; i >= 0; i--) {
+      const rgb = paintToRgb(strokes[i]);
       if (rgb) return rgb;
     }
     return null;
   }
   function findAncestorBackground(node) {
-    var _a, _b;
+    var _a;
+    const layers = [];
+    let base = null;
     let current = node.parent;
-    while (current) {
-      if ("fills" in current) {
+    while (current && !base) {
+      const hidden = "visible" in current && current.visible === false;
+      if (!hidden && "fills" in current) {
         const fills = current.fills;
         if (Array.isArray(fills)) {
-          for (const paint of fills) {
-            if (paint.type === "SOLID" && paint.visible !== false && ((_a = paint.opacity) != null ? _a : 1) >= 0.99) {
-              return (_b = paintToRgb(paint)) != null ? _b : { r: 255, g: 255, b: 255 };
-            }
+          const opacity = "opacity" in current ? current.opacity : 1;
+          const paints = [];
+          for (let k = fills.length - 1; k >= 0 && !base; k--) {
+            const paint = fills[k];
+            if (paint.visible === false) continue;
+            if (paint.type !== "SOLID") return null;
+            if (((_a = paint.opacity) != null ? _a : 1) * opacity >= 0.99) base = paintToRgb(paint);
+            else paints.unshift(paint);
           }
+          if (paints.length > 0) layers.push({ paints, opacity });
         }
       }
       current = current.parent;
     }
-    return { r: 255, g: 255, b: 255 };
+    let color = base != null ? base : { r: 255, g: 255, b: 255 };
+    for (let k = layers.length - 1; k >= 0; k--) {
+      color = compositeOnBackground(layers[k].paints, color, layers[k].opacity);
+    }
+    return color;
   }
 
   // src/plugin/rules/helpers.ts
@@ -184,15 +217,67 @@
   function componentRef(record) {
     return toNodeRef(record.node, record.info.id, record.info.name);
   }
+  var ownNodeCache = /* @__PURE__ */ new WeakMap();
+  function ownNodes(root) {
+    const cached = ownNodeCache.get(root);
+    if (cached) return cached;
+    const result = [];
+    const stack = [root];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      result.push(node);
+      if (node !== root && (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "COMPONENT_SET")) continue;
+      if ("children" in node) {
+        const children = node.children;
+        for (let i = children.length - 1; i >= 0; i--) stack.push(children[i]);
+      }
+    }
+    ownNodeCache.set(root, result);
+    return result;
+  }
+  function findOwn(root, predicate) {
+    return ownNodes(root).filter((n) => n !== root && predicate(n));
+  }
+  function isHiddenInTree(node) {
+    let current = node;
+    while (current && current.type !== "PAGE" && current.type !== "DOCUMENT") {
+      if ("visible" in current && current.visible === false) return true;
+      current = current.parent;
+    }
+    return false;
+  }
+  function hasIconAncestor(node, root) {
+    let current = node.parent;
+    while (current && current !== root) {
+      if (current.name.toLowerCase().includes("icon")) return true;
+      current = current.parent;
+    }
+    return false;
+  }
+  function paintHasVariable(paintLike) {
+    const bound = paintLike == null ? void 0 : paintLike.boundVariables;
+    return !!bound && Object.values(bound).some((v) => v !== void 0 && v !== null);
+  }
   function hasBoundVariableAt(node, field, index) {
     const bound = node.boundVariables;
-    if (!bound) return false;
-    const entry = bound[field];
-    if (entry === void 0 || entry === null) return false;
-    if (typeof index === "number" && Array.isArray(entry)) {
-      return entry[index] !== void 0 && entry[index] !== null;
+    const entry = bound == null ? void 0 : bound[field];
+    if (entry !== void 0 && entry !== null) {
+      if (typeof index === "number" && Array.isArray(entry)) {
+        if (entry[index] !== void 0 && entry[index] !== null) return true;
+      } else {
+        return true;
+      }
     }
-    return true;
+    if (typeof index === "number" && (field === "fills" || field === "strokes" || field === "effects")) {
+      const list = node[field];
+      if (Array.isArray(list) && paintHasVariable(list[index])) return true;
+    }
+    return false;
+  }
+  function hasStyleApplied(node, field) {
+    const key = field === "fills" ? "fillStyleId" : field === "strokes" ? "strokeStyleId" : "effectStyleId";
+    const id = node[key];
+    return typeof id === "symbol" || typeof id === "string" && id !== "";
   }
   function isInteractiveKind(kind) {
     return !!kind && ["button", "input", "checkbox", "radio", "switch", "select", "link", "menu-item", "tab"].includes(kind);
@@ -212,15 +297,17 @@
       const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const textNodes = variant.findAll((n) => n.type === "TEXT");
+          const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
             if (text.fontSize === figma.mixed || text.fontName === figma.mixed) continue;
-            const fg = findFirstSolidFill(text);
-            if (!fg) continue;
+            if (isHiddenInTree(text)) continue;
+            if (!findTopSolidFill(text)) continue;
             const bg = findAncestorBackground(text);
+            if (!bg) continue;
             const rendered = compositeOnBackground(
               (text.fills !== figma.mixed ? text.fills : []).filter((p) => p.type === "SOLID"),
-              bg
+              bg,
+              effectiveOpacity(text)
             );
             const ratio = contrastRatio(rendered, bg);
             const fontSize = text.fontSize;
@@ -269,7 +356,8 @@
           const strokes = variant.strokes.filter((p) => p.type === "SOLID" && p.visible !== false);
           if (strokes.length === 0) continue;
           const bg = findAncestorBackground(variant);
-          const strokeColor = compositeOnBackground(strokes, bg);
+          if (!bg) continue;
+          const strokeColor = compositeOnBackground(strokes, bg, effectiveOpacity(variant));
           const ratio = contrastRatio(strokeColor, bg);
           if (ratio < thresholds.uiComponent) {
             findings.push({
@@ -299,16 +387,29 @@
     severity: "warning",
     reference: "WCAG 2.1 SC 1.4.11 Non-text Contrast",
     evaluate(context) {
+      var _a;
       const findings = [];
       const thresholds = WCAG_THRESHOLDS[context.wcagLevel];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const icons = variant.findAll((n) => n.name.toLowerCase().includes("icon") && n.type !== "TEXT");
+          const vectorTypes = /* @__PURE__ */ new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE", "RECTANGLE", "LINE"]);
+          const iconComponent = record.info.detectedKind === "icon";
+          const icons = findOwn(
+            variant,
+            (n) => vectorTypes.has(n.type) && (iconComponent || n.name.toLowerCase().includes("icon") || hasIconAncestor(n, variant))
+          );
           for (const icon of icons) {
-            const fg = findFirstSolidFill(icon);
+            if (isHiddenInTree(icon)) continue;
+            const fg = (_a = findTopSolidFill(icon)) != null ? _a : findTopSolidStroke(icon);
             if (!fg) continue;
             const bg = findAncestorBackground(icon);
-            const ratio = contrastRatio(fg, bg);
+            if (!bg) continue;
+            const rendered = compositeOnBackground(
+              [{ type: "SOLID", color: { r: fg.r / 255, g: fg.g / 255, b: fg.b / 255 } }],
+              bg,
+              effectiveOpacity(icon)
+            );
+            const ratio = contrastRatio(rendered, bg);
             if (ratio < thresholds.uiComponent) {
               findings.push({
                 node: toNodeRef(icon, record.info.id, record.info.name),
@@ -347,7 +448,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const textNodes = variant.findAll((n) => n.type === "TEXT");
+          const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
             if (text.textStyleId !== "" && typeof text.textStyleId === "string") continue;
             if (text.textStyleId === figma.mixed) continue;
@@ -381,7 +482,7 @@
       const perText = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const textNodes = variant.findAll((n) => n.type === "TEXT");
+          const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
             if (text.fontName === figma.mixed) continue;
             const family = text.fontName.family;
@@ -452,7 +553,7 @@
       const perText = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const textNodes = variant.findAll((n) => n.type === "TEXT");
+          const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
             if (text.fontSize === figma.mixed) continue;
             const size = text.fontSize;
@@ -501,9 +602,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const frames = variant.findAll(
-            (n) => n.type === "FRAME" && n.children.length >= 2
-          );
+          const frames = findOwn(variant, (n) => n.type === "FRAME" && n.children.length >= 2);
           for (const frame of frames) {
             if (frame.layoutMode === "NONE") {
               findings.push({
@@ -535,7 +634,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const frames = variant.findAll((n) => n.type === "FRAME" && n.layoutMode !== "NONE");
+          const frames = findOwn(variant, (n) => n.type === "FRAME" && n.layoutMode !== "NONE");
           for (const frame of frames) {
             const values = [
               ["padding top", frame.paddingTop],
@@ -552,6 +651,7 @@
                   severity: "warning",
                   impact: "low",
                   effort: "low",
+                  key: label,
                   meta: { label, value }
                 });
               }
@@ -582,9 +682,9 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const nodes = [variant, ...variant.findAll(() => true)];
+          const nodes = ownNodes(variant);
           for (const node of nodes) {
-            if ("fills" in node) {
+            if ("fills" in node && !hasStyleApplied(node, "fills")) {
               const fills = node.fills;
               if (Array.isArray(fills)) {
                 fills.forEach((paint, i) => {
@@ -595,13 +695,14 @@
                       severity: "warning",
                       impact: "medium",
                       effort: "low",
+                      key: `fill-${i}`,
                       meta: { property: "fill" }
                     });
                   }
                 });
               }
             }
-            if ("strokes" in node) {
+            if ("strokes" in node && !hasStyleApplied(node, "strokes")) {
               const strokes = node.strokes;
               strokes.forEach((paint, i) => {
                 if (paint.type === "SOLID" && paint.visible !== false && !hasBoundVariableAt(node, "strokes", i)) {
@@ -611,6 +712,7 @@
                     severity: "warning",
                     impact: "medium",
                     effort: "low",
+                    key: `stroke-${i}`,
                     meta: { property: "stroke" }
                   });
                 }
@@ -638,7 +740,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const nodes = [variant, ...variant.findAll(() => true)];
+          const nodes = ownNodes(variant);
           for (const node of nodes) {
             if (!("cornerRadius" in node)) continue;
             const radius = node.cornerRadius;
@@ -671,15 +773,26 @@
     evaluate(context) {
       var _a;
       const usedIds = /* @__PURE__ */ new Set();
+      const collect = (value) => {
+        if (Array.isArray(value)) {
+          value.forEach(collect);
+        } else if (value && typeof value === "object") {
+          const entry = value;
+          if (typeof entry.id === "string") usedIds.add(entry.id);
+          if (entry.boundVariables) Object.values(entry.boundVariables).forEach(collect);
+        }
+      };
       for (const node of context.allComponentNodes) {
         const bound = node.boundVariables;
-        if (!bound) continue;
-        for (const value of Object.values(bound)) {
-          if (Array.isArray(value)) {
-            for (const entry of value) {
-              if (entry && typeof entry === "object" && "id" in entry) usedIds.add(entry.id);
-            }
-          } else if (value && typeof value === "object" && "id" in value) {
+        if (bound) Object.values(bound).forEach(collect);
+        for (const field of ["fills", "strokes", "effects"]) {
+          const list = node[field];
+          if (Array.isArray(list)) list.forEach(collect);
+        }
+      }
+      for (const variable of context.variables) {
+        for (const value of Object.values(variable.valuesByMode)) {
+          if (value && typeof value === "object" && value.type === "VARIABLE_ALIAS") {
             usedIds.add(value.id);
           }
         }
@@ -689,6 +802,7 @@
         if (!usedIds.has(variable.id)) {
           const collection = (_a = context.variableCollections.find((c) => c.id === variable.variableCollectionId)) == null ? void 0 : _a.name;
           findings.push({
+            key: `${collection != null ? collection : ""}/${variable.name}`,
             message: `Variable "${variable.name}" is not referenced by any bound property in the audited components (usage outside these components is not visible to this scan).`,
             severity: "suggestion",
             impact: "low",
@@ -734,6 +848,7 @@
                 impact: "low",
                 effort: "medium",
                 collection: collectionName,
+                key: `${vars[i].name}|${vars[j].name}`,
                 meta: { a: vars[i].name, b: vars[j].name }
               });
             }
@@ -758,9 +873,9 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const nodes = [variant, ...variant.findAll(() => true)];
+          const nodes = ownNodes(variant);
           for (const node of nodes) {
-            if (!("effects" in node)) continue;
+            if (!("effects" in node) || hasStyleApplied(node, "effects")) continue;
             const effects = node.effects;
             if (!Array.isArray(effects)) continue;
             effects.forEach((effect, i) => {
@@ -771,7 +886,8 @@
                   message: `"${node.name}" in ${record.info.name} has a hardcoded ${effect.type === "DROP_SHADOW" ? "drop" : "inner"} shadow.`,
                   severity: "suggestion",
                   impact: "low",
-                  effort: "low"
+                  effort: "low",
+                  key: `effect-${i}`
                 });
               }
             });
@@ -796,7 +912,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const nodes = [variant, ...variant.findAll(() => true)];
+          const nodes = ownNodes(variant);
           for (const node of nodes) {
             if (!("opacity" in node)) continue;
             const opacity = node.opacity;
@@ -826,22 +942,37 @@
     description: "A variable's value is an alias referencing a variable id that no longer exists in this file.",
     whyItMatters: "Broken alias chains silently fall back to an undefined or stale value, which is one of the hardest token bugs to spot visually.",
     severity: "critical",
-    evaluate(context) {
+    async evaluate(context) {
       var _a;
       const knownIds = new Set(context.variables.map((v) => v.id));
+      const resolved = /* @__PURE__ */ new Map();
+      const exists = async (id) => {
+        if (knownIds.has(id)) return true;
+        const cached = resolved.get(id);
+        if (cached !== void 0) return cached;
+        let found = false;
+        try {
+          found = await figma.variables.getVariableByIdAsync(id) !== null;
+        } catch (e) {
+          found = false;
+        }
+        resolved.set(id, found);
+        return found;
+      };
       const findings = [];
       for (const variable of context.variables) {
         const collection = (_a = context.variableCollections.find((c) => c.id === variable.variableCollectionId)) == null ? void 0 : _a.name;
         for (const [modeId, value] of Object.entries(variable.valuesByMode)) {
           if (value && typeof value === "object" && value.type === "VARIABLE_ALIAS") {
             const aliasId = value.id;
-            if (!knownIds.has(aliasId)) {
+            if (!await exists(aliasId)) {
               findings.push({
                 message: `"${variable.name}" (mode ${modeId}) aliases a variable that no longer exists.`,
                 severity: "critical",
                 impact: "high",
                 effort: "medium",
                 collection,
+                key: `${collection != null ? collection : ""}/${variable.name}/${modeId}`,
                 meta: { variableName: variable.name }
               });
             }
@@ -915,7 +1046,8 @@
               message: `"${variant.name}" duplicates the property values of "${seen.get(key)}" in ${record.info.name}.`,
               severity: "warning",
               impact: "medium",
-              effort: "medium"
+              effort: "medium",
+              key: variant.id
             });
           } else {
             seen.set(key, variant.name);
@@ -1074,41 +1206,175 @@
   };
   var stateRules = [missingStatesRule];
 
+  // src/plugin/scanner/componentTaxonomy.ts
+  var KIND_KEYWORDS = [
+    ["checkbox", ["checkbox"]],
+    ["radio", ["radio"]],
+    ["switch", ["switch", "toggle"]],
+    ["select", ["select", "dropdown", "combobox"]],
+    ["input", ["input", "textfield", "text field", "textarea", "text area"]],
+    ["button", ["button", "btn", "cta"]],
+    ["tab", ["tab"]],
+    ["accordion", ["accordion", "disclosure"]],
+    ["menu-item", ["menu item", "menuitem", "list item", "dropdown item"]],
+    ["link", ["link"]],
+    ["card", ["card"]],
+    ["badge", ["badge", "tag", "chip", "pill"]],
+    ["alert", ["alert", "banner", "toast", "notification"]],
+    ["icon", ["icon"]]
+  ];
+  function normalizeWords(name) {
+    return name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  function detectComponentKind(name) {
+    const padded = ` ${normalizeWords(name)} `;
+    for (const [kind, keywords] of KIND_KEYWORDS) {
+      if (keywords.some((k) => padded.includes(` ${k} `) || padded.includes(` ${k}s `))) return kind;
+    }
+    return "unknown";
+  }
+  var EXPECTED_STATES = {
+    button: ["default", "hover", "pressed", "focus", "disabled"],
+    input: ["default", "focus", "error", "disabled"],
+    checkbox: ["checked", "unchecked", "indeterminate", "disabled"],
+    radio: ["selected", "unselected", "disabled"],
+    switch: ["on", "off", "disabled"],
+    select: ["default", "open", "disabled"],
+    tab: ["default", "selected", "disabled"],
+    accordion: ["collapsed", "expanded"],
+    "menu-item": ["default", "hover", "selected", "disabled"],
+    link: ["default", "hover", "visited"],
+    card: [],
+    badge: [],
+    alert: [],
+    icon: [],
+    unknown: []
+  };
+  var STATE_ALIASES = {
+    focused: "focus",
+    "focus visible": "focus",
+    "focus ring": "focus",
+    hovered: "hover",
+    press: "pressed",
+    active: "pressed",
+    enabled: "default",
+    rest: "default",
+    normal: "default",
+    inactive: "disabled",
+    selected: "selected",
+    unselected: "unselected",
+    deselected: "unselected"
+  };
+  var KNOWN_STATE_VOCAB = new Set(
+    Array.from(new Set(Object.values(EXPECTED_STATES).flat())).concat([
+      "pressed",
+      "loading",
+      "expanded",
+      "collapsed",
+      "indeterminate",
+      "visited",
+      "error",
+      "success",
+      "warning"
+    ])
+  );
+  var STATE_PROPERTIES = {
+    disabled: { on: "disabled" },
+    error: { on: "error" },
+    loading: { on: "loading" },
+    focus: { on: "focus" },
+    focused: { on: "focus" },
+    hover: { on: "hover" },
+    hovered: { on: "hover" },
+    pressed: { on: "pressed" },
+    active: { on: "pressed" },
+    selected: { on: "selected", off: "unselected" },
+    checked: { on: "checked", off: "unchecked" },
+    indeterminate: { on: "indeterminate" },
+    expanded: { on: "expanded", off: "collapsed" },
+    open: { on: "open" },
+    visited: { on: "visited" },
+    on: { on: "on", off: "off" }
+  };
+  var TRUE_VALUES = /* @__PURE__ */ new Set(["true", "yes", "on"]);
+  var FALSE_VALUES = /* @__PURE__ */ new Set(["false", "no", "off"]);
+  function canonicalState(raw) {
+    var _a;
+    const value = normalizeWords(raw);
+    const canonical = (_a = STATE_ALIASES[value]) != null ? _a : value;
+    return KNOWN_STATE_VOCAB.has(canonical) ? canonical : null;
+  }
+  function variantStatesOf(properties) {
+    const found = /* @__PURE__ */ new Set();
+    for (const [prop, rawValue] of Object.entries(properties)) {
+      const value = normalizeWords(rawValue);
+      const state = canonicalState(rawValue);
+      if (state) found.add(state);
+      const meaning = STATE_PROPERTIES[normalizeWords(prop)];
+      if (meaning) {
+        if (TRUE_VALUES.has(value)) found.add(meaning.on);
+        else if (FALSE_VALUES.has(value) && meaning.off) found.add(meaning.off);
+      }
+    }
+    return Array.from(found);
+  }
+  function statesFromPropertyNames(propertyNames) {
+    const found = /* @__PURE__ */ new Set();
+    for (const name of propertyNames) {
+      const meaning = STATE_PROPERTIES[normalizeWords(name.split("#")[0])];
+      if (meaning) found.add(meaning.on);
+    }
+    return Array.from(found);
+  }
+  function detectStatesFromVariants(variantProperties, propertyNames = []) {
+    const found = new Set(statesFromPropertyNames(propertyNames));
+    for (const props of variantProperties) {
+      for (const state of variantStatesOf(props)) found.add(state);
+    }
+    return Array.from(found);
+  }
+
   // src/plugin/rules/accessibility.ts
-  var MIN_TOUCH_TARGET = 44;
+  var WCAG_AA_TARGET = 24;
+  var COMFORTABLE_TARGET = 44;
   var MIN_TEXT_SIZE = 12;
   var GENERIC_LAYER_NAMES = /* @__PURE__ */ new Set(["vector", "ellipse", "rectangle", "path", "icon", "group", "frame"]);
   var touchTargetRule = {
     id: "a11y-touch-target-size",
     category: "accessibility",
-    title: "Touch target smaller than 44x44",
-    description: "An interactive component's bounding box is smaller than the recommended minimum touch target size.",
+    title: "Touch target below recommended size",
+    description: "An interactive component's bounding box is smaller than the minimum target size for the configured WCAG level.",
     whyItMatters: "Small tap targets are hard to hit accurately for users with motor impairments and on touch devices generally \u2014 this is one of the most common mobile accessibility failures.",
     severity: "warning",
-    reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum)",
+    reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum, 24px) / SC 2.5.5 Target Size (Enhanced, 44px)",
     evaluate(context) {
       const findings = [];
+      const required = context.wcagLevel === "AAA" ? COMFORTABLE_TARGET : WCAG_AA_TARGET;
       for (const record of context.components) {
-        if (!isInteractiveKind(record.info.detectedKind)) continue;
+        if (!isInteractiveKind(record.info.detectedKind) || record.info.detectedKind === "link") continue;
         for (const variant of record.variantNodes) {
-          if (variant.width < MIN_TOUCH_TARGET || variant.height < MIN_TOUCH_TARGET) {
-            findings.push({
-              node: toNodeRef(variant, record.info.id, record.info.name),
-              message: `${variant.name} in ${record.info.name} is ${Math.round(variant.width)}x${Math.round(
-                variant.height
-              )}px, below the ${MIN_TOUCH_TARGET}x${MIN_TOUCH_TARGET}px minimum touch target.`,
-              severity: "warning",
-              impact: "high",
-              effort: "medium"
-            });
-          }
+          const smallest = Math.min(variant.width, variant.height);
+          if (smallest >= COMFORTABLE_TARGET) continue;
+          const failsRequired = smallest < required;
+          findings.push({
+            node: toNodeRef(variant, record.info.id, record.info.name),
+            message: `${variant.name} in ${record.info.name} is ${Math.round(variant.width)}x${Math.round(
+              variant.height
+            )}px, below the ${failsRequired ? required : COMFORTABLE_TARGET}x${failsRequired ? required : COMFORTABLE_TARGET}px ${failsRequired ? "WCAG minimum" : "recommended"} touch target.`,
+            severity: failsRequired ? "warning" : "suggestion",
+            impact: failsRequired ? "high" : "low",
+            effort: "medium",
+            meta: { required: failsRequired ? required : COMFORTABLE_TARGET }
+          });
         }
         if (context.isCancelled()) break;
       }
       return findings;
     },
-    recommendation() {
-      return `Increase padding/hit area to at least ${MIN_TOUCH_TARGET}x${MIN_TOUCH_TARGET}px, even if the visible control stays visually smaller.`;
+    recommendation(finding) {
+      var _a, _b;
+      const size = (_b = (_a = finding.meta) == null ? void 0 : _a.required) != null ? _b : COMFORTABLE_TARGET;
+      return `Increase padding/hit area to at least ${size}x${size}px, even if the visible control stays visually smaller.`;
     }
   };
   var minTextSizeRule = {
@@ -1122,7 +1388,7 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const textNodes = variant.findAll((n) => n.type === "TEXT");
+          const textNodes = findOwn(variant, (n) => n.type === "TEXT");
           for (const text of textNodes) {
             if (text.fontSize === figma.mixed) continue;
             const size = text.fontSize;
@@ -1187,7 +1453,10 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const hidden = variant.findAll((n) => "visible" in n && n.visible === false);
+          const hidden = findOwn(variant, (n) => {
+            var _a;
+            return "visible" in n && n.visible === false && ((_a = n.parent) == null ? void 0 : _a.type) !== "PAGE" && !(n.parent && "visible" in n.parent && n.parent.visible === false);
+          });
           for (const node of hidden) {
             findings.push({
               node: toNodeRef(node, record.info.id, record.info.name),
@@ -1219,7 +1488,7 @@
       for (const record of context.components) {
         if (record.info.type !== "COMPONENT_SET" || !record.info.detectedStates.includes("focus")) continue;
         record.info.variants.forEach((variantInfo, i) => {
-          const isFocusVariant = Object.values(variantInfo.properties).some((v) => v.toLowerCase() === "focus");
+          const isFocusVariant = variantStatesOf(variantInfo.properties).includes("focus");
           if (!isFocusVariant) return;
           const node = record.variantNodes[i];
           if (!node || !("strokes" in node)) return;
@@ -1582,8 +1851,9 @@
       const findings = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const icons = variant.findAll(
-            (n) => n.name.toLowerCase().includes("icon") && "width" in n && n.type !== "TEXT"
+          const icons = findOwn(
+            variant,
+            (n) => n.name.toLowerCase().includes("icon") && "width" in n && n.type !== "TEXT" && !hasIconAncestor(n, variant)
           );
           for (const icon of icons) {
             const w = Math.round(icon.width);
@@ -1622,7 +1892,7 @@
       const perNode = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const withStrokes = [variant, ...variant.findAll(() => true)].filter(
+          const withStrokes = ownNodes(variant).filter(
             (n) => "strokeWeight" in n && n.strokes.length > 0
           );
           for (const node of withStrokes) {
@@ -1662,7 +1932,7 @@
       const perNode = [];
       for (const record of context.components) {
         for (const variant of record.variantNodes) {
-          const withRadius = [variant, ...variant.findAll(() => true)].filter((n) => "cornerRadius" in n);
+          const withRadius = ownNodes(variant).filter((n) => "cornerRadius" in n);
           for (const node of withRadius) {
             const radius = node.cornerRadius;
             if (typeof radius !== "number" || radius <= 0) continue;
@@ -1706,69 +1976,6 @@
     ]);
   }
 
-  // src/plugin/scanner/componentTaxonomy.ts
-  var KIND_KEYWORDS = [
-    ["checkbox", ["checkbox"]],
-    ["radio", ["radio"]],
-    ["switch", ["switch", "toggle"]],
-    ["select", ["select", "dropdown", "combobox"]],
-    ["input", ["input", "textfield", "text field", "textarea", "text area"]],
-    ["button", ["button", "btn", "cta"]],
-    ["tab", ["tab"]],
-    ["accordion", ["accordion", "disclosure"]],
-    ["menu-item", ["menu item", "menuitem", "list item", "dropdown item"]],
-    ["link", ["link"]],
-    ["card", ["card"]],
-    ["badge", ["badge", "tag", "chip", "pill"]],
-    ["alert", ["alert", "banner", "toast", "notification"]],
-    ["icon", ["icon"]]
-  ];
-  function detectComponentKind(name) {
-    const lower = name.toLowerCase();
-    for (const [kind, keywords] of KIND_KEYWORDS) {
-      if (keywords.some((k) => lower.includes(k))) return kind;
-    }
-    return "unknown";
-  }
-  var EXPECTED_STATES = {
-    button: ["default", "hover", "pressed", "focus", "disabled"],
-    input: ["default", "focus", "error", "disabled"],
-    checkbox: ["checked", "unchecked", "indeterminate", "disabled"],
-    radio: ["selected", "unselected", "disabled"],
-    switch: ["on", "off", "disabled"],
-    select: ["default", "open", "disabled"],
-    tab: ["default", "selected", "disabled"],
-    accordion: ["collapsed", "expanded"],
-    "menu-item": ["default", "hover", "selected", "disabled"],
-    link: ["default", "hover", "visited"],
-    card: [],
-    badge: [],
-    alert: [],
-    icon: [],
-    unknown: []
-  };
-  var KNOWN_STATE_VOCAB = new Set(
-    Array.from(new Set(Object.values(EXPECTED_STATES).flat())).concat([
-      "active",
-      "loading",
-      "expanded",
-      "collapsed",
-      "indeterminate",
-      "visited",
-      "error",
-      "success",
-      "warning"
-    ])
-  );
-  function detectStatesFromVariants(variantPropertyValues) {
-    const found = /* @__PURE__ */ new Set();
-    for (const raw of variantPropertyValues) {
-      const value = raw.trim().toLowerCase();
-      if (KNOWN_STATE_VOCAB.has(value)) found.add(value);
-    }
-    return Array.from(found);
-  }
-
   // src/plugin/scanner/collect.ts
   var DEPRECATED_PATTERN = /deprecated|legacy|do not use|obsolete|\[old\]/i;
   function isDeprecatedMarker(text) {
@@ -1790,12 +1997,11 @@
       properties: variantPropsToDict(v.variantProperties)
     }));
     const propertyDefinitions = Object.keys((_a = set.componentPropertyDefinitions) != null ? _a : {});
-    const allPropValues = variantNodes.flatMap((v) => {
-      var _a2;
-      return Object.values((_a2 = v.variantProperties) != null ? _a2 : {});
-    });
     const kind = detectComponentKind(set.name);
-    const detectedStates = detectStatesFromVariants(allPropValues);
+    const detectedStates = detectStatesFromVariants(
+      variantNodes.map((v) => variantPropsToDict(v.variantProperties)),
+      propertyDefinitions
+    );
     const expected = (_b = EXPECTED_STATES[kind]) != null ? _b : [];
     const missingStates = expected.filter((s) => !detectedStates.includes(s));
     const description = (_c = set.description) != null ? _c : "";
@@ -1822,6 +2028,9 @@
     const kind = detectComponentKind(node.name);
     const expected = (_a = EXPECTED_STATES[kind]) != null ? _a : [];
     const description = (_b = node.description) != null ? _b : "";
+    const propertyDefinitions = Object.keys((_c = node.componentPropertyDefinitions) != null ? _c : {});
+    const detectedStates = detectStatesFromVariants([], propertyDefinitions);
+    const missingStates = expected.filter((s) => !detectedStates.includes(s));
     const info = {
       id: node.id,
       name: node.name,
@@ -1831,12 +2040,12 @@
       description,
       variantCount: 1,
       variants: [],
-      propertyDefinitions: Object.keys((_c = node.componentPropertyDefinitions) != null ? _c : {}),
+      propertyDefinitions,
       isDeprecated: isDeprecatedMarker(node.name) || isDeprecatedMarker(description),
       hasDocumentation: description.trim().length > 0,
       detectedKind: kind,
-      detectedStates: [],
-      missingStates: expected
+      detectedStates,
+      missingStates
     };
     return { node, info, variantNodes: [node] };
   }
@@ -1881,7 +2090,7 @@
         await tick();
       }
       for (const variant of components[i].variantNodes) {
-        allComponentNodes.push(variant, ...variant.findAll(() => true));
+        allComponentNodes.push(...ownNodes(variant));
       }
     }
     onProgress("Reading variables and styles", 0, 1);
@@ -2083,7 +2292,8 @@
   // src/shared/util.ts
   function issueKey(issue) {
     var _a, _b;
-    return `${issue.ruleId}::${(_b = (_a = issue.node) == null ? void 0 : _a.id) != null ? _b : "file"}`;
+    const base = `${issue.ruleId}::${(_b = (_a = issue.node) == null ? void 0 : _a.id) != null ? _b : "file"}`;
+    return issue.discriminator ? `${base}::${issue.discriminator}` : base;
   }
 
   // src/plugin/persistence.ts
@@ -2197,6 +2407,7 @@
   registerAllRules();
   figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
   var cancelled = false;
+  var scanning = false;
   var fileKey = getFileKey();
   function post(message) {
     figma.ui.postMessage(message);
@@ -2221,6 +2432,8 @@
     post({ type: "init", settings, result: lastResult, trend });
   }
   async function handleStartScan() {
+    if (scanning) return;
+    scanning = true;
     cancelled = false;
     try {
       const settings = await getSettings();
@@ -2240,6 +2453,8 @@
       } else {
         post({ type: "scan-error", message: err instanceof Error ? err.message : String(err) });
       }
+    } finally {
+      scanning = false;
     }
   }
   figma.ui.onmessage = async (message) => {

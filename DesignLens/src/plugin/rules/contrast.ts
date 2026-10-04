@@ -2,12 +2,14 @@ import type { AuditRule, RuleContext, RuleFinding } from "./types";
 import {
   compositeOnBackground,
   contrastRatio,
+  effectiveOpacity,
   findAncestorBackground,
-  findFirstSolidFill,
+  findTopSolidFill,
+  findTopSolidStroke,
   isLargeText,
   WCAG_THRESHOLDS
 } from "../color/contrast";
-import { toNodeRef } from "./helpers";
+import { findOwn, hasIconAncestor, isHiddenInTree, toNodeRef } from "./helpers";
 
 const textContrastRule: AuditRule = {
   id: "contrast-text-aa",
@@ -24,15 +26,17 @@ const textContrastRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const textNodes = variant.findAll((n) => n.type === "TEXT") as TextNode[];
+        const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
           if (text.fontSize === figma.mixed || text.fontName === figma.mixed) continue;
-          const fg = findFirstSolidFill(text);
-          if (!fg) continue;
+          if (isHiddenInTree(text)) continue;
+          if (!findTopSolidFill(text)) continue;
           const bg = findAncestorBackground(text);
+          if (!bg) continue; // gradient/image behind the text: can't be evaluated reliably
           const rendered = compositeOnBackground(
             (text.fills !== figma.mixed ? (text.fills as Paint[]) : []).filter((p) => p.type === "SOLID"),
-            bg
+            bg,
+            effectiveOpacity(text)
           );
           const ratio = contrastRatio(rendered, bg);
           const fontSize = text.fontSize as number;
@@ -84,7 +88,8 @@ const nonTextContrastRule: AuditRule = {
         const strokes = (variant.strokes as Paint[]).filter((p) => p.type === "SOLID" && p.visible !== false);
         if (strokes.length === 0) continue;
         const bg = findAncestorBackground(variant);
-        const strokeColor = compositeOnBackground(strokes, bg);
+        if (!bg) continue;
+        const strokeColor = compositeOnBackground(strokes, bg, effectiveOpacity(variant));
         const ratio = contrastRatio(strokeColor, bg);
         if (ratio < thresholds.uiComponent) {
           findings.push({
@@ -121,12 +126,25 @@ const iconContrastRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const icons = variant.findAll((n) => n.name.toLowerCase().includes("icon") && n.type !== "TEXT") as SceneNode[];
+        const vectorTypes = new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE", "RECTANGLE", "LINE"]);
+        // Evaluate the drawn shapes of each icon: vector-like layers named "icon" or sitting inside an icon-named container.
+        const iconComponent = record.info.detectedKind === "icon";
+        const icons = findOwn(
+          variant,
+          (n) => vectorTypes.has(n.type) && (iconComponent || n.name.toLowerCase().includes("icon") || hasIconAncestor(n, variant))
+        );
         for (const icon of icons) {
-          const fg = findFirstSolidFill(icon);
+          if (isHiddenInTree(icon)) continue;
+          const fg = findTopSolidFill(icon) ?? findTopSolidStroke(icon);
           if (!fg) continue;
           const bg = findAncestorBackground(icon);
-          const ratio = contrastRatio(fg, bg);
+          if (!bg) continue;
+          const rendered = compositeOnBackground(
+            [{ type: "SOLID", color: { r: fg.r / 255, g: fg.g / 255, b: fg.b / 255 } } as SolidPaint],
+            bg,
+            effectiveOpacity(icon)
+          );
+          const ratio = contrastRatio(rendered, bg);
           if (ratio < thresholds.uiComponent) {
             findings.push({
               node: toNodeRef(icon, record.info.id, record.info.name),

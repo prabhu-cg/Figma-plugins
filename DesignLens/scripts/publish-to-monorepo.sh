@@ -3,7 +3,7 @@
 # monorepo and pushes. That repo mixes several unrelated plugins on one branch, so a
 # plain `git push` from here isn't possible (it would try to overwrite everything else
 # on main with just this folder) — this script keeps a persistent clone of the monorepo
-# and copies only this project's tracked files into its DesignLens/ subfolder each run.
+# and copies this project (minus node_modules and local junk) into its DesignLens/ subfolder each run.
 #
 # Builds and includes dist/ (unlike this script's original version, which excluded it):
 # DesignLens gets loaded on machines that can't run npm via "Download ZIP" of the
@@ -11,7 +11,7 @@
 set -euo pipefail
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MONOREPO_DIR="/Users/prc/Documents/Personal/.designlens-monorepo"
+MONOREPO_DIR="${DESIGNLENS_MONOREPO_DIR:-$HOME/Documents/Personal/.designlens-monorepo}"
 COMMIT_MESSAGE="${1:-Update DesignLens}"
 
 if [ ! -d "$MONOREPO_DIR/.git" ]; then

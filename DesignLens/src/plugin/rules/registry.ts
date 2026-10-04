@@ -63,6 +63,7 @@ class RuleRegistry {
           node: finding.node,
           collection: finding.collection,
           status: "open",
+          discriminator: finding.key ?? (finding.node ? undefined : finding.message),
           meta: finding.meta
         });
       }

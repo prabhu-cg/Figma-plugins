@@ -1,5 +1,5 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
-import { toNodeRef } from "./helpers";
+import { findOwn, hasIconAncestor, ownNodes, toNodeRef } from "./helpers";
 
 const COMMON_ICON_SIZES = new Set([12, 16, 20, 24, 28, 32, 40, 48]);
 
@@ -14,9 +14,10 @@ const iconSizeConsistencyRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const icons = variant.findAll(
-          (n) => n.name.toLowerCase().includes("icon") && ("width" in n) && n.type !== "TEXT"
-        ) as SceneNode[];
+        const icons = findOwn(
+          variant,
+          (n) => n.name.toLowerCase().includes("icon") && "width" in n && n.type !== "TEXT" && !hasIconAncestor(n, variant)
+        );
         for (const icon of icons) {
           const w = Math.round(icon.width);
           const h = Math.round(icon.height);
@@ -55,9 +56,9 @@ const strokeConsistencyRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const withStrokes = [variant, ...variant.findAll(() => true)].filter(
+        const withStrokes = ownNodes(variant).filter(
           (n) => "strokeWeight" in n && (n as MinimalStrokesMixin).strokes.length > 0
-        ) as SceneNode[];
+        );
         for (const node of withStrokes) {
           const weight = (node as MinimalStrokesMixin).strokeWeight;
           if (typeof weight !== "number" || weight === 0) continue;
@@ -103,7 +104,7 @@ const cornerRadiusConsistencyRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const withRadius = [variant, ...variant.findAll(() => true)].filter((n) => "cornerRadius" in n) as SceneNode[];
+        const withRadius = ownNodes(variant).filter((n) => "cornerRadius" in n);
         for (const node of withRadius) {
           const radius = (node as unknown as CornerMixin).cornerRadius;
           if (typeof radius !== "number" || radius <= 0) continue;

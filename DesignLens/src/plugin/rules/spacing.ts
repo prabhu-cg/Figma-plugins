@@ -1,5 +1,5 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
-import { toNodeRef } from "./helpers";
+import { findOwn, toNodeRef } from "./helpers";
 
 const GRID_UNIT = 4;
 
@@ -19,9 +19,7 @@ const missingAutoLayoutRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const frames = variant.findAll(
-          (n) => n.type === "FRAME" && (n as FrameNode).children.length >= 2
-        ) as FrameNode[];
+        const frames = findOwn<FrameNode>(variant, (n) => n.type === "FRAME" && (n as FrameNode).children.length >= 2);
         for (const frame of frames) {
           if (frame.layoutMode === "NONE") {
             findings.push({
@@ -55,7 +53,7 @@ const hardcodedSpacingRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const frames = variant.findAll((n) => n.type === "FRAME" && (n as FrameNode).layoutMode !== "NONE") as FrameNode[];
+        const frames = findOwn<FrameNode>(variant, (n) => n.type === "FRAME" && (n as FrameNode).layoutMode !== "NONE");
         for (const frame of frames) {
           const values: Array<[string, number]> = [
             ["padding top", frame.paddingTop],
@@ -72,6 +70,7 @@ const hardcodedSpacingRule: AuditRule = {
                 severity: "warning",
                 impact: "low",
                 effort: "low",
+                key: label,
                 meta: { label, value }
               });
             }

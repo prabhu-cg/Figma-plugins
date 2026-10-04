@@ -35,6 +35,8 @@ export interface RuleFinding {
   effort?: "high" | "medium" | "low";
   /** Variable collection this finding relates to, if any — powers the Collection filter. */
   collection?: string;
+  /** Distinguishes this finding from others by the same rule on the same node. Defaults to the message for node-less findings. */
+  key?: string;
   meta?: Record<string, string | number | boolean | undefined>;
 }
 

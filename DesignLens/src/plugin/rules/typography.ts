@@ -1,5 +1,5 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
-import { toNodeRef } from "./helpers";
+import { findOwn, toNodeRef } from "./helpers";
 
 const hardcodedTypeRule: AuditRule = {
   id: "typography-hardcoded-style",
@@ -14,7 +14,7 @@ const hardcodedTypeRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const textNodes = variant.findAll((n) => n.type === "TEXT") as TextNode[];
+        const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
           if (text.textStyleId !== "" && typeof text.textStyleId === "string") continue;
           if (text.textStyleId === figma.mixed) continue;
@@ -50,7 +50,7 @@ const fontFamilyConsistencyRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const textNodes = variant.findAll((n) => n.type === "TEXT") as TextNode[];
+        const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
           if (text.fontName === figma.mixed) continue;
           const family = (text.fontName as FontName).family;
@@ -129,7 +129,7 @@ const sizeScaleRule: AuditRule = {
 
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const textNodes = variant.findAll((n) => n.type === "TEXT") as TextNode[];
+        const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
           if (text.fontSize === figma.mixed) continue;
           const size = text.fontSize as number;

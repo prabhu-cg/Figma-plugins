@@ -1,5 +1,6 @@
 import type { ComponentInfo, VariantInfo } from "@shared/types";
 import type { ComponentRecord } from "../rules/types";
+import { ownNodes } from "../rules/helpers";
 import { detectComponentKind, detectStatesFromVariants, EXPECTED_STATES } from "./componentTaxonomy";
 
 export interface CollectResult {
@@ -39,9 +40,11 @@ function buildComponentSetRecord(set: ComponentSetNode, page: PageNode): Compone
     properties: variantPropsToDict(v.variantProperties)
   }));
   const propertyDefinitions = Object.keys(set.componentPropertyDefinitions ?? {});
-  const allPropValues = variantNodes.flatMap((v) => Object.values(v.variantProperties ?? {}));
   const kind = detectComponentKind(set.name);
-  const detectedStates = detectStatesFromVariants(allPropValues);
+  const detectedStates = detectStatesFromVariants(
+    variantNodes.map((v) => variantPropsToDict(v.variantProperties)),
+    propertyDefinitions
+  );
   const expected = EXPECTED_STATES[kind] ?? [];
   const missingStates = expected.filter((s) => !detectedStates.includes(s));
   const description = set.description ?? "";
@@ -70,6 +73,9 @@ function buildStandaloneComponentRecord(node: ComponentNode, page: PageNode): Co
   const kind = detectComponentKind(node.name);
   const expected = EXPECTED_STATES[kind] ?? [];
   const description = node.description ?? "";
+  const propertyDefinitions = Object.keys(node.componentPropertyDefinitions ?? {});
+  const detectedStates = detectStatesFromVariants([], propertyDefinitions);
+  const missingStates = expected.filter((s) => !detectedStates.includes(s));
 
   const info: ComponentInfo = {
     id: node.id,
@@ -80,12 +86,12 @@ function buildStandaloneComponentRecord(node: ComponentNode, page: PageNode): Co
     description,
     variantCount: 1,
     variants: [],
-    propertyDefinitions: Object.keys(node.componentPropertyDefinitions ?? {}),
+    propertyDefinitions,
     isDeprecated: isDeprecatedMarker(node.name) || isDeprecatedMarker(description),
     hasDocumentation: description.trim().length > 0,
     detectedKind: kind,
-    detectedStates: [],
-    missingStates: expected
+    detectedStates,
+    missingStates
   };
 
   return { node, info, variantNodes: [node] };
@@ -139,7 +145,7 @@ export async function collectDocument(
       await tick();
     }
     for (const variant of components[i].variantNodes) {
-      allComponentNodes.push(variant, ...variant.findAll(() => true));
+      allComponentNodes.push(...ownNodes(variant));
     }
   }
 

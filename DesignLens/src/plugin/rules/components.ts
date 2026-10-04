@@ -58,7 +58,8 @@ const duplicateVariantRule: AuditRule = {
             message: `"${variant.name}" duplicates the property values of "${seen.get(key)}" in ${record.info.name}.`,
             severity: "warning",
             impact: "medium",
-            effort: "medium"
+            effort: "medium",
+            key: variant.id
           });
         } else {
           seen.set(key, variant.name);

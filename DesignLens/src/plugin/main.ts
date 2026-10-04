@@ -21,6 +21,7 @@ registerAllRules();
 figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
 
 let cancelled = false;
+let scanning = false;
 const fileKey = getFileKey();
 
 function post(message: PluginToUIMessage): void {
@@ -49,6 +50,9 @@ async function handleInit(): Promise<void> {
 }
 
 async function handleStartScan(): Promise<void> {
+  // A second start-scan while one is running would reset the shared cancel flag and run two scans at once.
+  if (scanning) return;
+  scanning = true;
   cancelled = false;
   try {
     const settings = await getSettings();
@@ -71,6 +75,8 @@ async function handleStartScan(): Promise<void> {
     } else {
       post({ type: "scan-error", message: err instanceof Error ? err.message : String(err) });
     }
+  } finally {
+    scanning = false;
   }
 }
 

@@ -1,5 +1,5 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
-import { hasBoundVariableAt, toNodeRef } from "./helpers";
+import { hasBoundVariableAt, hasStyleApplied, ownNodes, toNodeRef } from "./helpers";
 
 const hardcodedColorRule: AuditRule = {
   id: "tokens-hardcoded-color",
@@ -14,9 +14,9 @@ const hardcodedColorRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const nodes = [variant, ...variant.findAll(() => true)] as SceneNode[];
+        const nodes = ownNodes(variant);
         for (const node of nodes) {
-          if ("fills" in node) {
+          if ("fills" in node && !hasStyleApplied(node, "fills")) {
             const fills = (node as MinimalFillsMixin).fills;
             if (Array.isArray(fills)) {
               fills.forEach((paint, i) => {
@@ -27,13 +27,14 @@ const hardcodedColorRule: AuditRule = {
                     severity: "warning",
                     impact: "medium",
                     effort: "low",
+                    key: `fill-${i}`,
                     meta: { property: "fill" }
                   });
                 }
               });
             }
           }
-          if ("strokes" in node) {
+          if ("strokes" in node && !hasStyleApplied(node, "strokes")) {
             const strokes = (node as MinimalStrokesMixin).strokes;
             strokes.forEach((paint, i) => {
               if (paint.type === "SOLID" && paint.visible !== false && !hasBoundVariableAt(node, "strokes", i)) {
@@ -43,6 +44,7 @@ const hardcodedColorRule: AuditRule = {
                   severity: "warning",
                   impact: "medium",
                   effort: "low",
+                  key: `stroke-${i}`,
                   meta: { property: "stroke" }
                 });
               }
@@ -70,7 +72,7 @@ const hardcodedRadiusRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const nodes = [variant, ...variant.findAll(() => true)] as SceneNode[];
+        const nodes = ownNodes(variant);
         for (const node of nodes) {
           if (!("cornerRadius" in node)) continue;
           const radius = (node as unknown as CornerMixin).cornerRadius;
@@ -104,15 +106,27 @@ const unusedVariableRule: AuditRule = {
   severity: "suggestion",
   evaluate(context: RuleContext): RuleFinding[] {
     const usedIds = new Set<string>();
+    const collect = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        value.forEach(collect);
+      } else if (value && typeof value === "object") {
+        const entry = value as { id?: unknown; boundVariables?: Record<string, unknown> };
+        if (typeof entry.id === "string") usedIds.add(entry.id);
+        if (entry.boundVariables) Object.values(entry.boundVariables).forEach(collect);
+      }
+    };
     for (const node of context.allComponentNodes) {
       const bound = (node as { boundVariables?: Record<string, unknown> }).boundVariables;
-      if (!bound) continue;
-      for (const value of Object.values(bound)) {
-        if (Array.isArray(value)) {
-          for (const entry of value) {
-            if (entry && typeof entry === "object" && "id" in entry) usedIds.add((entry as VariableAlias).id);
-          }
-        } else if (value && typeof value === "object" && "id" in value) {
+      if (bound) Object.values(bound).forEach(collect);
+      for (const field of ["fills", "strokes", "effects"] as const) {
+        const list = (node as unknown as Record<string, unknown>)[field];
+        if (Array.isArray(list)) list.forEach(collect);
+      }
+    }
+    // A variable that another variable aliases is referenced, even if no layer binds it directly.
+    for (const variable of context.variables) {
+      for (const value of Object.values(variable.valuesByMode)) {
+        if (value && typeof value === "object" && (value as { type?: string }).type === "VARIABLE_ALIAS") {
           usedIds.add((value as VariableAlias).id);
         }
       }
@@ -123,6 +137,7 @@ const unusedVariableRule: AuditRule = {
       if (!usedIds.has(variable.id)) {
         const collection = context.variableCollections.find((c) => c.id === variable.variableCollectionId)?.name;
         findings.push({
+          key: `${collection ?? ""}/${variable.name}`,
           message: `Variable "${variable.name}" is not referenced by any bound property in the audited components (usage outside these components is not visible to this scan).`,
           severity: "suggestion",
           impact: "low",
@@ -170,6 +185,7 @@ const duplicateVariableRule: AuditRule = {
               impact: "low",
               effort: "medium",
               collection: collectionName,
+              key: `${vars[i].name}|${vars[j].name}`,
               meta: { a: vars[i].name, b: vars[j].name }
             });
           }
@@ -194,9 +210,9 @@ const hardcodedShadowRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const nodes = [variant, ...variant.findAll(() => true)] as SceneNode[];
+        const nodes = ownNodes(variant);
         for (const node of nodes) {
-          if (!("effects" in node)) continue;
+          if (!("effects" in node) || hasStyleApplied(node, "effects")) continue;
           const effects = (node as BlendMixin).effects;
           if (!Array.isArray(effects)) continue;
           effects.forEach((effect, i) => {
@@ -207,7 +223,8 @@ const hardcodedShadowRule: AuditRule = {
                 message: `"${node.name}" in ${record.info.name} has a hardcoded ${effect.type === "DROP_SHADOW" ? "drop" : "inner"} shadow.`,
                 severity: "suggestion",
                 impact: "low",
-                effort: "low"
+                effort: "low",
+                key: `effect-${i}`
               });
             }
           });
@@ -233,7 +250,7 @@ const hardcodedOpacityRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const nodes = [variant, ...variant.findAll(() => true)] as SceneNode[];
+        const nodes = ownNodes(variant);
         for (const node of nodes) {
           if (!("opacity" in node)) continue;
           const opacity = (node as BlendMixin).opacity;
@@ -264,8 +281,24 @@ const brokenAliasRule: AuditRule = {
   description: "A variable's value is an alias referencing a variable id that no longer exists in this file.",
   whyItMatters: "Broken alias chains silently fall back to an undefined or stale value, which is one of the hardest token bugs to spot visually.",
   severity: "critical",
-  evaluate(context: RuleContext): RuleFinding[] {
+  async evaluate(context: RuleContext): Promise<RuleFinding[]> {
     const knownIds = new Set(context.variables.map((v) => v.id));
+    // Aliases to variables from an enabled library aren't in the local list, so confirm with
+    // Figma before calling them broken. Resolved lookups are cached per id.
+    const resolved = new Map<string, boolean>();
+    const exists = async (id: string): Promise<boolean> => {
+      if (knownIds.has(id)) return true;
+      const cached = resolved.get(id);
+      if (cached !== undefined) return cached;
+      let found = false;
+      try {
+        found = (await figma.variables.getVariableByIdAsync(id)) !== null;
+      } catch {
+        found = false;
+      }
+      resolved.set(id, found);
+      return found;
+    };
     const findings: RuleFinding[] = [];
 
     for (const variable of context.variables) {
@@ -273,13 +306,14 @@ const brokenAliasRule: AuditRule = {
       for (const [modeId, value] of Object.entries(variable.valuesByMode)) {
         if (value && typeof value === "object" && (value as { type?: string }).type === "VARIABLE_ALIAS") {
           const aliasId = (value as VariableAlias).id;
-          if (!knownIds.has(aliasId)) {
+          if (!(await exists(aliasId))) {
             findings.push({
               message: `"${variable.name}" (mode ${modeId}) aliases a variable that no longer exists.`,
               severity: "critical",
               impact: "high",
               effort: "medium",
               collection,
+              key: `${collection ?? ""}/${variable.name}/${modeId}`,
               meta: { variableName: variable.name }
             });
           }

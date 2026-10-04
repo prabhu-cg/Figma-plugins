@@ -1,42 +1,53 @@
 import type { AuditRule, RuleContext, RuleFinding } from "./types";
-import { componentRef, isInteractiveKind, toNodeRef } from "./helpers";
+import { componentRef, findOwn, isInteractiveKind, toNodeRef } from "./helpers";
+import { variantStatesOf } from "../scanner/componentTaxonomy";
 
-const MIN_TOUCH_TARGET = 44;
+// WCAG 2.2 SC 2.5.8 (AA) requires 24x24; 44x44 is SC 2.5.5 (AAA) and the iOS/Android guideline.
+const WCAG_AA_TARGET = 24;
+const COMFORTABLE_TARGET = 44;
 const MIN_TEXT_SIZE = 12;
 const GENERIC_LAYER_NAMES = new Set(["vector", "ellipse", "rectangle", "path", "icon", "group", "frame"]);
 
 const touchTargetRule: AuditRule = {
   id: "a11y-touch-target-size",
   category: "accessibility",
-  title: "Touch target smaller than 44x44",
-  description: "An interactive component's bounding box is smaller than the recommended minimum touch target size.",
+  title: "Touch target below recommended size",
+  description: "An interactive component's bounding box is smaller than the minimum target size for the configured WCAG level.",
   whyItMatters:
     "Small tap targets are hard to hit accurately for users with motor impairments and on touch devices generally — this is one of the most common mobile accessibility failures.",
   severity: "warning",
-  reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum)",
+  reference: "WCAG 2.2 SC 2.5.8 Target Size (Minimum, 24px) / SC 2.5.5 Target Size (Enhanced, 44px)",
   evaluate(context: RuleContext): RuleFinding[] {
     const findings: RuleFinding[] = [];
+    // AA requires 24px; AAA (and platform guidance) 44px. At AA, 24–44px is surfaced as a suggestion.
+    const required = context.wcagLevel === "AAA" ? COMFORTABLE_TARGET : WCAG_AA_TARGET;
     for (const record of context.components) {
-      if (!isInteractiveKind(record.info.detectedKind)) continue;
+      // Inline links are exempt from the target-size criterion.
+      if (!isInteractiveKind(record.info.detectedKind) || record.info.detectedKind === "link") continue;
       for (const variant of record.variantNodes) {
-        if (variant.width < MIN_TOUCH_TARGET || variant.height < MIN_TOUCH_TARGET) {
-          findings.push({
-            node: toNodeRef(variant, record.info.id, record.info.name),
-            message: `${variant.name} in ${record.info.name} is ${Math.round(variant.width)}x${Math.round(
-              variant.height
-            )}px, below the ${MIN_TOUCH_TARGET}x${MIN_TOUCH_TARGET}px minimum touch target.`,
-            severity: "warning",
-            impact: "high",
-            effort: "medium"
-          });
-        }
+        const smallest = Math.min(variant.width, variant.height);
+        if (smallest >= COMFORTABLE_TARGET) continue;
+        const failsRequired = smallest < required;
+        findings.push({
+          node: toNodeRef(variant, record.info.id, record.info.name),
+          message: `${variant.name} in ${record.info.name} is ${Math.round(variant.width)}x${Math.round(
+            variant.height
+          )}px, below the ${failsRequired ? required : COMFORTABLE_TARGET}x${failsRequired ? required : COMFORTABLE_TARGET}px ${
+            failsRequired ? "WCAG minimum" : "recommended"
+          } touch target.`,
+          severity: failsRequired ? "warning" : "suggestion",
+          impact: failsRequired ? "high" : "low",
+          effort: "medium",
+          meta: { required: failsRequired ? required : COMFORTABLE_TARGET }
+        });
       }
       if (context.isCancelled()) break;
     }
     return findings;
   },
-  recommendation() {
-    return `Increase padding/hit area to at least ${MIN_TOUCH_TARGET}x${MIN_TOUCH_TARGET}px, even if the visible control stays visually smaller.`;
+  recommendation(finding) {
+    const size = finding.meta?.required ?? COMFORTABLE_TARGET;
+    return `Increase padding/hit area to at least ${size}x${size}px, even if the visible control stays visually smaller.`;
   }
 };
 
@@ -51,7 +62,7 @@ const minTextSizeRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const textNodes = variant.findAll((n) => n.type === "TEXT") as TextNode[];
+        const textNodes = findOwn<TextNode>(variant, (n) => n.type === "TEXT");
         for (const text of textNodes) {
           if (text.fontSize === figma.mixed) continue;
           const size = text.fontSize as number;
@@ -120,7 +131,8 @@ const hiddenLayerRule: AuditRule = {
     const findings: RuleFinding[] = [];
     for (const record of context.components) {
       for (const variant of record.variantNodes) {
-        const hidden = variant.findAll((n) => "visible" in n && n.visible === false);
+        // Only the topmost hidden layer — its hidden children are part of the same leftover.
+        const hidden = findOwn(variant, (n) => "visible" in n && n.visible === false && n.parent?.type !== "PAGE" && !(n.parent && "visible" in n.parent && (n.parent as SceneNode).visible === false));
         for (const node of hidden) {
           findings.push({
             node: toNodeRef(node, record.info.id, record.info.name),
@@ -155,7 +167,7 @@ const focusVisibilityRule: AuditRule = {
       if (record.info.type !== "COMPONENT_SET" || !record.info.detectedStates.includes("focus")) continue;
 
       record.info.variants.forEach((variantInfo, i) => {
-        const isFocusVariant = Object.values(variantInfo.properties).some((v) => v.toLowerCase() === "focus");
+        const isFocusVariant = variantStatesOf(variantInfo.properties).includes("focus");
         if (!isFocusVariant) return;
         const node = record.variantNodes[i];
         if (!node || !("strokes" in node)) return;
