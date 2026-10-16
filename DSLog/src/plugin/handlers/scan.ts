@@ -5,7 +5,7 @@ import { diffSnapshots } from "@plugin/diff";
 import { postToUi } from "@plugin/utils/postMessage";
 import { getLatestChangeSetForBaseline, pruneStaleChangeSets } from "@shared/utils/changeSets";
 import { carryOverReviews } from "@shared/utils/carryOverReviews";
-import { findCurrentBaseline, persist, session } from "./session";
+import { findCurrentBaseline, persist, rejectUnreadableBaseline, session } from "./session";
 import { captureSnapshot, resolveComponentIds } from "./scanSupport";
 import type { Msg } from "./types";
 
@@ -56,6 +56,7 @@ export async function handleScan(message: Msg<"scan">): Promise<void> {
     postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
     return;
   }
+  if (rejectUnreadableBaseline(baseline)) return;
 
   const { snapshot, scanSummary } = await captureSnapshot(
     await resolveComponentIds(baseline),

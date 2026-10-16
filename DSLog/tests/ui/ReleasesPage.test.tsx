@@ -204,6 +204,25 @@ describe("ReleasesPage", () => {
       expect(await screen.findByText(/Could not copy/)).toBeTruthy();
     });
 
+    it("falls back to execCommand when the async clipboard API is denied", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await fillAndOpenConfirm(user);
+      await user.click(screen.getByRole("button", { name: "Create v2.0.0" }));
+      vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(new Error("denied"));
+      const exec = vi.fn(() => true);
+      Object.defineProperty(document, "execCommand", { value: exec, configurable: true, writable: true });
+
+      try {
+        await user.click(screen.getByRole("button", { name: /Copy changelog/ }));
+        expect(await screen.findByText("Copied to clipboard")).toBeTruthy();
+        expect(exec).toHaveBeenCalledWith("copy");
+        expect(document.querySelector("textarea[readonly]")).toBeNull();
+      } finally {
+        delete (document as { execCommand?: unknown }).execCommand;
+      }
+    });
+
     it("View changelog opens it on the Past releases tab", async () => {
       const user = userEvent.setup();
       renderPage();

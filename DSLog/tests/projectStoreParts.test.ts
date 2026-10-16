@@ -322,3 +322,26 @@ describe("save log", () => {
     expect(last(stats).partsChecked).toBeGreaterThan(0);
   });
 });
+
+describe("a baseline snapshot that cannot be read", () => {
+  it("is flagged, kept as stored, and never overwritten by the empty stand-in", async () => {
+    const { hasUnreadableSnapshot } = await import("@plugin/storage");
+    await saveProject(makeProject());
+    // Lose one chunk of b1's snapshot, as a damaged or half-synced file might.
+    const chunkKey = fig.root.getPluginDataKeys().find((k: string) => k.startsWith("dslog:snap:b1:g") && k.includes(":chunk:0"))!;
+    const indexBefore = fig.root.getPluginData("dslog:snap:b1:index");
+    fig.root.setPluginData(chunkKey, "");
+
+    const loaded = await loadProject();
+    expect(hasUnreadableSnapshot("b1")).toBe(true);
+    expect(hasUnreadableSnapshot("b2")).toBe(false);
+    expect(loaded.baselines.find((b) => b.id === "b1")!.snapshot.components).toHaveLength(0);
+
+    writes.length = 0;
+    await saveProject(loaded);
+    expect(writes.some((k) => k.startsWith("dslog:snap:b1"))).toBe(false);
+    expect(fig.root.getPluginData("dslog:snap:b1:index")).toBe(indexBefore);
+    // The readable baseline is untouched by any of this.
+    expect((await loadProject()).baselines.find((b) => b.id === "b2")!.snapshot.components).toHaveLength(300);
+  });
+});

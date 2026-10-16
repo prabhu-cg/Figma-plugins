@@ -1,5 +1,6 @@
 import { useMemo, useRef } from "react";
 import { useProjectState } from "@ui/state/ProjectContext";
+import { useShortcutHints } from "@ui/state/useShortcutHints";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
 import { RenameSuggestionBanner } from "@ui/components/RenameSuggestionBanner";
 import { TrackIcon } from "@ui/components/Icons";
@@ -25,6 +26,7 @@ export function ChangesPage({
 
   const view = useChangesView(changeSet, focusChangeId, onFocusConsumed);
   const scrollRoot = useRef<HTMLDivElement>(null);
+  const [hintsShown, toggleHints] = useShortcutHints();
 
   // One pass instead of four, and only when the change set itself changes (not on every selection or keystroke).
   const counts = useMemo(() => {
@@ -63,7 +65,11 @@ export function ChangesPage({
   const reviewedCount = counts.reviewed;
 
   return (
-    <div className="view" style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div
+      className="view"
+      data-shortcuts={hintsShown ? "shown" : "hidden"}
+      style={{ display: "flex", flexDirection: "column", overflow: "hidden" }}
+    >
       <div style={{ flexShrink: 0, paddingBottom: 12, marginBottom: 4, borderBottom: "1px solid var(--color-border)" }}>
         <div className="view-header" style={{ marginBottom: 16 }}>
           <div>
@@ -73,6 +79,14 @@ export function ChangesPage({
               {unreviewedCount} unreviewed · {reviewedCount} reviewed
             </div>
           </div>
+          <button
+            className="btn btn-ghost btn-sm"
+            aria-pressed={hintsShown}
+            title={hintsShown ? "Hide keyboard shortcut hints" : "Show keyboard shortcut hints"}
+            onClick={toggleHints}
+          >
+            Shortcuts: {hintsShown ? "on" : "off"}
+          </button>
         </div>
 
         <ChangesFilterBar view={view} />
@@ -94,7 +108,8 @@ export function ChangesPage({
         )}
       </div>
 
-      <div ref={scrollRoot} style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingTop: 12 }}>
+      <div ref={scrollRoot} style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
+        <div style={{ height: 12 }} aria-hidden />
         <RenameSuggestionBanner changeSetId={changeSet.id} changes={changeSet.changes} />
 
         <div className="sr-only" role="status" aria-live="polite">

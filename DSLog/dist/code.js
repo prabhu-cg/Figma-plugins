@@ -200,6 +200,9 @@
   function writeChunkedSerialized(store, prefix, serialized, chunkSizeBytes) {
     return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
   }
+  async function deleteQuietly(store, keys) {
+    await Promise.all(keys.map((k) => Promise.resolve().then(() => store.delete(k)).then(void 0, () => void 0)));
+  }
   async function writeSerialized(store, prefix, serialized, chunkSizeBytes) {
     const bytes = utf8Encode(serialized);
     const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
@@ -214,14 +217,14 @@
       committedIndex = JSON.stringify(index);
       await store.set(`${prefix}:index`, committedIndex);
     } catch (error) {
-      await Promise.allSettled(newKeys.map((k) => store.delete(k)));
+      await deleteQuietly(store, newKeys);
       throw error;
     }
     try {
       const live = new Set(newKeys);
       const pattern = chunkKeyPattern(prefix);
       const stale = (await store.keys()).filter((k) => pattern.test(k) && !live.has(k));
-      await Promise.allSettled(stale.map((k) => store.delete(k)));
+      await deleteQuietly(store, stale);
     } catch {
     }
     return committedIndex;
@@ -281,6 +284,10 @@
     const v = value;
     return typeof v.snapshots === "object" && v.snapshots !== null && Array.isArray(v.changeSets);
   }
+  const unreadableSnapshots = /* @__PURE__ */ new Set();
+  function hasUnreadableSnapshot(baselineId) {
+    return unreadableSnapshots.has(baselineId);
+  }
   const EMPTY_SNAPSHOT = { components: [], tokens: [], collections: [] };
   const records = /* @__PURE__ */ new WeakMap();
   function recordsFor(store) {
@@ -327,16 +334,23 @@
       return isLegacyHeavy(legacy) ? legacy : { snapshots: {}, changeSets: [] };
     }
     const snapshots = {};
+    unreadableSnapshots.clear();
     for (const id of manifest.snapshots) {
       const prefix = snapshotPrefix(id);
       const raw = await readChunkedRaw(pluginDataAdapter, prefix);
-      if (raw === void 0) continue;
+      if (raw === void 0) {
+        unreadableSnapshots.add(id);
+        console.warn(`[DSLog] snapshot for baseline ${id} could not be read; it will not be overwritten or compared.`);
+        continue;
+      }
       try {
         const snapshot = JSON.parse(raw);
         snapshots[id] = snapshot;
         const index = await pluginDataAdapter.get(`${prefix}:index`);
         if (index !== void 0) map.set(prefix, { index, source: snapshot });
       } catch {
+        unreadableSnapshots.add(id);
+        console.warn(`[DSLog] snapshot for baseline ${id} is unparseable; it will not be overwritten or compared.`);
       }
     }
     const changeSets = [];
@@ -408,6 +422,7 @@
     const started = Date.now();
     const stats = { partsWritten: 0, partsChecked: 0, bytesWritten: 0, ms: 0 };
     for (const baseline of project.baselines) {
+      if (unreadableSnapshots.has(baseline.id)) continue;
       await savePart(pluginDataAdapter, snapshotPrefix(baseline.id), STORAGE_CHUNK_SIZE_PLUGIN_DATA, { source: baseline.snapshot }, stats);
     }
     for (const changeSet of project.changeSets) {
@@ -456,7 +471,10 @@
     };
     await savePart(clientStorageAdapter, META_PREFIX, STORAGE_CHUNK_SIZE_CLIENT, { serialize: () => JSON.stringify(meta) }, stats);
     stats.ms = Date.now() - started;
-    saveLogger?.(stats);
+    try {
+      saveLogger?.(stats);
+    } catch {
+    }
   }
   function postToUi(message) {
     figma.ui.postMessage(message);
@@ -505,9 +523,15 @@
     }
     requested++;
     if (!running) {
-      running = drain().finally(() => {
-        running = void 0;
-      });
+      running = drain().then(
+        () => {
+          running = void 0;
+        },
+        (error) => {
+          running = void 0;
+          throw error;
+        }
+      );
     }
     return running;
   }
@@ -540,6 +564,14 @@
   function findCurrentBaseline() {
     const { project } = session;
     return project.baselines.find((b) => b.id === project.currentBaselineId);
+  }
+  function rejectUnreadableBaseline(baseline) {
+    if (!hasUnreadableSnapshot(baseline.id)) return false;
+    postToUi({
+      type: "error",
+      message: `The saved snapshot for baseline v${baseline.version} couldn't be read, so DSLog can't compare against it. Your stored data was not changed. Create a new baseline to continue.`
+    });
+    return true;
   }
   async function handleGetState() {
     postToUi({ type: "state", project: session.project });
@@ -2105,6 +2137,7 @@
       postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
       return;
     }
+    if (rejectUnreadableBaseline(baseline)) return;
     const { snapshot, scanSummary } = await captureSnapshot(
       await resolveComponentIds(baseline),
       baseline.tracking.tokens.includedCollectionIds,
@@ -2225,6 +2258,7 @@
       postToUi({ type: "error", message: "No baseline exists yet. Create a baseline first." });
       return;
     }
+    if (rejectUnreadableBaseline(baseline)) return;
     const snapshot = session.latestScannedSnapshot ?? (await captureSnapshot(
       await resolveComponentIds(baseline),
       baseline.tracking.tokens.includedCollectionIds,
@@ -2588,12 +2622,13 @@
   figma.showUI(__html__, { width: 1180, height: 760, themeColors: true });
   setSaveLogger((stats) => {
     if (stats.partsWritten === 0) return;
-    console.debug(
+    console.log(
       `[DSLog] saved ${stats.partsWritten} of ${stats.partsChecked} parts (${Math.round(stats.bytesWritten / 1024)} KB) in ${stats.ms} ms`
     );
   });
   figma.ui.onmessage = (message) => {
     handleMessage(message).catch((error) => {
+      console.error(`[DSLog] "${message.type}" failed:`, error instanceof Error && error.stack ? error.stack : error);
       postToUi({
         type: "error",
         message: error instanceof Error ? error.message : "Unexpected error in DSLog plugin."

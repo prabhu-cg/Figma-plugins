@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { loadMainWithFakeFigma } from "./helpers/fakeFigma";
 import type { PluginToUiMessage } from "@shared/types/messages";
 
@@ -17,6 +17,23 @@ function stateOf(messages: PluginToUiMessage[]) {
 
 // The fake UI receives the live project object, so deep-copy when comparing before/after.
 const frozen = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/** Starts the plugin again against the same fake file, as closing and reopening it in Figma does. */
+async function reloadMainOnSameFigma() {
+  const fig = (globalThis as never as { figma: { ui: { onmessage: (m: unknown) => Promise<void>; postMessage: (m: unknown) => void } } }).figma;
+  const received: PluginToUiMessage[] = [];
+  fig.ui.postMessage = (msg) => received.push(msg as PluginToUiMessage);
+  vi.resetModules();
+  await import("@plugin/main");
+  (await import("@plugin/handlers/session")).setPersistDebounce(0);
+  const send = async (message: unknown) => {
+    received.length = 0;
+    await fig.ui.onmessage(message);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return received;
+  };
+  return { send };
+}
 
 async function createBaseline(send: Harness["send"], version = "1.0.0") {
   const discovered = await send({ type: "discover-components", scope: "document", pageIds: [] });
@@ -348,6 +365,68 @@ describe("main.ts message handling", () => {
       fig.root.setPluginData = originalSet;
 
       expect(stateOf(await send({ type: "get-state" })).changeSets).toHaveLength(before.changeSets.length);
+    });
+  });
+  describe("unreadable baseline snapshot", () => {
+    it("scan and create-release refuse with a clear message instead of reporting everything as Added", async () => {
+      const first = await loadMainWithFakeFigma();
+      const baseline = await createBaseline(first.send);
+      // Damage the stored snapshot, then start the plugin again against the same file.
+      const fig = (globalThis as never as { figma: { root: { getPluginDataKeys(): string[]; setPluginData(k: string, v: string): void } } }).figma;
+      const chunk = fig.root.getPluginDataKeys().find((k) => k.startsWith(`dslog:snap:${baseline.id}:g`) && k.includes(":chunk:0"));
+      expect(chunk).toBeDefined();
+      fig.root.setPluginData(chunk!, "");
+
+      const { send } = await reloadMainOnSameFigma();
+      for (const message of [{ type: "scan" }, { type: "create-release", version: "2.0.0", title: "x" }] as const) {
+        const msgs = await send(message as never);
+        expect(errorOf(msgs)).toMatch(/couldn't be read/i);
+        expect(msgs.some((m) => m.type === "scan-complete")).toBe(false);
+      }
+    });
+  });
+
+  describe("console without debug (Figma's plugin console)", () => {
+    it("a scan that writes data still completes, and a throwing save logger cannot fail it", async () => {
+      const original = console.debug;
+      const { send } = await loadMainWithFakeFigma();
+      try {
+        (console as unknown as { debug?: unknown }).debug = undefined;
+        await createBaseline(send);
+        const scanned = await send({ type: "scan" });
+        expect(errorOf(scanned)).toBeUndefined();
+        expect(scanned.some((m) => m.type === "scan-complete")).toBe(true);
+      } finally {
+        console.debug = original;
+      }
+    });
+  });
+
+  describe("engines without newer Promise methods (Figma's plugin sandbox)", () => {
+    // In real Figma a missing built-in only fails when called ("not a function"). Saving is on the path of every
+    // scan and every deprecation, so both must work with these removed.
+    it("scan and mark-deprecated still save and reply", async () => {
+      const proto = Promise.prototype as unknown as { finally?: unknown };
+      const ctor = Promise as unknown as { allSettled?: unknown };
+      const originalFinally = proto.finally;
+      const originalAllSettled = ctor.allSettled;
+      const { send } = await loadMainWithFakeFigma();
+      try {
+        delete proto.finally;
+        delete ctor.allSettled;
+
+        await createBaseline(send);
+        const scanned = await send({ type: "scan" });
+        expect(errorOf(scanned)).toBeUndefined();
+        expect(scanned.some((m) => m.type === "scan-complete")).toBe(true);
+
+        const msgs = await send({ type: "mark-deprecated", entityId: "any", kind: "component", displayName: "Old" });
+        expect(errorOf(msgs)).toBeUndefined();
+        expect(stateOf(msgs).trackedEntities.some((e) => e.deprecated)).toBe(true);
+      } finally {
+        proto.finally = originalFinally;
+        ctor.allSettled = originalAllSettled;
+      }
     });
   });
 });

@@ -134,6 +134,11 @@ export function writeChunkedSerialized(
   return withLock(store, prefix, () => writeSerialized(store, prefix, serialized, chunkSizeBytes));
 }
 
+/** Deletes every key, ignoring failures. (Not `Promise.allSettled`, which Figma's plugin sandbox may lack.) */
+async function deleteQuietly(store: KVStore, keys: string[]): Promise<void> {
+  await Promise.all(keys.map((k) => Promise.resolve().then(() => store.delete(k)).then(undefined, () => undefined)));
+}
+
 async function writeSerialized(store: KVStore, prefix: string, serialized: string, chunkSizeBytes: number): Promise<string> {
   const bytes = utf8Encode(serialized);
   const chunks = splitUtf8Bytes(bytes, chunkSizeBytes);
@@ -151,7 +156,7 @@ async function writeSerialized(store: KVStore, prefix: string, serialized: strin
     await store.set(`${prefix}:index`, committedIndex);
   } catch (error) {
     // The index still points at the previous generation; drop the half-written one.
-    await Promise.allSettled(newKeys.map((k) => store.delete(k)));
+    await deleteQuietly(store, newKeys);
     throw error;
   }
 
@@ -160,7 +165,7 @@ async function writeSerialized(store: KVStore, prefix: string, serialized: strin
     const live = new Set(newKeys);
     const pattern = chunkKeyPattern(prefix);
     const stale = (await store.keys()).filter((k) => pattern.test(k) && !live.has(k));
-    await Promise.allSettled(stale.map((k) => store.delete(k)));
+    await deleteQuietly(store, stale);
   } catch {
     // Orphans are harmless and get removed by the next write.
   }

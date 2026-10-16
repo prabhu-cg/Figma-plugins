@@ -1,5 +1,5 @@
 import type { Baseline, DesignSystemSnapshot, Project } from "@shared/types/project";
-import { loadProject, saveProject } from "@plugin/storage";
+import { hasUnreadableSnapshot, loadProject, saveProject } from "@plugin/storage";
 import { postToUi } from "@plugin/utils/postMessage";
 import { pruneStaleChangeSets } from "@shared/utils/changeSets";
 import type { ScanSummary } from "./scanSupport";
@@ -60,9 +60,16 @@ export function persist(): Promise<void> {
   }
   requested++;
   if (!running) {
-    running = drain().finally(() => {
-      running = undefined;
-    });
+    // Not `.finally()`: Figma's plugin sandbox doesn't implement it, and a throw here would fail every save.
+    running = drain().then(
+      () => {
+        running = undefined;
+      },
+      (error) => {
+        running = undefined;
+        throw error;
+      },
+    );
   }
   return running;
 }
@@ -117,4 +124,17 @@ export function flushScheduledPersist(): void {
 export function findCurrentBaseline(): Baseline | undefined {
   const { project } = session;
   return project.baselines.find((b) => b.id === project.currentBaselineId);
+}
+
+/**
+ * True (after telling the UI why) when the baseline's stored snapshot couldn't be read. Comparing against the
+ * empty stand-in would report every component as newly added, and a release built from it would record that.
+ */
+export function rejectUnreadableBaseline(baseline: Baseline): boolean {
+  if (!hasUnreadableSnapshot(baseline.id)) return false;
+  postToUi({
+    type: "error",
+    message: `The saved snapshot for baseline v${baseline.version} couldn't be read, so DSLog can't compare against it. Your stored data was not changed. Create a new baseline to continue.`,
+  });
+  return true;
 }

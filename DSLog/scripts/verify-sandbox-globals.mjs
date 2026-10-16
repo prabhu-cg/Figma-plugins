@@ -34,6 +34,18 @@ const BANNED_IN_SANDBOX = [
   "window",
 ];
 
+/**
+ * Newer built-ins that Figma's plugin sandbox may not implement. A missing method only fails when it is called
+ * ("not a function"), so it can sit unnoticed until a particular code path runs in real Figma.
+ */
+const BANNED_METHODS = [
+  [/\bconsole\.(debug|table|group|groupEnd|time|timeEnd|trace|dir)\(/, "console methods other than log/info/warn/error"],
+  [/\.finally\(/, "Promise.prototype.finally"],
+  [/\bPromise\.(allSettled|any|withResolvers)\b/, "Promise.allSettled/any/withResolvers"],
+  [/\.(at|flat|flatMap|replaceAll|findLast|findLastIndex|toSorted|toReversed|toSpliced)\(/, "ES2019+ array/string methods"],
+  [/\bObject\.(fromEntries|hasOwn|groupBy)\(/, "Object.fromEntries/hasOwn/groupBy"],
+];
+
 const root = path.resolve(import.meta.dirname, "..");
 const bundlePath = path.join(root, "dist", "code.js");
 const source = readFileSync(bundlePath, "utf-8");
@@ -43,6 +55,11 @@ for (const name of BANNED_IN_SANDBOX) {
   const pattern = new RegExp(`\\b${name}\\b`, "g");
   const matches = source.match(pattern);
   if (matches) hits.push({ name, count: matches.length });
+}
+
+for (const [pattern, label] of BANNED_METHODS) {
+  const matches = source.match(new RegExp(pattern.source, "g"));
+  if (matches) hits.push({ name: label, count: matches.length });
 }
 
 if (hits.length > 0) {

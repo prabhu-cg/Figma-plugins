@@ -56,6 +56,7 @@ export function PastReleasesTab() {
 
   return (
     <div className="card">
+      <div className="table-scroll">
       <table className="table">
         <thead>
           <tr>
@@ -94,6 +95,7 @@ export function PastReleasesTab() {
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

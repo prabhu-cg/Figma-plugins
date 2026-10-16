@@ -20,6 +20,18 @@ sides are typed against the same contract. `src/ui/state/bridge.ts` wraps
 `parent.postMessage` / `window.onmessage`; `src/plugin/main.ts` wraps
 `figma.ui.postMessage` / `figma.ui.onmessage`.
 
+### The sandbox is a smaller JavaScript engine
+
+The plugin bundle targets ES2020 but Figma's engine does not implement every
+built-in that implies. `Promise.prototype.finally`, `Promise.allSettled` and
+`console.debug` have each broken real saves/scans as `not a function`, and the
+tests (Node/jsdom) could not see it. Plugin code uses plain `then`, `Promise.all`
+and `console.log`; `scripts/verify-sandbox-globals.mjs` fails the build if the
+bundle references a known-missing global or method.
+
+Diagnostics are never allowed to fail the work they report on: the save logger
+runs in a `try/catch` after the data is already written.
+
 ## Why the plugin code is split the way it is
 
 Figma's node/variable APIs are large, mutable, and impossible to unit test

@@ -83,6 +83,17 @@ function isLegacyHeavy(value: unknown): value is LegacyHeavyData {
   return typeof v.snapshots === "object" && v.snapshots !== null && Array.isArray(v.changeSets);
 }
 
+/**
+ * Baselines whose stored snapshot could not be read on load. They are shown as empty, but that empty copy is a
+ * stand-in, not the truth: it must never be written back over whatever is still in storage, and nothing may be
+ * diffed against it (every component would look newly "Added").
+ */
+const unreadableSnapshots = new Set<string>();
+
+export function hasUnreadableSnapshot(baselineId: string): boolean {
+  return unreadableSnapshots.has(baselineId);
+}
+
 const EMPTY_SNAPSHOT: DesignSystemSnapshot = { components: [], tokens: [], collections: [] };
 
 // ---------------------------------------------------------------------------------------------------------
@@ -180,17 +191,24 @@ async function loadParts(): Promise<{
   }
 
   const snapshots: Record<string, DesignSystemSnapshot> = {};
+  unreadableSnapshots.clear();
   for (const id of manifest.snapshots) {
     const prefix = snapshotPrefix(id);
     const raw = await readChunkedRaw(pluginDataAdapter, prefix);
-    if (raw === undefined) continue; // a missing snapshot degrades to "empty", never to losing the baseline
+    if (raw === undefined) {
+      // A missing snapshot degrades to "empty", never to losing the baseline — and is flagged, not trusted.
+      unreadableSnapshots.add(id);
+      console.warn(`[DSLog] snapshot for baseline ${id} could not be read; it will not be overwritten or compared.`);
+      continue;
+    }
     try {
       const snapshot = JSON.parse(raw) as DesignSystemSnapshot;
       snapshots[id] = snapshot;
       const index = await pluginDataAdapter.get(`${prefix}:index`);
       if (index !== undefined) map.set(prefix, { index, source: snapshot });
     } catch {
-      // unreadable: treated as missing
+      unreadableSnapshots.add(id);
+      console.warn(`[DSLog] snapshot for baseline ${id} is unparseable; it will not be overwritten or compared.`);
     }
   }
 
@@ -299,6 +317,7 @@ async function writeProject(project: Project): Promise<void> {
   const stats: SaveStats = { partsWritten: 0, partsChecked: 0, bytesWritten: 0, ms: 0 };
 
   for (const baseline of project.baselines) {
+    if (unreadableSnapshots.has(baseline.id)) continue; // keep whatever is stored; see unreadableSnapshots
     await savePart(pluginDataAdapter, snapshotPrefix(baseline.id), STORAGE_CHUNK_SIZE_PLUGIN_DATA, { source: baseline.snapshot }, stats);
   }
   for (const changeSet of project.changeSets) {
@@ -352,5 +371,10 @@ async function writeProject(project: Project): Promise<void> {
   await savePart(clientStorageAdapter, META_PREFIX, STORAGE_CHUNK_SIZE_CLIENT, { serialize: () => JSON.stringify(meta) }, stats);
 
   stats.ms = Date.now() - started;
-  saveLogger?.(stats);
+  // Diagnostics only: the project is already saved, so a failing logger must not fail the save.
+  try {
+    saveLogger?.(stats);
+  } catch {
+    // ignore
+  }
 }

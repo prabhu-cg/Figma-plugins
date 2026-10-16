@@ -46,6 +46,35 @@ describe("ChangesPage", () => {
     });
   });
 
+  describe("shortcut hints", () => {
+    const page = () => document.querySelector(".view") as HTMLElement;
+
+    it("are hidden by default and the toggle shows and hides them", async () => {
+      const user = userEvent.setup();
+      localStorage.removeItem("dslog-shortcut-hints");
+      renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      expect(page().getAttribute("data-shortcuts")).toBe("hidden");
+
+      const toggle = screen.getByRole("button", { name: /Shortcuts/ });
+      expect(toggle.getAttribute("aria-pressed")).toBe("false");
+      await user.click(toggle);
+      expect(page().getAttribute("data-shortcuts")).toBe("shown");
+      expect(toggle.getAttribute("aria-pressed")).toBe("true");
+      expect(localStorage.getItem("dslog-shortcut-hints")).toBe("1");
+      await user.click(toggle);
+      expect(page().getAttribute("data-shortcuts")).toBe("hidden");
+    });
+
+    it("keyboard shortcuts keep working while the hints are hidden", async () => {
+      const user = userEvent.setup();
+      localStorage.removeItem("dslog-shortcut-hints");
+      const { plugin } = renderWithProject(<ChangesPage />, makeProject(threeChanges()));
+      await user.keyboard("j");
+      await user.keyboard("a");
+      expect(reviewStates(plugin)[0]).toBe("accepted");
+    });
+  });
+
   describe("keyboard review", () => {
     it("J selects the first change and arrows move, clamping at the ends", async () => {
       const user = userEvent.setup();

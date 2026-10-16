@@ -33,7 +33,7 @@ export function ChangesList({
 
   return (
     <div className="flex flex-col gap-2" style={{ paddingRight: 4 }}>
-      <div className="flex items-center justify-between gap-2 wrap" style={{ paddingBottom: 4 }}>
+      <div className="flex items-center justify-between gap-2 wrap list-header">
         <label className="checkbox-row text-secondary" style={{ fontSize: 12, fontWeight: 600, padding: 0 }}>
           <input
             type="checkbox"
@@ -67,7 +67,7 @@ export function ChangesList({
           Showing {shownCount} of {filtered.length} — scroll for more
         </div>
       )}
-      <div className="text-tertiary" style={{ fontSize: 11.5, paddingTop: 4 }}>
+      <div className="text-tertiary shortcut-legend" style={{ fontSize: 11.5, paddingTop: 4 }}>
         <span className="kbd">↑</span> <span className="kbd">↓</span> move · <span className="kbd">A</span> accept ·{" "}
         <span className="kbd">R</span> reject · <span className="kbd">V</span> reviewed · <span className="kbd">Z</span> undo
       </div>

@@ -94,8 +94,11 @@ one change set rather than the whole project.
 `loadProject()` reads the manifest, then each listed part, and re-attaches
 each baseline's snapshot from `dslog:snap:<baseline.id>` (falling back to an
 empty snapshot if that part is missing/corrupted, rather than dropping the
-baseline record). A change set that can't be read is dropped; the rest of the
-project still loads. `saveProject()` does the inverse split.
+baseline record). That empty snapshot is only a stand-in: the baseline id is
+remembered as *unreadable*, its stored part is never rewritten, and scanning or
+creating a release against it is refused with a message to create a new baseline
+(otherwise every component would be reported as newly "Added"). A change set
+that can't be read is dropped; the rest of the project still loads. `saveProject()` does the inverse split.
 
 ### Saving only what changed
 
@@ -166,8 +169,8 @@ in `docs/architecture.md`.
   tracking your Design System" empty state).
 - Missing/invalid plugin-data parts do **not** wipe the meta — baselines and
   releases still show up, just with an empty snapshot for any baseline
-  whose snapshot part didn't load, and without any change set that couldn't
-  be read. This means metadata corruption and snapshot-payload corruption fail
+  whose snapshot part didn't load (flagged unreadable and left untouched in
+  storage, see above), and without any change set that couldn't be read. This means metadata corruption and snapshot-payload corruption fail
   independently rather than compounding.
 - `shared/schemas/validate.ts` additionally provides `isValidProject` (a
   strict, all-or-nothing shape check) and `migrateProject` (a lenient,

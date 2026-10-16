@@ -55,6 +55,10 @@ human-written changelog.
     (only an invalid/duplicate version blocks creation; everything else is
     an informational warning), and the migration actions the release would
     need to document.
+   Keyboard shortcuts on the Changes page (arrows, A accept, R reject, V
+   reviewed, Z undo, N next unreviewed) always work; their on-screen hints are
+   hidden by default and can be shown with the **Shortcuts** toggle in the
+   page header (remembered between sessions).
 11. **Manage deprecations and compare releases** — a dedicated Deprecations
     tab (History page) shows every deprecated item with its status, and a
     Compare tab diffs any two releases directly — reusing the same diff
@@ -130,6 +134,20 @@ npm run dev         # vite build --watch (plugin sandbox bundle only)
 After editing source, re-run `npm run build` and re-run the plugin in
 Figma (Figma does not hot-reload plugin code).
 
+To see errors and save timings, open **Plugins → Development → Open console**.
+Failures are logged there with a stack (`[DSLog] "scan" failed: …`), and each
+save that wrote something logs `[DSLog] saved N of M parts …`.
+
+### Figma's plugin sandbox is not Node or a browser
+
+`dist/code.js` runs in a restricted JS engine. Anything it lacks only fails when
+called, as a bare `not a function`, so it can pass every test and still break in
+Figma. `npm run build` therefore scans the bundle (`scripts/verify-sandbox-globals.mjs`)
+and fails on known-missing globals (`TextEncoder`, `fetch`, `structuredClone`, …) and
+methods (`Promise.prototype.finally`, `Promise.allSettled`, `console.debug` and the other
+non-basic console methods, ES2019+ array/string helpers). Add to its lists when a new
+gap turns up.
+
 ## Testing
 
 `npm run test` runs the Vitest suite (`tests/`), covering:
@@ -158,11 +176,13 @@ Figma (Figma does not hot-reload plugin code).
   real plugin message handlers (`main.ts` → `handlers/`) against a simulated `figma` global for the
   baseline → scan → release flow, deprecation, rename confirmation,
   review-state updates, and the document-wide impact-index build
+- sandbox compatibility (saving, scanning and deprecating with newer built-ins removed), and an unreadable baseline snapshot
+  being flagged and never overwritten
 - message queue and storage concurrency (overlapping saves, rollback isolation, coalesced background saves),
   part-wise storage (what a save skips and rewrites, migration from the original layout, failures), and
   change-set pruning
 - UI tests (`tests/ui/`, jsdom + React Testing Library): the Changes, Releases and Overview pages, search
-  combobox, tabs, nav, banners, and the theme / dismiss-once hooks, rendered with the real
+  combobox, tabs, nav, banners, the shortcut-hints toggle, the clipboard fallback, and the theme / dismiss-once hooks, rendered with the real
   `ProjectProvider` against a mocked `bridge` and a small fake plugin that answers review and release
   messages. A test file opts in with a `// @vitest-environment jsdom` docblock; the rest stay on node
 - the instance scanner (per-component counts, "potentially affected"
