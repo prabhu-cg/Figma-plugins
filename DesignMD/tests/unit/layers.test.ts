@@ -1,7 +1,7 @@
 import Ajv from 'ajv';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { readLayerTree } from '../../src/plugin/extraction/layers';
+import { newReadStats, readLayerTree } from '../../src/plugin/extraction/layers';
 
 const MIXED = Symbol('figma.mixed');
 const solid = (r: number, g: number, b: number, extra: object = {}) => ({
@@ -290,6 +290,36 @@ describe('readLayerTree', () => {
       const r = await readLayerTree(node);
       expect(r.tree.fills?.[0].token).toBeUndefined();
       expect(r.warnings).toEqual([]);
+    });
+  });
+
+  describe('stopping early and counting', () => {
+    const wide = (n: number) =>
+      frame(Array.from({ length: n }, (_, i) => textNode({ id: `t${i}` })));
+
+    it('cuts the tree short when shouldStop turns true, and flags it truncated', async () => {
+      let calls = 0;
+      const r = await readLayerTree(wide(50), { shouldStop: () => ++calls > 5 });
+      expect(r.truncated).toBe(true);
+      expect(r.tree.children).toHaveLength(5);
+      expect(r.warnings.map((w) => w.code)).toContain('TREE_TRUNCATED');
+    });
+
+    it('counts trees, layers and instance lookups, with the time the lookups took', async () => {
+      const instance = (id: string) => ({
+        id,
+        type: 'INSTANCE',
+        name: 'Icon',
+        visible: true,
+        getMainComponentAsync: async () => {
+          await new Promise((r) => setTimeout(r, 5));
+          return { id: 'm', name: 'icon' };
+        },
+      });
+      const stats = newReadStats();
+      await readLayerTree(frame([instance('a'), instance('b'), textNode()]), { stats });
+      expect(stats).toMatchObject({ trees: 1, layers: 4, instanceLookups: 2 });
+      expect(stats.instanceMs).toBeGreaterThanOrEqual(8);
     });
   });
 

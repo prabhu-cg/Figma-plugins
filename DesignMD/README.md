@@ -112,7 +112,8 @@ exceeds it, since its token usage may then be under-reported.
 and none of them can take the plugin down:
 
 - **Budgets.** `components.json` reads each component's layers inside the same budget (500 layers,
-  10 levels), plus a 5 s time budget and a 4 MB budget for its serialized variant diffs. A component
+  10 levels), plus a 5 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
+  10-minute budget for the whole run. A component
   that goes over is written with `treeTruncated: true` and a warning, never skipped silently. Sets
   with more than 128 variants get no diffs (a warning says so).
 - **Isolation.** Each component is read on its own. One that cannot be found, throws, or has
@@ -129,15 +130,17 @@ and none of them can take the plugin down:
 
 ### Large-file checks
 
-| File                                                              | Components       | Time | Heap growth | `components.json` |
-| ----------------------------------------------------------------- | ---------------- | ---- | ----------- | ----------------- |
-| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide) | 1,000            | ~5 s | ~130 MB     | 37.6 MB (unsplit) |
-| Rayna UI community file (550+ components)                         | not yet measured |      |             |                   |
+| File                                                              | Components | Time                            | Heap growth  | `components.json` |
+| ----------------------------------------------------------------- | ---------- | ------------------------------- | ------------ | ----------------- |
+| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide) | 1,000      | ~5 s                            | ~130 MB      | 37.6 MB (unsplit) |
+| Rayna UI community file (2,581 components, 493 sets)              | 2,581      | scan 8.5 s, generate 3 min 36 s | not measured | not checked yet   |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
-600 MB heap). Run the plugin on the Rayna UI file in Figma and record the real numbers here before a
-release; the README's earlier claim that 10,000+ variables and 5,000+ components stay responsive has
-likewise not been measured against a real file.
+600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected: the scan took 8.5 s and
+generating took 3 min 36 s. Heap growth and output size were not recorded, and the generated file
+has not been checked yet. After a generate, the plugin console (Plugins > Development > Open
+console) prints how many layers were read and how long instance lookups took. The README's earlier
+claim that 10,000+ variables and 5,000+ components stay responsive has not been measured.
 
 ## Development
 

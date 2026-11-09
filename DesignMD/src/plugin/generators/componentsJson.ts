@@ -198,6 +198,12 @@ export function buildComponentsFile(
         message: `Generation was cancelled before "${doc.name}" was read, so its layer tree is empty.`,
         componentId: doc.id,
       });
+    } else if (!structure && result && 'timedOut' in result && result.timedOut) {
+      warnings.push({
+        code: 'TIME_BUDGET_EXCEEDED',
+        message: `The overall time limit was reached before "${doc.name}" was read, so its layer tree is empty. Turn off variant differences, or scan a selection, to read more within the limit.`,
+        componentId: doc.id,
+      });
     } else if (!structure) {
       warnings.push({
         code: 'COMPONENT_FAILED',

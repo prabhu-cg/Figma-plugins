@@ -16,6 +16,10 @@
   (`COMPONENT_FAILED`, `PROPERTIES_UNREADABLE`), progress as "done of total", a Cancel button that
   returns partial results (`SCAN_CANCELLED`), large results sent in pieces, and automatic splitting
   into `components/<name>.json` above 20 MB.
+- A 10-minute budget for reading all component layers in one generate (a 2,581-component file takes
+  about 3.5 minutes); components not reached get a `TIME_BUDGET_EXCEEDED` warning. A per-layer time
+  check keeps each component inside its 5 s budget, and the plugin console reports layers read and
+  instance-lookup time.
 - If one output fails to generate, the others are still offered and the failure is shown.
 
 ### Changed

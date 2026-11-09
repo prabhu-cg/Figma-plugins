@@ -9,6 +9,7 @@ import {
   type UIToPluginMessage,
 } from '@shared/messages';
 import { extractDesignSystem } from './extraction';
+import { newReadStats } from './extraction/layers';
 import { extractStructures } from './extraction/structures';
 import { generateOutputsDetailed } from './generators';
 import { transformToDesignSystem } from './transform';
@@ -148,6 +149,8 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
     };
     // Layer trees are read only when components.json is selected: they cost far more than the scan.
     cancelRequested = false;
+    const stats = newReadStats();
+    const readStarted = Date.now();
     const structures = options.options.componentsJson
       ? await withCancellation(
           () => cancelRequested,
@@ -158,6 +161,7 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
                 includeText: options.options.includeText,
                 includeVariantDiffs: options.options.includeVariantDiffs,
                 resolveToken: tokenResolver(designSystem),
+                stats,
               },
               (done, total) =>
                 post({
@@ -170,6 +174,16 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
             ),
         )
       : undefined;
+    if (structures) {
+      // Visible in the plugin's console (Plugins > Development > Open console) so slow runs can be explained.
+      const seconds = Math.round((Date.now() - readStarted) / 1000);
+      const perLayer =
+        stats.layers > 0 ? ((Date.now() - readStarted) / stats.layers).toFixed(2) : '0';
+      console.log(
+        `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ` +
+          `${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1000)}s`,
+      );
+    }
     const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
       structures,
     });

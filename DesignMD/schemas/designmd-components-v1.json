@@ -1486,6 +1486,7 @@
         "UNRESOLVED_REFERENCE",
         "PROPERTIES_UNREADABLE",
         "SCAN_CANCELLED",
+        "TIME_BUDGET_EXCEEDED",
         "OUTPUT_TOO_LARGE"
       ],
       "description": "Stable codes for warnings. New codes may be added within v1, so handle unknown codes."

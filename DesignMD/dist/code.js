@@ -652,174 +652,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
-  const ICON_MAX_SIZE = 64;
-  const LABEL_MAX_CHARS = 40;
-  const VECTOR_TYPES = /* @__PURE__ */ new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE"]);
-  const CONTAINER_TYPES = /* @__PURE__ */ new Set([
-    "FRAME",
-    "GROUP",
-    "COMPONENT",
-    "COMPONENT_SET",
-    "INSTANCE",
-    "SECTION"
-  ]);
-  const NAME_RULES = [
-    ["heading", /\b(heading|headline|title|h[1-6])\b/i],
-    ["button", /\b(button|btn|cta)\b/i],
-    ["link", /\b(link|anchor)\b/i],
-    ["input", /\b(input|field|textfield|textarea|select|dropdown)\b/i],
-    ["divider", /\b(divider|separator|hr|rule)\b/i],
-    ["icon", /\b(icon|glyph|chevron|caret|arrow)\b/i],
-    ["image", /\b(image|img|photo|picture|avatar|thumbnail|illustration)\b/i],
-    ["slot", /\b(slot|placeholder|content)\b/i],
-    ["label", /\b(label|caption)\b/i]
-  ];
-  const words = (name) => name.replace(/[_\-/.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
-  function isSmall(layer) {
-    return layer.size !== void 0 && layer.size.width <= ICON_MAX_SIZE && layer.size.height <= ICON_MAX_SIZE;
-  }
-  function fromProperty(layer) {
-    var _a;
-    const refs = layer.propertyRefs;
-    if (refs == null ? void 0 : refs.characters) {
-      const chars = (_a = layer.text) == null ? void 0 : _a.characters;
-      const short = chars === void 0 || chars.length <= LABEL_MAX_CHARS && !chars.includes("\n");
-      return { role: short ? "label" : "text", roleSource: "property" };
-    }
-    if (refs == null ? void 0 : refs.mainComponent) {
-      return { role: isSmall(layer) ? "icon" : "slot", roleSource: "property" };
-    }
-    return void 0;
-  }
-  function fromType(layer) {
-    var _a;
-    if ((_a = layer.fills) == null ? void 0 : _a.some((p) => p.visible && p.type === "IMAGE")) {
-      return { role: "image", roleSource: "type" };
-    }
-    if (layer.type === "LINE") return { role: "divider", roleSource: "type" };
-    if (layer.type === "RECTANGLE" && layer.children.length === 0 && layer.size !== void 0 && Math.min(layer.size.width, layer.size.height) <= 2 && Math.max(layer.size.width, layer.size.height) > 8) {
-      return { role: "divider", roleSource: "type" };
-    }
-    if (VECTOR_TYPES.has(layer.type) && isSmall(layer)) return { role: "icon", roleSource: "type" };
-    return void 0;
-  }
-  function fromName(layer) {
-    const name = words(layer.name);
-    for (const [role, pattern] of NAME_RULES) {
-      if (pattern.test(name)) return { role, roleSource: "name" };
-    }
-    return void 0;
-  }
-  function inferRole(layer, isRoot = false) {
-    if (isRoot) return { role: "root", roleSource: "type" };
-    const found = fromProperty(layer) ?? fromType(layer) ?? fromName(layer);
-    if (found) return found;
-    if (layer.type === "TEXT") return { role: "text", roleSource: "type" };
-    if (CONTAINER_TYPES.has(layer.type) && layer.children.length > 0) {
-      return { role: "container", roleSource: "type" };
-    }
-    return { role: "unknown", roleSource: "none" };
-  }
-  function assignRoles(layer, isRoot = true) {
-    const { role, roleSource } = inferRole(layer, isRoot);
-    return {
-      ...layer,
-      role,
-      roleSource,
-      children: layer.children.map((child) => assignRoles(child, false))
-    };
-  }
-  const ATTRIBUTES = [
-    "visible",
-    "size",
-    "layout",
-    "radius",
-    "opacity",
-    "fills",
-    "strokes",
-    "effects",
-    "text",
-    "instanceOf",
-    "propertyRefs"
-  ];
-  function indexTree(root, warnings, componentId) {
-    const out = /* @__PURE__ */ new Map();
-    const visit = (layer, path, parentPath) => {
-      out.set(path, { layer, parentPath });
-      const counts = /* @__PURE__ */ new Map();
-      for (const child of layer.children) counts.set(child.name, (counts.get(child.name) ?? 0) + 1);
-      const seen = /* @__PURE__ */ new Map();
-      for (const child of layer.children) {
-        const total = counts.get(child.name);
-        const n = seen.get(child.name) ?? 0;
-        seen.set(child.name, n + 1);
-        const segment = total > 1 ? `${child.name}[${n}]` : child.name;
-        if (total > 1 && n === 0) {
-          warnings.push({
-            code: "DUPLICATE_SIBLING_NAME",
-            message: `Layers inside "${path}" share the name "${child.name}", so they are told apart by index.`,
-            ...componentId ? { componentId } : {},
-            layerId: child.id
-          });
-        }
-        visit(child, `${path}/${segment}`, path);
-      }
-    };
-    visit(root, root.name, void 0);
-    return out;
-  }
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  function changesBetween(base, other) {
-    const changes = {};
-    for (const key of ATTRIBUTES) {
-      const before = base[key];
-      const after = other[key];
-      if (after === void 0) {
-        if (key === "radius" && before !== void 0) changes.radius = 0;
-        continue;
-      }
-      if (!same(before, after)) changes[key] = after;
-    }
-    return changes;
-  }
-  function diffVariant(base, variant, info) {
-    const warnings = [];
-    const baseIndex = indexTree(base, [], void 0);
-    const variantIndex = indexTree(variant, warnings, info.componentId);
-    const layers = [];
-    const added = [];
-    const removed = [];
-    const isMatch = (path) => {
-      const a = baseIndex.get(path);
-      const b = variantIndex.get(path);
-      return !!a && !!b && a.layer.type === b.layer.type;
-    };
-    for (const [path, entry] of variantIndex) {
-      if (isMatch(path)) {
-        const changes = changesBetween(baseIndex.get(path).layer, entry.layer);
-        if (Object.keys(changes).length > 0) layers.push({ path, changes });
-      } else if (entry.parentPath === void 0 || isMatch(entry.parentPath)) {
-        added.push({ parentPath: entry.parentPath ?? "", layer: entry.layer });
-      }
-    }
-    for (const [path, entry] of baseIndex) {
-      if (!isMatch(path) && (entry.parentPath === void 0 || isMatch(entry.parentPath))) {
-        removed.push(path);
-      }
-    }
-    return {
-      diff: {
-        variantId: info.variantId,
-        variantProperties: info.variantProperties,
-        layers,
-        added,
-        removed
-      },
-      warnings
-    };
-  }
   const MAX_LAYERS = 500;
   const MAX_DEPTH = 10;
+  const newReadStats = () => ({
+    layers: 0,
+    trees: 0,
+    instanceLookups: 0,
+    instanceMs: 0
+  });
   const round2 = (n) => Math.round(n * 100) / 100;
   const round3 = (n) => Math.round(n * 1e3) / 1e3;
   function read(n, key) {
@@ -1144,7 +984,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     let count = 0;
     let truncated = false;
     const visit = async (n, depth) => {
+      var _a;
       count++;
+      if (options.stats) options.stats.layers++;
       const id = str(n, "id") ?? "";
       const type = str(n, "type") ?? "UNKNOWN";
       const layer = {
@@ -1172,7 +1014,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       const effects = readEffects(read(n, "effects"), str(n, "effectStyleId"), id, t);
       if (effects) layer.effects = effects;
       if (type === "TEXT") layer.text = readText(n, id, includeText, t);
+      const stats = options.stats;
+      const lookupStart = stats ? Date.now() : 0;
       const instanceOf = await readInstance(n);
+      if (stats && type === "INSTANCE") {
+        stats.instanceLookups++;
+        stats.instanceMs += Date.now() - lookupStart;
+      }
       if (instanceOf) layer.instanceOf = instanceOf;
       const propertyRefs = readPropertyRefs(n);
       if (propertyRefs) layer.propertyRefs = propertyRefs;
@@ -1182,7 +1030,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           truncated = true;
         } else {
           for (const child of kids) {
-            if (count >= maxLayers) {
+            if (count >= maxLayers || ((_a = options.shouldStop) == null ? void 0 : _a.call(options))) {
               truncated = true;
               break;
             }
@@ -1193,6 +1041,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return layer;
     };
     const tree = await visit(root, 0);
+    if (options.stats) options.stats.trees++;
     const warnings = t.warnings;
     if (truncated) {
       warnings.push({
@@ -1209,8 +1058,175 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
+  const ICON_MAX_SIZE = 64;
+  const LABEL_MAX_CHARS = 40;
+  const VECTOR_TYPES = /* @__PURE__ */ new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "ELLIPSE"]);
+  const CONTAINER_TYPES = /* @__PURE__ */ new Set([
+    "FRAME",
+    "GROUP",
+    "COMPONENT",
+    "COMPONENT_SET",
+    "INSTANCE",
+    "SECTION"
+  ]);
+  const NAME_RULES = [
+    ["heading", /\b(heading|headline|title|h[1-6])\b/i],
+    ["button", /\b(button|btn|cta)\b/i],
+    ["link", /\b(link|anchor)\b/i],
+    ["input", /\b(input|field|textfield|textarea|select|dropdown)\b/i],
+    ["divider", /\b(divider|separator|hr|rule)\b/i],
+    ["icon", /\b(icon|glyph|chevron|caret|arrow)\b/i],
+    ["image", /\b(image|img|photo|picture|avatar|thumbnail|illustration)\b/i],
+    ["slot", /\b(slot|placeholder|content)\b/i],
+    ["label", /\b(label|caption)\b/i]
+  ];
+  const words = (name) => name.replace(/[_\-/.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  function isSmall(layer) {
+    return layer.size !== void 0 && layer.size.width <= ICON_MAX_SIZE && layer.size.height <= ICON_MAX_SIZE;
+  }
+  function fromProperty(layer) {
+    var _a;
+    const refs = layer.propertyRefs;
+    if (refs == null ? void 0 : refs.characters) {
+      const chars = (_a = layer.text) == null ? void 0 : _a.characters;
+      const short = chars === void 0 || chars.length <= LABEL_MAX_CHARS && !chars.includes("\n");
+      return { role: short ? "label" : "text", roleSource: "property" };
+    }
+    if (refs == null ? void 0 : refs.mainComponent) {
+      return { role: isSmall(layer) ? "icon" : "slot", roleSource: "property" };
+    }
+    return void 0;
+  }
+  function fromType(layer) {
+    var _a;
+    if ((_a = layer.fills) == null ? void 0 : _a.some((p) => p.visible && p.type === "IMAGE")) {
+      return { role: "image", roleSource: "type" };
+    }
+    if (layer.type === "LINE") return { role: "divider", roleSource: "type" };
+    if (layer.type === "RECTANGLE" && layer.children.length === 0 && layer.size !== void 0 && Math.min(layer.size.width, layer.size.height) <= 2 && Math.max(layer.size.width, layer.size.height) > 8) {
+      return { role: "divider", roleSource: "type" };
+    }
+    if (VECTOR_TYPES.has(layer.type) && isSmall(layer)) return { role: "icon", roleSource: "type" };
+    return void 0;
+  }
+  function fromName(layer) {
+    const name = words(layer.name);
+    for (const [role, pattern] of NAME_RULES) {
+      if (pattern.test(name)) return { role, roleSource: "name" };
+    }
+    return void 0;
+  }
+  function inferRole(layer, isRoot = false) {
+    if (isRoot) return { role: "root", roleSource: "type" };
+    const found = fromProperty(layer) ?? fromType(layer) ?? fromName(layer);
+    if (found) return found;
+    if (layer.type === "TEXT") return { role: "text", roleSource: "type" };
+    if (CONTAINER_TYPES.has(layer.type) && layer.children.length > 0) {
+      return { role: "container", roleSource: "type" };
+    }
+    return { role: "unknown", roleSource: "none" };
+  }
+  function assignRoles(layer, isRoot = true) {
+    const { role, roleSource } = inferRole(layer, isRoot);
+    return {
+      ...layer,
+      role,
+      roleSource,
+      children: layer.children.map((child) => assignRoles(child, false))
+    };
+  }
+  const ATTRIBUTES = [
+    "visible",
+    "size",
+    "layout",
+    "radius",
+    "opacity",
+    "fills",
+    "strokes",
+    "effects",
+    "text",
+    "instanceOf",
+    "propertyRefs"
+  ];
+  function indexTree(root, warnings, componentId) {
+    const out = /* @__PURE__ */ new Map();
+    const visit = (layer, path, parentPath) => {
+      out.set(path, { layer, parentPath });
+      const counts = /* @__PURE__ */ new Map();
+      for (const child of layer.children) counts.set(child.name, (counts.get(child.name) ?? 0) + 1);
+      const seen = /* @__PURE__ */ new Map();
+      for (const child of layer.children) {
+        const total = counts.get(child.name);
+        const n = seen.get(child.name) ?? 0;
+        seen.set(child.name, n + 1);
+        const segment = total > 1 ? `${child.name}[${n}]` : child.name;
+        if (total > 1 && n === 0) {
+          warnings.push({
+            code: "DUPLICATE_SIBLING_NAME",
+            message: `Layers inside "${path}" share the name "${child.name}", so they are told apart by index.`,
+            ...componentId ? { componentId } : {},
+            layerId: child.id
+          });
+        }
+        visit(child, `${path}/${segment}`, path);
+      }
+    };
+    visit(root, root.name, void 0);
+    return out;
+  }
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function changesBetween(base, other) {
+    const changes = {};
+    for (const key of ATTRIBUTES) {
+      const before = base[key];
+      const after = other[key];
+      if (after === void 0) {
+        if (key === "radius" && before !== void 0) changes.radius = 0;
+        continue;
+      }
+      if (!same(before, after)) changes[key] = after;
+    }
+    return changes;
+  }
+  function diffVariant(base, variant, info) {
+    const warnings = [];
+    const baseIndex = indexTree(base, [], void 0);
+    const variantIndex = indexTree(variant, warnings, info.componentId);
+    const layers = [];
+    const added = [];
+    const removed = [];
+    const isMatch = (path) => {
+      const a = baseIndex.get(path);
+      const b = variantIndex.get(path);
+      return !!a && !!b && a.layer.type === b.layer.type;
+    };
+    for (const [path, entry] of variantIndex) {
+      if (isMatch(path)) {
+        const changes = changesBetween(baseIndex.get(path).layer, entry.layer);
+        if (Object.keys(changes).length > 0) layers.push({ path, changes });
+      } else if (entry.parentPath === void 0 || isMatch(entry.parentPath)) {
+        added.push({ parentPath: entry.parentPath ?? "", layer: entry.layer });
+      }
+    }
+    for (const [path, entry] of baseIndex) {
+      if (!isMatch(path) && (entry.parentPath === void 0 || isMatch(entry.parentPath))) {
+        removed.push(path);
+      }
+    }
+    return {
+      diff: {
+        variantId: info.variantId,
+        variantProperties: info.variantProperties,
+        layers,
+        added,
+        removed
+      },
+      warnings
+    };
+  }
   const MAX_VARIANTS_FOR_DIFFS = 128;
   const COMPONENT_TIME_BUDGET_MS = 5e3;
+  const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1e3;
   const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
   const BATCH_SIZE = 10;
   const isStructure = (r) => !!r && !("error" in r);
@@ -1255,7 +1271,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const budget = options.timeBudgetMs ?? COMPONENT_TIME_BUDGET_MS;
     const memoryBudget = options.memoryBudgetBytes ?? COMPONENT_MEMORY_BUDGET_BYTES;
     let diffBytes = 0;
-    const readOptions = { includeText: options.includeText, resolveToken: options.resolveToken };
+    const shouldStop = () => isCancelled() || options.deadline !== void 0 && now() > options.deadline || now() - started > budget;
+    const readOptions = {
+      includeText: options.includeText,
+      resolveToken: options.resolveToken,
+      shouldStop,
+      stats: options.stats
+    };
     const warnings = [];
     const members = node.type === "COMPONENT_SET" ? node.children.filter((c) => c.type === "COMPONENT") : [node];
     if (members.length === 0) throw new Error("The component set has no variants.");
@@ -1283,6 +1305,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           warnings.push({
             code: "SCAN_CANCELLED",
             message: `Generation was cancelled while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
+            componentId: node.id
+          });
+          break;
+        }
+        if (options.deadline !== void 0 && now() > options.deadline) {
+          truncated = true;
+          warnings.push({
+            code: "TIME_BUDGET_EXCEEDED",
+            message: `The overall time limit was reached while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
             componentId: node.id
           });
           break;
@@ -1351,16 +1382,21 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
   }
   async function extractStructures(components, options = {}, onProgress) {
+    const now = options.now ?? Date.now;
+    const deadline = options.deadline ?? now() + (options.totalBudgetMs ?? TOTAL_TIME_BUDGET_MS);
     const results = await processInBatches(
       [...components],
       BATCH_SIZE,
       async (doc) => {
+        if (now() > deadline) {
+          return [doc.id, { error: "The overall time limit was reached.", timedOut: true }];
+        }
         try {
           const node = await figma.getNodeByIdAsync(doc.id);
           if (!node || node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") {
             return [doc.id, { error: "The component could not be found in the file." }];
           }
-          return [doc.id, await extractComponentStructure(node, options)];
+          return [doc.id, await extractComponentStructure(node, { ...options, deadline })];
         } catch (err) {
           return [doc.id, { error: err instanceof Error ? err.message : String(err) }];
         }
@@ -1847,6 +1883,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         warnings.push({
           code: "SCAN_CANCELLED",
           message: `Generation was cancelled before "${doc.name}" was read, so its layer tree is empty.`,
+          componentId: doc.id
+        });
+      } else if (!structure && result && "timedOut" in result && result.timedOut) {
+        warnings.push({
+          code: "TIME_BUDGET_EXCEEDED",
+          message: `The overall time limit was reached before "${doc.name}" was read, so its layer tree is empty. Turn off variant differences, or scan a selection, to read more within the limit.`,
           componentId: doc.id
         });
       } else if (!structure) {
@@ -3567,6 +3609,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         contrastPairs: options.contrastPairs ?? []
       };
       cancelRequested = false;
+      const stats = newReadStats();
+      const readStarted = Date.now();
       const structures = options.options.componentsJson ? await withCancellation(
         () => cancelRequested,
         () => extractStructures(
@@ -3574,7 +3618,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
           {
             includeText: options.options.includeText,
             includeVariantDiffs: options.options.includeVariantDiffs,
-            resolveToken: tokenResolver(designSystem)
+            resolveToken: tokenResolver(designSystem),
+            stats
           },
           (done, total) => post({
             type: "progress",
@@ -3585,6 +3630,13 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
           })
         )
       ) : void 0;
+      if (structures) {
+        const seconds = Math.round((Date.now() - readStarted) / 1e3);
+        const perLayer = stats.layers > 0 ? ((Date.now() - readStarted) / stats.layers).toFixed(2) : "0";
+        console.log(
+          `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1e3)}s`
+        );
+      }
       const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
         structures
       });

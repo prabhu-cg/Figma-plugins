@@ -217,6 +217,65 @@ describe('extractComponentStructure: budgets and hostile nodes', () => {
   });
 });
 
+describe('overall time budget', () => {
+  function many(n: number) {
+    return document('F', [
+      page(
+        'P',
+        Array.from({ length: n }, (_, i) =>
+          component(`C${i}`, { width: 10, height: 10 }, [text('Label')]),
+        ),
+      ),
+    ]);
+  }
+
+  it('stops starting components once the whole-run budget is spent, and marks the rest', async () => {
+    installFakeFigma({ root: many(30) });
+    const docs = transformComponents(await extractComponents());
+    let t = 0;
+    // Every clock read costs 100 ms; the whole run is allowed 2,000 ms.
+    const out = await extractStructures(docs, { totalBudgetMs: 2000, now: () => (t += 100) });
+    const timedOut = [...out.values()].filter((r) => 'timedOut' in r);
+    const read = [...out.values()].filter((r) => !('error' in r));
+    expect(timedOut.length).toBeGreaterThan(0);
+    expect(read.length).toBeGreaterThan(0);
+    expect(out.size).toBe(30);
+
+    const ds = { ...makeDesignSystem(), components: docs };
+    const file = buildComponentsFile(ds, out);
+    const warned = file.warnings.filter((w) => w.code === 'TIME_BUDGET_EXCEEDED');
+    expect(warned).toHaveLength(timedOut.length);
+    expect(warned[0].message).toContain('selection');
+    expect(file.warnings.filter((w) => w.code === 'COMPONENT_FAILED')).toEqual([]);
+    expect(file.components).toHaveLength(30);
+  });
+
+  it('cuts a single tree short when its own budget runs out mid-read', async () => {
+    const set = componentSet('Big', [
+      {
+        props: { S: 'a' },
+        children: Array.from({ length: 40 }, (_, i) => text(`T${i}`)),
+      },
+    ]);
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    let t = 0;
+    const s = await extractComponentStructure(set as never, {
+      timeBudgetMs: 500,
+      now: () => (t += 50),
+    });
+    expect(s.treeTruncated).toBe(true);
+    expect(s.tree.children.length).toBeLessThan(40);
+    expect(s.warnings.map((w) => w.code)).toContain('TREE_TRUNCATED');
+  });
+
+  it('reads everything when the budget is not reached', async () => {
+    installFakeFigma({ root: many(12) });
+    const docs = transformComponents(await extractComponents());
+    const out = await extractStructures(docs);
+    expect([...out.values()].every((r) => !('error' in r))).toBe(true);
+  });
+});
+
 describe('extractStructures: isolation', () => {
   it('reports a missing node and a throwing node, and still reads the others', async () => {
     const { root, set } = buildFile();

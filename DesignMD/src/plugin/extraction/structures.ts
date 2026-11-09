@@ -17,12 +17,18 @@ import { assignRoles } from '../transform/roles';
 import { diffVariant } from '../transform/variantDiffs';
 import { isCancelled, processInBatches } from '../utils/async';
 import { defaultVariantOf } from './components';
-import { readLayerTree, type ReadLayerOptions } from './layers';
+import { readLayerTree, type ReadLayerOptions, type ReadStats } from './layers';
 
 /** A set with more variants than this gets no diffs. */
 export const MAX_VARIANTS_FOR_DIFFS = 128;
 /** Wall-clock budget for the layers and diffs of one component. */
 export const COMPONENT_TIME_BUDGET_MS = 5000;
+/**
+ * Wall-clock budget for reading every component in one generate. The per-component budget alone
+ * would allow (components x 5 s) in the worst case. A real 2,581-component file took 3 min 36 s,
+ * so this is a safety net with roughly 3x headroom, not something a normal file reaches.
+ */
+export const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1000;
 /** Budget for the serialized variant diffs of one component. Keeps one huge set from dominating memory. */
 export const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
 const BATCH_SIZE = 10;
@@ -30,10 +36,16 @@ const BATCH_SIZE = 10;
 export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
   includeVariantDiffs?: boolean;
   timeBudgetMs?: number;
+  /** Wall-clock budget for the whole run. Defaults to TOTAL_TIME_BUDGET_MS. */
+  totalBudgetMs?: number;
   /** Approximate cap, in serialized bytes, on the variant diffs of one component. */
   memoryBudgetBytes?: number;
   /** Clock, injectable for tests. */
   now?: () => number;
+  /** Absolute time (same clock as `now`) after which no further layers are read. */
+  deadline?: number;
+  /** Receives counters for the run. */
+  stats?: ReadStats;
 }
 
 export interface ComponentStructure {
@@ -47,7 +59,8 @@ export interface ComponentStructure {
   warnings: ComponentsWarning[];
 }
 
-export type StructureResult = ComponentStructure | { error: string; cancelled?: boolean };
+export type StructureResult =
+  ComponentStructure | { error: string; cancelled?: boolean; timedOut?: boolean };
 
 export const isStructure = (r: StructureResult | undefined): r is ComponentStructure =>
   !!r && !('error' in r);
@@ -110,7 +123,18 @@ export async function extractComponentStructure(
   const budget = options.timeBudgetMs ?? COMPONENT_TIME_BUDGET_MS;
   const memoryBudget = options.memoryBudgetBytes ?? COMPONENT_MEMORY_BUDGET_BYTES;
   let diffBytes = 0;
-  const readOptions = { includeText: options.includeText, resolveToken: options.resolveToken };
+  // Stops layer reading when the run is cancelled, the whole-run deadline passes, or this component
+  // has used up its own budget. Checked per layer, so one huge tree cannot overrun either.
+  const shouldStop = () =>
+    isCancelled() ||
+    (options.deadline !== undefined && now() > options.deadline) ||
+    now() - started > budget;
+  const readOptions = {
+    includeText: options.includeText,
+    resolveToken: options.resolveToken,
+    shouldStop,
+    stats: options.stats,
+  };
   const warnings: ComponentsWarning[] = [];
 
   const members =
@@ -145,6 +169,15 @@ export async function extractComponentStructure(
         warnings.push({
           code: 'SCAN_CANCELLED',
           message: `Generation was cancelled while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
+          componentId: node.id,
+        });
+        break;
+      }
+      if (options.deadline !== undefined && now() > options.deadline) {
+        truncated = true;
+        warnings.push({
+          code: 'TIME_BUDGET_EXCEEDED',
+          message: `The overall time limit was reached while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
           componentId: node.id,
         });
         break;
@@ -226,16 +259,21 @@ export async function extractStructures(
   options: StructureOptions = {},
   onProgress?: (done: number, total: number) => void,
 ): Promise<Map<string, StructureResult>> {
+  const now = options.now ?? Date.now;
+  const deadline = options.deadline ?? now() + (options.totalBudgetMs ?? TOTAL_TIME_BUDGET_MS);
   const results = await processInBatches(
     [...components],
     BATCH_SIZE,
     async (doc): Promise<[string, StructureResult]> => {
+      if (now() > deadline) {
+        return [doc.id, { error: 'The overall time limit was reached.', timedOut: true }];
+      }
       try {
         const node = await figma.getNodeByIdAsync(doc.id);
         if (!node || (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET')) {
           return [doc.id, { error: 'The component could not be found in the file.' }];
         }
-        return [doc.id, await extractComponentStructure(node, options)];
+        return [doc.id, await extractComponentStructure(node, { ...options, deadline })];
       } catch (err) {
         return [doc.id, { error: err instanceof Error ? err.message : String(err) }];
       }

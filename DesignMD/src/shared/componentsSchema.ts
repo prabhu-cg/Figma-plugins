@@ -472,6 +472,7 @@ export type WarningCode =
   | 'UNRESOLVED_REFERENCE'
   | 'PROPERTIES_UNREADABLE'
   | 'SCAN_CANCELLED'
+  | 'TIME_BUDGET_EXCEEDED'
   | 'OUTPUT_TOO_LARGE';
 
 /** A non-fatal issue found while generating the file. */
