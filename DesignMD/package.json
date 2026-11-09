@@ -17,7 +17,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.plugin.json",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write .",
-    "publish:monorepo": "bash scripts/publish-to-monorepo.sh"
+    "publish:monorepo": "bash scripts/publish-to-monorepo.sh",
+    "schema": "node scripts/build-schema.mjs",
+    "schema:check": "node scripts/build-schema.mjs --check"
   },
   "dependencies": {
     "file-saver": "^2.0.5",
@@ -37,12 +39,14 @@
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "ajv": "^8.20.0",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^4.6.2",
     "jsdom": "^30.1.2",
     "prettier": "^3.4.2",
+    "ts-json-schema-generator": "^2.9.0",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vite-plugin-singlefile": "^2.1.0",

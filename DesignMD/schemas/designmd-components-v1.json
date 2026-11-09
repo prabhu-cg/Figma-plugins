@@ -1,0 +1,1479 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/prabhu-cg/Figma-plugins/main/DesignMD/schemas/designmd-components-v1.json",
+  "title": "designmd.components/v1",
+  "description": "Output of the DesignMD Figma plugin: components, their layer trees and the tokens they use. Producers write only the fields listed here. Consumers must ignore fields they do not know, because new optional fields may be added within v1.",
+  "$ref": "#/definitions/ComponentsFileV1",
+  "definitions": {
+    "ComponentsFileV1": {
+      "type": "object",
+      "properties": {
+        "$schema": {
+          "type": "string",
+          "description": "URL of the JSON Schema for this file."
+        },
+        "schema": {
+          "type": "string",
+          "const": "designmd.components/v1",
+          "description": "Format identifier and version. Always \"designmd.components/v1\"."
+        },
+        "metadata": {
+          "$ref": "#/definitions/ComponentsMetadata",
+          "description": "Details about the file."
+        },
+        "index": {
+          "$ref": "#/definitions/ComponentsIndex",
+          "description": "Counts and names."
+        },
+        "tokens": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/TokenEntry"
+          },
+          "description": "Only the variables and styles the components use, keyed by Figma id, with default-mode values."
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ComponentV1"
+          },
+          "description": "The components. Empty in the main file when the output is split into components/<name>.json files."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ComponentsWarning"
+          },
+          "description": "Non-fatal issues."
+        }
+      },
+      "required": [
+        "$schema",
+        "schema",
+        "metadata",
+        "index",
+        "tokens",
+        "components",
+        "warnings"
+      ],
+      "additionalProperties": false,
+      "description": "The root of components.json."
+    },
+    "ComponentsMetadata": {
+      "type": "object",
+      "properties": {
+        "fileName": {
+          "type": "string",
+          "description": "Name of the Figma file."
+        },
+        "fileKey": {
+          "type": "string",
+          "description": "Figma file key. Absent when Figma does not provide one."
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "file",
+            "selection"
+          ],
+          "description": "What was scanned: the whole file or the selection."
+        },
+        "generatedAt": {
+          "type": "string",
+          "description": "When the file was generated, ISO 8601. The only timestamp in the file."
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "Version of the DesignMD plugin that wrote the file."
+        },
+        "contentHash": {
+          "type": "string",
+          "description": "SHA-256 of the file with generatedAt and contentHash set to \"\". Use it to detect changes."
+        }
+      },
+      "required": [
+        "fileName",
+        "scope",
+        "generatedAt",
+        "pluginVersion",
+        "contentHash"
+      ],
+      "additionalProperties": false,
+      "description": "Details about the file the output was made from."
+    },
+    "ComponentsIndex": {
+      "type": "object",
+      "properties": {
+        "componentCount": {
+          "type": "number",
+          "description": "Number of components in the scan, including those stored in separate files."
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ComponentIndexEntry"
+          },
+          "description": "One entry per component, in the same order as the components."
+        }
+      },
+      "required": [
+        "componentCount",
+        "components"
+      ],
+      "additionalProperties": false,
+      "description": "Counts and names, so a tool can decide what to read."
+    },
+    "ComponentIndexEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Figma node id of the component."
+        },
+        "name": {
+          "type": "string",
+          "description": "Component name."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path of the file holding this component, for example \"components/Button.json\". Present only when the output is split."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "One line of the index."
+    },
+    "TokenEntry": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ColorTokenEntry"
+        },
+        {
+          "$ref": "#/definitions/NumberTokenEntry"
+        },
+        {
+          "$ref": "#/definitions/StringTokenEntry"
+        },
+        {
+          "$ref": "#/definitions/BooleanTokenEntry"
+        },
+        {
+          "$ref": "#/definitions/CompositeTokenEntry"
+        }
+      ],
+      "description": "One entry of the `tokens` lookup."
+    },
+    "ColorTokenEntry": {
+      "type": "object",
+      "properties": {
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name."
+        },
+        "type": {
+          "type": "string",
+          "const": "color",
+          "description": "Token type."
+        },
+        "value": {
+          "$ref": "#/definitions/ColorRgba",
+          "description": "The resolved default-mode value."
+        }
+      },
+      "required": [
+        "cssName",
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "A color token, resolved for the default mode."
+    },
+    "ColorRgba": {
+      "type": "object",
+      "properties": {
+        "hex": {
+          "type": "string",
+          "description": "Six-digit lowercase hex without alpha, for example \"#1252f7\"."
+        },
+        "alpha": {
+          "type": "number",
+          "description": "Opacity from 0 to 1."
+        },
+        "r": {
+          "type": "number",
+          "description": "Red channel, 0 to 255."
+        },
+        "g": {
+          "type": "number",
+          "description": "Green channel, 0 to 255."
+        },
+        "b": {
+          "type": "number",
+          "description": "Blue channel, 0 to 255."
+        }
+      },
+      "required": [
+        "hex",
+        "alpha",
+        "r",
+        "g",
+        "b"
+      ],
+      "additionalProperties": false,
+      "description": "A color with explicit alpha."
+    },
+    "NumberTokenEntry": {
+      "type": "object",
+      "properties": {
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "dimension",
+            "number"
+          ],
+          "description": "\"dimension\" is a length in px; \"number\" is unitless."
+        },
+        "value": {
+          "type": "number",
+          "description": "The resolved default-mode value."
+        }
+      },
+      "required": [
+        "cssName",
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "A numeric token, resolved for the default mode."
+    },
+    "StringTokenEntry": {
+      "type": "object",
+      "properties": {
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "string",
+            "fontFamily"
+          ],
+          "description": "Token type."
+        },
+        "value": {
+          "type": "string",
+          "description": "The resolved default-mode value."
+        }
+      },
+      "required": [
+        "cssName",
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "A string token, resolved for the default mode."
+    },
+    "BooleanTokenEntry": {
+      "type": "object",
+      "properties": {
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name."
+        },
+        "type": {
+          "type": "string",
+          "const": "boolean",
+          "description": "Token type."
+        },
+        "value": {
+          "type": "boolean",
+          "description": "The resolved default-mode value."
+        }
+      },
+      "required": [
+        "cssName",
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "A boolean token, resolved for the default mode."
+    },
+    "CompositeTokenEntry": {
+      "type": "object",
+      "properties": {
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "typography",
+            "shadow",
+            "gradient",
+            "grid"
+          ],
+          "description": "Token type."
+        },
+        "value": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          },
+          "description": "Flat summary of the style. Numbers are px unless the key says otherwise."
+        }
+      },
+      "required": [
+        "cssName",
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "A style token (text, effect, gradient) as flat key-value pairs. Full detail is in tokens.json."
+    },
+    "ComponentV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Figma node id."
+        },
+        "key": {
+          "type": "string",
+          "description": "Figma component key, empty for unpublished components."
+        },
+        "name": {
+          "type": "string",
+          "description": "Component name, for example \"Button / primary\"."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description from Figma. Text for people."
+        },
+        "isComponentSet": {
+          "type": "boolean",
+          "description": "True for a component set (has variants)."
+        },
+        "pageName": {
+          "type": "string",
+          "description": "Name of the page the component is on."
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ComponentVariantV1"
+          },
+          "description": "Variants. One entry for a plain component."
+        },
+        "properties": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ComponentPropertyV1"
+          },
+          "description": "Component properties."
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "State values found in the variants, for example \"hover\"."
+        },
+        "sizes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Size values found in the variants, for example \"sm\"."
+        },
+        "relatedComponentNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of related components."
+        },
+        "boundVariableIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the variables used anywhere in the component. Keys of the `tokens` lookup."
+        },
+        "styleIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ids of the styles used anywhere in the component. Keys of the `tokens` lookup."
+        },
+        "layout": {
+          "$ref": "#/definitions/ComponentLayoutV1",
+          "description": "Geometry of the default variant."
+        },
+        "defaultVariantId": {
+          "type": "string",
+          "description": "Id of the variant the `tree` was read from."
+        },
+        "tree": {
+          "$ref": "#/definitions/Layer",
+          "description": "Layer tree of the default variant."
+        },
+        "variantDiffs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VariantDiff"
+          },
+          "description": "Differences of every other variant from the default. Empty when diffs are off or skipped."
+        },
+        "treeTruncated": {
+          "type": "boolean",
+          "description": "True when the layer, depth, time or memory budget was hit, so `tree` is incomplete."
+        }
+      },
+      "required": [
+        "id",
+        "key",
+        "name",
+        "description",
+        "isComponentSet",
+        "pageName",
+        "variants",
+        "properties",
+        "states",
+        "sizes",
+        "relatedComponentNames",
+        "boundVariableIds",
+        "styleIds",
+        "defaultVariantId",
+        "tree",
+        "variantDiffs",
+        "treeTruncated"
+      ],
+      "additionalProperties": false,
+      "description": "One component or component set."
+    },
+    "ComponentVariantV1": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Figma node id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Variant name, for example \"size=sm, state=hover\"."
+        },
+        "variantProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Property values of the variant."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the variant."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "variantProperties",
+        "description"
+      ],
+      "additionalProperties": false,
+      "description": "One variant of a component set."
+    },
+    "ComponentPropertyV1": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The raw Figma key, for example \"icon#3287:0\"."
+        },
+        "name": {
+          "type": "string",
+          "description": "Cleaned name, for example \"icon\"."
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "BOOLEAN",
+            "TEXT",
+            "INSTANCE_SWAP",
+            "VARIANT"
+          ],
+          "description": "Property type."
+        },
+        "defaultValue": {
+          "type": "string",
+          "description": "Default value as a string. Booleans are \"true\" or \"false\". For INSTANCE_SWAP it is the node id."
+        },
+        "defaultResolved": {
+          "$ref": "#/definitions/ResolvedComponentRef",
+          "description": "For INSTANCE_SWAP, the default component. Absent for other types or when it cannot be resolved."
+        },
+        "variantOptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "For VARIANT properties, the allowed values."
+        },
+        "preferredValues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PreferredValue"
+          },
+          "description": "For INSTANCE_SWAP, the preferred instances."
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "type",
+        "defaultValue"
+      ],
+      "additionalProperties": false,
+      "description": "A component property."
+    },
+    "ResolvedComponentRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Figma node id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Component name, for display."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "A resolved reference to a component."
+    },
+    "PreferredValue": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "COMPONENT",
+            "COMPONENT_SET"
+          ],
+          "description": "Whether the preferred value is a component or a component set."
+        },
+        "key": {
+          "type": "string",
+          "description": "Key of the component or component set."
+        }
+      },
+      "required": [
+        "type",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "An instance Figma lists as a preferred value of a property."
+    },
+    "ComponentLayoutV1": {
+      "type": "object",
+      "properties": {
+        "measuredFrom": {
+          "type": "string",
+          "description": "Name of the variant the measurements came from."
+        },
+        "width": {
+          "type": "number",
+          "description": "Width in px."
+        },
+        "height": {
+          "type": "number",
+          "description": "Height in px."
+        },
+        "layoutMode": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "HORIZONTAL",
+            "VERTICAL"
+          ],
+          "description": "Layout mode of the root."
+        },
+        "gap": {
+          "type": "number",
+          "description": "Space between children in px. Auto-layout only."
+        },
+        "padding": {
+          "$ref": "#/definitions/Padding",
+          "description": "Padding in px. Auto-layout only."
+        },
+        "cornerRadius": {
+          "type": "number",
+          "description": "Uniform corner radius in px. Omitted when corners differ or the radius is 0."
+        }
+      },
+      "required": [
+        "measuredFrom",
+        "width",
+        "height",
+        "layoutMode"
+      ],
+      "additionalProperties": false,
+      "description": "Geometry of the default variant."
+    },
+    "Padding": {
+      "type": "object",
+      "properties": {
+        "top": {
+          "type": "number",
+          "description": "Top padding."
+        },
+        "right": {
+          "type": "number",
+          "description": "Right padding."
+        },
+        "bottom": {
+          "type": "number",
+          "description": "Bottom padding."
+        },
+        "left": {
+          "type": "number",
+          "description": "Left padding."
+        }
+      },
+      "required": [
+        "top",
+        "right",
+        "bottom",
+        "left"
+      ],
+      "additionalProperties": false,
+      "description": "Padding in px."
+    },
+    "Layer": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Figma node id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Layer name, for display."
+        },
+        "type": {
+          "type": "string",
+          "description": "Figma node type, for example FRAME, TEXT, INSTANCE, RECTANGLE, VECTOR, ELLIPSE or GROUP."
+        },
+        "role": {
+          "$ref": "#/definitions/LayerRole",
+          "description": "Inferred role."
+        },
+        "roleSource": {
+          "$ref": "#/definitions/RoleSource",
+          "description": "How the role was decided."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the layer is visible."
+        },
+        "size": {
+          "$ref": "#/definitions/LayerSize",
+          "description": "Size in px."
+        },
+        "layout": {
+          "$ref": "#/definitions/LayerLayout",
+          "description": "Auto-layout settings. Only on auto-layout frames."
+        },
+        "radius": {
+          "type": "number",
+          "description": "Uniform corner radius in px. See cornerRadii when corners differ."
+        },
+        "cornerRadii": {
+          "$ref": "#/definitions/CornerRadii",
+          "description": "Per-corner radii, written only when the corners differ."
+        },
+        "opacity": {
+          "type": "number",
+          "description": "Opacity from 0 to 1."
+        },
+        "fills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerPaint"
+          },
+          "description": "Fill paints."
+        },
+        "strokes": {
+          "$ref": "#/definitions/LayerStrokes",
+          "description": "Stroke settings."
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerEffect"
+          },
+          "description": "Effects. Always an array, even for one shadow."
+        },
+        "text": {
+          "$ref": "#/definitions/LayerText",
+          "description": "Text properties. Only on TEXT layers."
+        },
+        "instanceOf": {
+          "$ref": "#/definitions/InstanceOf",
+          "description": "Main component. Only on INSTANCE layers."
+        },
+        "propertyRefs": {
+          "$ref": "#/definitions/PropertyRefs",
+          "description": "Component properties that drive this layer."
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Layer"
+          },
+          "description": "Child layers in paint order."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "type",
+        "visible",
+        "children"
+      ],
+      "additionalProperties": false,
+      "description": "One layer of a component's tree. Only id, name, type, visible and children are always present."
+    },
+    "LayerRole": {
+      "type": "string",
+      "enum": [
+        "root",
+        "container",
+        "heading",
+        "text",
+        "label",
+        "icon",
+        "image",
+        "button",
+        "link",
+        "input",
+        "divider",
+        "slot",
+        "unknown"
+      ],
+      "description": "What a layer is for. A hint, never a fact."
+    },
+    "RoleSource": {
+      "type": "string",
+      "enum": [
+        "property",
+        "type",
+        "name",
+        "none"
+      ],
+      "description": "How a layer's role was decided. \"name\" is the lowest confidence."
+    },
+    "LayerSize": {
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "number",
+          "description": "Width in px."
+        },
+        "height": {
+          "type": "number",
+          "description": "Height in px."
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ],
+      "additionalProperties": false,
+      "description": "The size of a layer in px."
+    },
+    "LayerLayout": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "HORIZONTAL",
+            "VERTICAL"
+          ],
+          "description": "Direction of the auto layout."
+        },
+        "gap": {
+          "type": "number",
+          "description": "Space between children, in px."
+        },
+        "padding": {
+          "$ref": "#/definitions/Padding",
+          "description": "Padding, in px."
+        },
+        "primaryAlign": {
+          "type": "string",
+          "enum": [
+            "MIN",
+            "CENTER",
+            "MAX",
+            "SPACE_BETWEEN"
+          ],
+          "description": "Alignment along the layout direction."
+        },
+        "counterAlign": {
+          "type": "string",
+          "enum": [
+            "MIN",
+            "CENTER",
+            "MAX",
+            "BASELINE"
+          ],
+          "description": "Alignment across the layout direction."
+        },
+        "sizingH": {
+          "type": "string",
+          "enum": [
+            "FIXED",
+            "HUG",
+            "FILL"
+          ],
+          "description": "Horizontal sizing: fixed size, hug the content, or fill the parent."
+        },
+        "sizingV": {
+          "type": "string",
+          "enum": [
+            "FIXED",
+            "HUG",
+            "FILL"
+          ],
+          "description": "Vertical sizing: fixed size, hug the content, or fill the parent."
+        },
+        "wrap": {
+          "type": "boolean",
+          "description": "True when children wrap onto new lines."
+        }
+      },
+      "required": [
+        "mode",
+        "gap",
+        "padding",
+        "primaryAlign",
+        "counterAlign",
+        "sizingH",
+        "sizingV",
+        "wrap"
+      ],
+      "additionalProperties": false,
+      "description": "Auto-layout settings. Present only on auto-layout frames."
+    },
+    "CornerRadii": {
+      "type": "object",
+      "properties": {
+        "tl": {
+          "type": "number",
+          "description": "Top-left radius."
+        },
+        "tr": {
+          "type": "number",
+          "description": "Top-right radius."
+        },
+        "br": {
+          "type": "number",
+          "description": "Bottom-right radius."
+        },
+        "bl": {
+          "type": "number",
+          "description": "Bottom-left radius."
+        }
+      },
+      "required": [
+        "tl",
+        "tr",
+        "br",
+        "bl"
+      ],
+      "additionalProperties": false,
+      "description": "Corner radii in px, written only when the corners differ."
+    },
+    "LayerPaint": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "SOLID",
+            "GRADIENT_LINEAR",
+            "GRADIENT_RADIAL",
+            "GRADIENT_ANGULAR",
+            "GRADIENT_DIAMOND",
+            "IMAGE",
+            "VIDEO",
+            "PATTERN"
+          ],
+          "description": "Figma paint type."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the paint is visible."
+        },
+        "color": {
+          "$ref": "#/definitions/ColorRgba",
+          "description": "The color, for SOLID paints."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short human-readable description of a gradient or image paint."
+        },
+        "token": {
+          "$ref": "#/definitions/TokenRef",
+          "description": "The token this paint is bound to, when it is."
+        }
+      },
+      "required": [
+        "type",
+        "visible"
+      ],
+      "additionalProperties": false,
+      "description": "A fill or stroke paint. Image bytes are never exported."
+    },
+    "TokenRef": {
+      "type": "object",
+      "properties": {
+        "variableId": {
+          "type": "string",
+          "description": "Figma variable id. Also the key of this token in the file's `tokens` lookup."
+        },
+        "styleId": {
+          "type": "string",
+          "description": "Figma style id. Also the key of this token in the file's `tokens` lookup."
+        },
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name, for example \"--color-primary-500\"."
+        }
+      },
+      "required": [
+        "cssName"
+      ],
+      "additionalProperties": false,
+      "description": "A reference to a design token. At least one of variableId and styleId is present."
+    },
+    "LayerStrokes": {
+      "type": "object",
+      "properties": {
+        "paints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerPaint"
+          },
+          "description": "The stroke paints."
+        },
+        "weight": {
+          "type": "number",
+          "description": "Stroke weight in px."
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "INSIDE",
+            "CENTER",
+            "OUTSIDE"
+          ],
+          "description": "Where the stroke sits relative to the edge."
+        }
+      },
+      "required": [
+        "paints",
+        "weight",
+        "align"
+      ],
+      "additionalProperties": false,
+      "description": "Stroke settings."
+    },
+    "LayerEffect": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "DROP_SHADOW",
+            "INNER_SHADOW",
+            "LAYER_BLUR",
+            "BACKGROUND_BLUR"
+          ],
+          "description": "Figma effect type."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the effect is visible."
+        },
+        "color": {
+          "$ref": "#/definitions/ColorRgba",
+          "description": "Shadow color. Absent for blurs."
+        },
+        "offsetX": {
+          "type": "number",
+          "description": "Horizontal shadow offset in px."
+        },
+        "offsetY": {
+          "type": "number",
+          "description": "Vertical shadow offset in px."
+        },
+        "radius": {
+          "type": "number",
+          "description": "Blur radius in px."
+        },
+        "spread": {
+          "type": "number",
+          "description": "Shadow spread in px."
+        },
+        "token": {
+          "$ref": "#/definitions/TokenRef",
+          "description": "The effect style this effect comes from, when it does."
+        }
+      },
+      "required": [
+        "type",
+        "visible",
+        "radius"
+      ],
+      "additionalProperties": false,
+      "description": "A shadow or blur effect."
+    },
+    "LayerText": {
+      "type": "object",
+      "properties": {
+        "styleId": {
+          "type": "string",
+          "description": "Figma text style id, when one is applied."
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "Font family name."
+        },
+        "fontWeight": {
+          "type": "number",
+          "description": "Numeric font weight, for example 600."
+        },
+        "fontSize": {
+          "type": "number",
+          "description": "Font size in px."
+        },
+        "lineHeight": {
+          "$ref": "#/definitions/UnitValue",
+          "description": "Line height."
+        },
+        "letterSpacing": {
+          "$ref": "#/definitions/UnitValue",
+          "description": "Letter spacing."
+        },
+        "textCase": {
+          "type": "string",
+          "enum": [
+            "ORIGINAL",
+            "UPPER",
+            "LOWER",
+            "TITLE",
+            "SMALL_CAPS",
+            "SMALL_CAPS_FORCED"
+          ],
+          "description": "Text case transform."
+        },
+        "textDecoration": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "UNDERLINE",
+            "STRIKETHROUGH"
+          ],
+          "description": "Text decoration."
+        },
+        "token": {
+          "$ref": "#/definitions/TokenRef",
+          "description": "The color token bound to the text fill, when there is one."
+        },
+        "characters": {
+          "type": "string",
+          "description": "The text content. Absent when \"Include text content\" is off."
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "LEFT",
+            "CENTER",
+            "RIGHT",
+            "JUSTIFIED"
+          ],
+          "description": "Horizontal alignment."
+        },
+        "mixed": {
+          "type": "boolean",
+          "description": "True when the layer mixes styles. The fields above then describe the first run."
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TextRun"
+          },
+          "description": "One entry per style run, written when `mixed` is true."
+        }
+      },
+      "required": [
+        "align",
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "letterSpacing",
+        "lineHeight",
+        "textCase",
+        "textDecoration"
+      ],
+      "additionalProperties": false,
+      "description": "Text properties of a TEXT layer."
+    },
+    "UnitValue": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "number",
+          "description": "The numeric value."
+        },
+        "unit": {
+          "type": "string",
+          "enum": [
+            "px",
+            "percent",
+            "auto"
+          ],
+          "description": "\"px\" for pixels, \"percent\" for a percentage of the font size, \"auto\" when the value is automatic (value is 0)."
+        }
+      },
+      "required": [
+        "value",
+        "unit"
+      ],
+      "additionalProperties": false,
+      "description": "A length with an explicit unit."
+    },
+    "TextRun": {
+      "type": "object",
+      "properties": {
+        "styleId": {
+          "type": "string",
+          "description": "Figma text style id, when one is applied."
+        },
+        "fontFamily": {
+          "type": "string",
+          "description": "Font family name."
+        },
+        "fontWeight": {
+          "type": "number",
+          "description": "Numeric font weight, for example 600."
+        },
+        "fontSize": {
+          "type": "number",
+          "description": "Font size in px."
+        },
+        "lineHeight": {
+          "$ref": "#/definitions/UnitValue",
+          "description": "Line height."
+        },
+        "letterSpacing": {
+          "$ref": "#/definitions/UnitValue",
+          "description": "Letter spacing."
+        },
+        "textCase": {
+          "type": "string",
+          "enum": [
+            "ORIGINAL",
+            "UPPER",
+            "LOWER",
+            "TITLE",
+            "SMALL_CAPS",
+            "SMALL_CAPS_FORCED"
+          ],
+          "description": "Text case transform."
+        },
+        "textDecoration": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "UNDERLINE",
+            "STRIKETHROUGH"
+          ],
+          "description": "Text decoration."
+        },
+        "token": {
+          "$ref": "#/definitions/TokenRef",
+          "description": "The color token bound to the text fill, when there is one."
+        },
+        "characters": {
+          "type": "string",
+          "description": "The characters of this run."
+        }
+      },
+      "required": [
+        "characters",
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "letterSpacing",
+        "lineHeight",
+        "textCase",
+        "textDecoration"
+      ],
+      "additionalProperties": false,
+      "description": "A stretch of text with its own style, used when a text layer mixes styles."
+    },
+    "InstanceOf": {
+      "type": "object",
+      "properties": {
+        "componentId": {
+          "type": "string",
+          "description": "Id of the main component."
+        },
+        "componentName": {
+          "type": "string",
+          "description": "Name of the main component, for display."
+        }
+      },
+      "required": [
+        "componentId",
+        "componentName"
+      ],
+      "additionalProperties": false,
+      "description": "The main component an instance layer points at."
+    },
+    "PropertyRefs": {
+      "type": "object",
+      "properties": {
+        "characters": {
+          "type": "string",
+          "description": "Key of the TEXT property that sets this layer's characters."
+        },
+        "visible": {
+          "type": "string",
+          "description": "Key of the BOOLEAN property that shows or hides this layer."
+        },
+        "mainComponent": {
+          "type": "string",
+          "description": "Key of the INSTANCE_SWAP property that sets this instance's main component."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Which component property drives which layer attribute. Values are property keys, for example \"label#12:0\"."
+    },
+    "VariantDiff": {
+      "type": "object",
+      "properties": {
+        "variantId": {
+          "type": "string",
+          "description": "Figma node id of the variant."
+        },
+        "variantProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "The variant's property values, for example { \"size\": \"sm\" }."
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerDiff"
+          },
+          "description": "Layers that differ."
+        },
+        "added": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AddedLayer"
+          },
+          "description": "Layers present here and not in the default variant."
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Name paths of layers present in the default variant and missing here."
+        }
+      },
+      "required": [
+        "variantId",
+        "variantProperties",
+        "layers",
+        "added",
+        "removed"
+      ],
+      "additionalProperties": false,
+      "description": "How one variant differs from the default variant."
+    },
+    "LayerDiff": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Name path from the root, for example \"Button/Label\". Duplicate siblings get an index, \"Icon[1]\"."
+        },
+        "changes": {
+          "$ref": "#/definitions/LayerChanges",
+          "description": "Only the attributes that differ from the default variant."
+        }
+      },
+      "required": [
+        "path",
+        "changes"
+      ],
+      "additionalProperties": false,
+      "description": "A layer that differs between a variant and the default variant."
+    },
+    "LayerChanges": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/definitions/LayerRole",
+          "description": "Inferred role."
+        },
+        "roleSource": {
+          "$ref": "#/definitions/RoleSource",
+          "description": "How the role was decided."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the layer is visible."
+        },
+        "size": {
+          "$ref": "#/definitions/LayerSize",
+          "description": "Size in px."
+        },
+        "layout": {
+          "$ref": "#/definitions/LayerLayout",
+          "description": "Auto-layout settings. Only on auto-layout frames."
+        },
+        "radius": {
+          "type": "number",
+          "description": "Uniform corner radius in px. See cornerRadii when corners differ."
+        },
+        "cornerRadii": {
+          "$ref": "#/definitions/CornerRadii",
+          "description": "Per-corner radii, written only when the corners differ."
+        },
+        "opacity": {
+          "type": "number",
+          "description": "Opacity from 0 to 1."
+        },
+        "fills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerPaint"
+          },
+          "description": "Fill paints."
+        },
+        "strokes": {
+          "$ref": "#/definitions/LayerStrokes",
+          "description": "Stroke settings."
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerEffect"
+          },
+          "description": "Effects. Always an array, even for one shadow."
+        },
+        "text": {
+          "$ref": "#/definitions/LayerText",
+          "description": "Text properties. Only on TEXT layers."
+        },
+        "instanceOf": {
+          "$ref": "#/definitions/InstanceOf",
+          "description": "Main component. Only on INSTANCE layers."
+        },
+        "propertyRefs": {
+          "$ref": "#/definitions/PropertyRefs",
+          "description": "Component properties that drive this layer."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The attributes of a layer that a variant can change. Same shapes as in Layer."
+    },
+    "AddedLayer": {
+      "type": "object",
+      "properties": {
+        "parentPath": {
+          "type": "string",
+          "description": "Name path of the parent in the default structure."
+        },
+        "layer": {
+          "$ref": "#/definitions/Layer",
+          "description": "The new layer, in full."
+        }
+      },
+      "required": [
+        "parentPath",
+        "layer"
+      ],
+      "additionalProperties": false,
+      "description": "A layer that exists in a variant but not in the default variant."
+    },
+    "ComponentsWarning": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "$ref": "#/definitions/WarningCode",
+          "description": "Stable code. Match on this, not on the message."
+        },
+        "message": {
+          "type": "string",
+          "description": "Text for people. Do not parse."
+        },
+        "componentId": {
+          "type": "string",
+          "description": "Id of the component the warning is about."
+        },
+        "layerId": {
+          "type": "string",
+          "description": "Id of the layer the warning is about."
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "A non-fatal issue found while generating the file."
+    },
+    "WarningCode": {
+      "type": "string",
+      "enum": [
+        "TREE_TRUNCATED",
+        "COMPONENT_FAILED",
+        "DUPLICATE_SIBLING_NAME",
+        "VARIANT_DIFFS_SKIPPED",
+        "UNRESOLVED_REFERENCE",
+        "SCAN_CANCELLED",
+        "OUTPUT_TOO_LARGE"
+      ],
+      "description": "Stable codes for warnings. New codes may be added within v1, so handle unknown codes."
+    }
+  }
+}

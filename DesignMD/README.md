@@ -7,12 +7,12 @@ forever with no feature gating.
 
 ## What it generates
 
-| File                 | Contents                                                                                                                                                                                      |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design.md`          | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, token and style usage, accessibility notes (contrast per color mode), naming conventions        |
-| `components/*.md`    | One Markdown file per component/component set: variants, sizes, states, layout, properties, token references, related components                                                              |
-| `tokens.json`        | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes |
-| `tokens.css`         | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                      |
+| File              | Contents                                                                                                                                                                                      |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `design.md`       | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, token and style usage, accessibility notes (contrast per color mode), naming conventions        |
+| `components/*.md` | One Markdown file per component/component set: variants, sizes, states, layout, properties, token references, related components                                                              |
+| `tokens.json`     | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes |
+| `tokens.css`      | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                      |
 
 `design.md` and the component docs are on by default; the token files are opt-in. Variables are
 the source of truth: when a category has no variables (e.g. no color variables), the
@@ -34,6 +34,9 @@ CSS config:
 ```
 
 With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
+
+`components.json` (`designmd.components/v1`) is specified and has a published JSON Schema and an example
+(see [docs/components-json.md](docs/components-json.md)); the export itself is not available yet.
 
 ### What the docs cover
 
