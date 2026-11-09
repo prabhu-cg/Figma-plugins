@@ -49,7 +49,6 @@ No AI. No servers. No account. Nothing leaves your machine.
 - **Component docs** — one Markdown file per component or component set: variants, sizes, states, layout (size, auto layout, gap, padding, radius), properties, token references, and related components
 - **tokens.json** — nested, W3C-style design tokens (color, dimension, typography, shadow, …) with modes and usage, ready for design-token pipelines
 - **css-tokens.json** and **tokens.css** — CSS custom properties (`--color-primary-500`, `--spacing-md`, …) with a `[data-theme]` block per mode and automatic dark-mode support
-- **\_tokens.scss** — Sass variables plus a `$modes` map
 - **tailwind.tokens.js** — a Tailwind preset that reads those variables, including opacity modifiers like `bg-primary/50`
 
 Bundle everything into a single ZIP you can drop straight into a Git repository, or preview and copy any file right in the plugin first.

@@ -205,7 +205,7 @@ describe('plugin controller (main.ts)', () => {
 
   it('save-settings: persists, and ignores storage failures', async () => {
     const h = await bootPlugin(richFile());
-    const settings = { options: { ...DEFAULT_EXPORT_OPTIONS, scssFile: true } };
+    const settings = { options: { ...DEFAULT_EXPORT_OPTIONS, cssFile: true } };
     await h.send({ type: 'save-settings', settings });
     expect(h.storage['designmd.settings.v1']).toEqual(settings);
 

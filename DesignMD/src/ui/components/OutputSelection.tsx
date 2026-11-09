@@ -5,7 +5,6 @@ import {
   CodeIcon,
   DocumentIcon,
   HashIcon,
-  SassIcon,
   StackIcon,
   WindIcon,
 } from './icons';
@@ -62,12 +61,6 @@ const OUTPUT_GROUPS: Array<{ title: string; items: OutputItem[] }> = [
         title: 'tokens.css',
         description: 'CSS custom properties, with a [data-theme] block for each mode',
         icon: CodeIcon,
-      },
-      {
-        key: 'scssFile',
-        title: '_tokens.scss',
-        description: 'Sass variables plus a $modes map',
-        icon: SassIcon,
       },
       {
         key: 'tailwindPreset',

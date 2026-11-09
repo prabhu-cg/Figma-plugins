@@ -14,7 +14,6 @@ forever with no feature gating.
 | `tokens.json`        | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes |
 | `css-tokens.json`    | CSS custom-property-ready export (`--color-primary-500`, etc.) with per-mode values                                                                                                           |
 | `tokens.css`         | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                      |
-| `_tokens.scss`       | Sass variables (aliases stay references) plus a `$modes` map of per-mode differences                                                                                                          |
 | `tailwind.tokens.js` | A Tailwind preset: colors use RGB-channel variables so opacity modifiers (`bg-primary/50`) work, other values are `var(--token)` references                                                   |
 
 `design.md` and the component docs are on by default; the token files are opt-in. Variables are

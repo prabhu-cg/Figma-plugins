@@ -30,7 +30,6 @@ const SELECTABLE_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'tokensJson',
   'cssTokensJson',
   'cssFile',
-  'scssFile',
   'tailwindPreset',
 ];
 

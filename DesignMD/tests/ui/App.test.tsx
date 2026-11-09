@@ -53,14 +53,14 @@ describe('App: startup', () => {
     render(<App />);
     fromPlugin({
       type: 'settings',
-      settings: { options: { ...DEFAULT_EXPORT_OPTIONS, designMd: false, scssFile: true } },
+      settings: { options: { ...DEFAULT_EXPORT_OPTIONS, designMd: false, cssFile: true } },
       fileSettings: { excludedPages: [], contrastPairs: [] },
     });
     // Output choices live on the Export tab once a scan has finished.
     fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
     openTab('Export');
     expect(checkbox(/^design\.md$/)).not.toBeChecked();
-    expect(checkbox(/^_tokens\.scss$/)).toBeChecked();
+    expect(checkbox(/^tokens\.css$/)).toBeChecked();
   });
 
   it('keeps defaults when there are no saved settings', () => {

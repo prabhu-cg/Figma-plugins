@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   generateCssFile,
   generateOutputs,
-  generateScssFile,
   generateTailwindPreset,
 } from '../../src/plugin/generators';
 import { buildCssVariableMaps, modeOverrides } from '../../src/plugin/generators/cssVariables';
@@ -107,44 +106,6 @@ describe('generateCssFile', () => {
     const ds = makeDesignSystem();
     ds.metadata.fileName = 'evil */ body { display:none } /*';
     expect(generateCssFile(ds).content.split('\n')[0].split('*/')).toHaveLength(2);
-  });
-});
-
-describe('generateScssFile', () => {
-  it('writes Sass variables with aliases as references', () => {
-    const file = generateScssFile(makeDesignSystem());
-    expect(file.path).toBe('_tokens.scss');
-    expect(file.content).toContain('$color-primary-500: #3366ff;');
-    expect(file.content).toContain('$semantic-color-danger: $color-primary-500;');
-  });
-
-  it('adds a $modes map with only the values that differ', () => {
-    const { content } = generateScssFile(makeDesignSystem());
-    expect(content).toContain('$modes: (');
-    expect(content).toContain('"dark": (\n    "color-primary-500": #1a3399,');
-    expect(content).not.toContain('"light"');
-  });
-
-  it('prefixes names that would start with a digit', () => {
-    const ds = makeDesignSystem();
-    ds.variables.push(
-      variable({
-        id: 'x',
-        name: '2xl',
-        path: ['2xl'],
-        resolvedType: 'FLOAT',
-        category: 'spacing',
-        cssName: '--2xl',
-        valuesByMode: [mode('Light', float(40))],
-      }),
-    );
-    expect(generateScssFile(ds).content).toContain('$_2xl: 40px;');
-  });
-
-  it('omits $modes when no mode differs', () => {
-    const ds = makeDesignSystem();
-    ds.variables.forEach((v) => (v.valuesByMode = v.valuesByMode.slice(0, 1)));
-    expect(generateScssFile(ds).content).not.toContain('$modes');
   });
 });
 
@@ -304,7 +265,6 @@ describe('generateTailwindPreset opacity support', () => {
 describe('generateOutputs with code outputs', () => {
   it('is opt-in: none of the new files are in the default selection', () => {
     expect(DEFAULT_EXPORT_OPTIONS.cssFile).toBe(false);
-    expect(DEFAULT_EXPORT_OPTIONS.scssFile).toBe(false);
     expect(DEFAULT_EXPORT_OPTIONS.tailwindPreset).toBe(false);
     const paths = generateOutputs(makeDesignSystem(), DEFAULT_EXPORT_OPTIONS).map((f) => f.path);
     expect(paths).not.toContain('tokens.css');
@@ -316,9 +276,8 @@ describe('generateOutputs with code outputs', () => {
       designMd: false,
       componentDocs: false,
       cssFile: true,
-      scssFile: true,
       tailwindPreset: true,
     }).map((f) => f.path);
-    expect(paths).toEqual(['tokens.css', '_tokens.scss', 'tailwind.tokens.js']);
+    expect(paths).toEqual(['tokens.css', 'tailwind.tokens.js']);
   });
 });
