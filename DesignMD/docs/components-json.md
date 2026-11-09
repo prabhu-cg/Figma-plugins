@@ -18,7 +18,7 @@ styles the components use, with their default-mode values; full token data and m
 
 ## Rules for consumers
 
-- Lengths are numbers in px. Line height and letter spacing are `{ value, unit }`.
+- Lengths are numbers in px. A layer's `radius` is a number, or `{ tl, tr, br, bl }` when corners differ. Line height and letter spacing are `{ value, unit }`.
 - Colors are `{ hex, alpha, r, g, b }`. Hex never carries alpha.
 - A missing field means "not applicable". `null` means "applies, no value". `[]` means "none".
 - `role` is a hint. Treat `roleSource: "name"` as low confidence.
@@ -30,9 +30,3 @@ styles the components use, with their default-mode values; full token data and m
 
 `metadata.contentHash` is the SHA-256 of the file text with `generatedAt` and `contentHash` set to `""`.
 Equal hashes mean equal content.
-
-## Differences from the first draft of the spec
-
-- A layer's corner radius is always a number (`radius`). When corners differ, `cornerRadii` holds
-  `{ tl, tr, br, bl }` as well. This keeps one type per field.
-- A paint's color is a `color` object (`ColorRgba`) rather than loose `hex` and `alpha` fields.

@@ -703,12 +703,15 @@
           "description": "Auto-layout settings. Only on auto-layout frames."
         },
         "radius": {
-          "type": "number",
-          "description": "Uniform corner radius in px. See cornerRadii when corners differ."
-        },
-        "cornerRadii": {
-          "$ref": "#/definitions/CornerRadii",
-          "description": "Per-corner radii, written only when the corners differ."
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/CornerRadii"
+            }
+          ],
+          "description": "Corner radius in px: a number when all corners match, or per-corner values when they differ."
         },
         "opacity": {
           "type": "number",
@@ -912,7 +915,7 @@
         "bl"
       ],
       "additionalProperties": false,
-      "description": "Corner radii in px, written only when the corners differ."
+      "description": "Per-corner radii in px, used when the corners differ."
     },
     "LayerPaint": {
       "type": "object",
@@ -935,9 +938,13 @@
           "type": "boolean",
           "description": "Whether the paint is visible."
         },
-        "color": {
-          "$ref": "#/definitions/ColorRgba",
-          "description": "The color, for SOLID paints."
+        "hex": {
+          "type": "string",
+          "description": "Six-digit lowercase hex without alpha, for SOLID paints."
+        },
+        "alpha": {
+          "type": "number",
+          "description": "Opacity from 0 to 1, for SOLID paints."
         },
         "description": {
           "type": "string",
@@ -1371,12 +1378,15 @@
           "description": "Auto-layout settings. Only on auto-layout frames."
         },
         "radius": {
-          "type": "number",
-          "description": "Uniform corner radius in px. See cornerRadii when corners differ."
-        },
-        "cornerRadii": {
-          "$ref": "#/definitions/CornerRadii",
-          "description": "Per-corner radii, written only when the corners differ."
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/CornerRadii"
+            }
+          ],
+          "description": "Corner radius in px: a number when all corners match, or per-corner values when they differ."
         },
         "opacity": {
           "type": "number",

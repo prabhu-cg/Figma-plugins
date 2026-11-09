@@ -7,7 +7,7 @@
     "scope": "file",
     "generatedAt": "2026-11-09T10:00:00.000Z",
     "pluginVersion": "1.1.0",
-    "contentHash": "f09e22b64326e28611480f3875d9e840e0ca96fcad8ce4519c6db694e3c2a89e"
+    "contentHash": "29c01ed22008a37607429dd07af94186ec32f943245598bea34272a85f0bf67e"
   },
   "index": {
     "componentCount": 1,
@@ -110,7 +110,8 @@
           {
             "type": "SOLID",
             "visible": true,
-            "color": { "hex": "#1252f7", "alpha": 1, "r": 18, "g": 82, "b": 247 },
+            "hex": "#1252f7",
+            "alpha": 1,
             "token": { "variableId": "VariableID:1:2", "cssName": "--color-primary-500" }
           }
         ],
@@ -165,7 +166,8 @@
                   {
                     "type": "SOLID",
                     "visible": true,
-                    "color": { "hex": "#0d3fc4", "alpha": 1, "r": 13, "g": 63, "b": 196 },
+                    "hex": "#0d3fc4",
+                    "alpha": 1,
                     "token": { "variableId": "VariableID:1:3", "cssName": "--color-primary-600" }
                   }
                 ]

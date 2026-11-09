@@ -151,8 +151,10 @@ export interface LayerPaint {
     | 'PATTERN';
   /** Whether the paint is visible. */
   visible: boolean;
-  /** The color, for SOLID paints. */
-  color?: ColorRgba;
+  /** Six-digit lowercase hex without alpha, for SOLID paints. */
+  hex?: string;
+  /** Opacity from 0 to 1, for SOLID paints. */
+  alpha?: number;
   /** Short human-readable description of a gradient or image paint. */
   description?: string;
   /** The token this paint is bound to, when it is. */
@@ -189,7 +191,7 @@ export interface LayerEffect {
   token?: TokenRef;
 }
 
-/** Corner radii in px, written only when the corners differ. */
+/** Per-corner radii in px, used when the corners differ. */
 export interface CornerRadii {
   /** Top-left radius. */
   tl: number;
@@ -304,10 +306,8 @@ export interface Layer {
   size?: LayerSize;
   /** Auto-layout settings. Only on auto-layout frames. */
   layout?: LayerLayout;
-  /** Uniform corner radius in px. See cornerRadii when corners differ. */
-  radius?: number;
-  /** Per-corner radii, written only when the corners differ. */
-  cornerRadii?: CornerRadii;
+  /** Corner radius in px: a number when all corners match, or per-corner values when they differ. */
+  radius?: number | CornerRadii;
   /** Opacity from 0 to 1. */
   opacity?: number;
   /** Fill paints. */
