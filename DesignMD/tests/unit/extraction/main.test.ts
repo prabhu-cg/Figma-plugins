@@ -123,26 +123,50 @@ describe('plugin controller (main.ts)', () => {
     ]);
   });
 
-  it('generate: reads component structure only when components.json is selected', async () => {
+  it('generate: never builds components.json in the plugin (the UI does)', async () => {
     const h = await bootPlugin(richFile());
     await h.send({ type: 'extract' });
     await h.send({
       type: 'generate',
-      options: {
-        ...DEFAULT_EXPORT_OPTIONS,
-        designMd: false,
-        componentDocs: false,
-        componentsJson: true,
-      },
-      excludedPages: ['Drafts'],
+      options: { ...DEFAULT_EXPORT_OPTIONS, componentsJson: true },
+      excludedPages: [],
     });
     const [done] = ofType(h, 'generation-complete');
-    const files = done.files as Array<{ path: string; content: string }>;
-    expect(files.map((f) => f.path)).toEqual(['components.json']);
-    const json = JSON.parse(files[0].content);
-    expect(json.schema).toBe('designmd.components/v1');
-    expect(json.components.map((c: { name: string }) => c.name)).toEqual(['Button']);
+    expect((done.files as Array<{ path: string }>).map((f) => f.path)).not.toContain(
+      'components.json',
+    );
+    expect(ofType(h, 'progress').map((p) => p.stage)).not.toContain('structure');
+  });
+
+  it("read-structures: streams each component's layers, then says it is complete", async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({ type: 'extract' });
+    await h.send({
+      type: 'read-structures',
+      excludedPages: ['Drafts'],
+      includeText: true,
+      includeVariantDiffs: true,
+    });
+    const items = ofType(h, 'structures').flatMap(
+      (m) => m.items as Array<[string, { tree?: { name: string }; error?: string }]>,
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0][1].error).toBeUndefined();
+    expect(items[0][1].tree?.name).toBe('Button');
     expect(ofType(h, 'progress').map((p) => p.stage)).toContain('structure');
+    expect(messages(h).at(-1)).toEqual({ type: 'structures-complete', cancelled: false });
+  });
+
+  it('read-structures: refuses to run before anything has been extracted', async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({
+      type: 'read-structures',
+      excludedPages: [],
+      includeText: true,
+      includeVariantDiffs: true,
+    });
+    expect(ofType(h, 'error')).toHaveLength(1);
+    expect(ofType(h, 'structures')).toEqual([]);
   });
 
   it('cancel during a scan: returns the partial result with a warning, not an error', async () => {
@@ -165,8 +189,8 @@ describe('plugin controller (main.ts)', () => {
     expect((done.designSystem as { components: unknown[] }).components.length).toBeGreaterThan(0);
   });
 
-  it('cancel during generation: delivers components.json with SCAN_CANCELLED warnings', async () => {
-    // 25 components: the first batch of 10 is read before the cancel lands, the rest are not.
+  it('cancel while reading layers: stops after the current batch and says it was cancelled', async () => {
+    // 25 components: the first batch is read before the cancel lands, the rest are not.
     const many: FakeFigmaOptions = {
       root: document('Acme', [
         page(
@@ -178,29 +202,18 @@ describe('plugin controller (main.ts)', () => {
     const h = await bootPlugin(many);
     await h.send({ type: 'extract' });
     const run = h.send({
-      type: 'generate',
-      options: {
-        ...DEFAULT_EXPORT_OPTIONS,
-        designMd: false,
-        componentDocs: false,
-        componentsJson: true,
-      },
+      type: 'read-structures',
       excludedPages: [],
+      includeText: true,
+      includeVariantDiffs: true,
     });
     await h.send({ type: 'cancel' });
     await run;
     expect(ofType(h, 'error')).toEqual([]);
-    const [done] = ofType(h, 'generation-complete');
-    const json = JSON.parse((done.files as Array<{ content: string }>)[0].content);
-    expect(json.components).toHaveLength(25);
-    const cancelled = json.warnings.filter((w: { code: string }) => w.code === 'SCAN_CANCELLED');
-    expect(cancelled).toHaveLength(15);
-    expect(json.warnings.filter((w: { code: string }) => w.code === 'COMPONENT_FAILED')).toEqual(
-      [],
-    );
-    expect(json.components.filter((c: { treeTruncated: boolean }) => c.treeTruncated)).toHaveLength(
-      15,
-    );
+    const sent = ofType(h, 'structures').flatMap((m) => m.items as unknown[]);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.length).toBeLessThan(25);
+    expect(messages(h).at(-1)).toEqual({ type: 'structures-complete', cancelled: true });
   });
 
   it('generate: sends a large result in pieces, then a completion message that lists them', async () => {

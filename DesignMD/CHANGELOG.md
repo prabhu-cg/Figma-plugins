@@ -20,6 +20,8 @@
   about 3.5 minutes); components not reached get a `TIME_BUDGET_EXCEEDED` warning. A per-layer time
   check keeps each component inside its 5 s budget, and the plugin console reports layers read and
   instance-lookup time.
+- Figma stays responsive while `components.json` is generated: layer reading is time-sliced, and the
+  file is assembled, hashed and split in the plugin UI rather than on Figma's main thread.
 - If one output fails to generate, the others are still offered and the failure is shown.
 
 ### Changed

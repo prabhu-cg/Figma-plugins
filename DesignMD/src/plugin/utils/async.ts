@@ -9,6 +9,23 @@ export function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+/**
+ * Returns a function that yields to the event loop when `intervalMs` have passed since the last
+ * yield. Called often (say once per layer) it keeps every synchronous stretch short, so Figma can
+ * repaint and answer input while a long read runs. Cheap when it is not yet due.
+ */
+export function createTimeSlicer(
+  intervalMs = 12,
+  now: () => number = Date.now,
+): () => Promise<void> {
+  let last = now();
+  return async () => {
+    if (now() - last < intervalMs) return;
+    await yieldToEventLoop();
+    last = now();
+  };
+}
+
 let cancelCheck: (() => boolean) | null = null;
 
 /** True while a run started with withCancellation has been asked to stop. */

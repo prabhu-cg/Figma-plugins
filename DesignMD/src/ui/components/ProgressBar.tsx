@@ -14,6 +14,7 @@ const STAGE_LABELS: Record<string, string> = {
   'grid-styles': 'Reading grid styles',
   components: 'Reading components',
   structure: 'Reading component layers',
+  assemble: 'Building components.json',
 };
 
 export function ProgressBar({ stage, percent, done, total }: ProgressBarProps) {

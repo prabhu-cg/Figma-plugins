@@ -35,6 +35,8 @@ styles the components use, with their default-mode values; full token data and m
 - A layer whose type changed is reported as removed plus added. Only the top-most added or removed layer is
   listed; its children come inside it.
 - Layer trees are read only when `components.json` is selected, so a token-only export stays fast.
+- The plugin reads the layers from Figma and streams them to the UI, which builds, hashes and splits the
+  file. This keeps the heavy work off Figma's main thread.
 
 ## Large files
 

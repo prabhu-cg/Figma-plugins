@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  createTimeSlicer,
   isCancelled,
   processInBatches,
   safely,
@@ -103,5 +104,24 @@ describe('cancellation', () => {
       ),
     ).rejects.toThrow('x');
     expect(isCancelled()).toBe(false);
+  });
+});
+
+describe('createTimeSlicer', () => {
+  it('does not yield until the interval has passed, then yields and starts a new interval', async () => {
+    let t = 0;
+    const slice = createTimeSlicer(10, () => t);
+    const spy = vi.spyOn(globalThis, 'setTimeout');
+    await slice();
+    t = 9;
+    await slice();
+    expect(spy).not.toHaveBeenCalled();
+    t = 10;
+    await slice();
+    expect(spy).toHaveBeenCalledTimes(1);
+    t = 15;
+    await slice(); // only 5 ms since the yield
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

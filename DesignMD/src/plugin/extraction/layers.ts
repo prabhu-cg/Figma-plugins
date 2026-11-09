@@ -39,6 +39,8 @@ export interface ReadLayerOptions {
   resolveToken?: (kind: 'variable' | 'style', id: string) => string | undefined;
   /** Checked before each layer; when it returns true the tree is cut short and flagged truncated. */
   shouldStop?: () => boolean;
+  /** Awaited before each layer; lets the caller hand control back to Figma now and then. */
+  yieldIfDue?: () => Promise<void>;
   /** Filled in as layers are read, so a slow run can be explained with numbers. */
   stats?: ReadStats;
 }
@@ -456,6 +458,7 @@ export async function readLayerTree(
 
   const visit = async (n: unknown, depth: number): Promise<Layer> => {
     count++;
+    if (options.yieldIfDue) await options.yieldIfDue();
     if (options.stats) options.stats.layers++;
     const id = str(n, 'id') ?? '';
     const type = str(n, 'type') ?? 'UNKNOWN';

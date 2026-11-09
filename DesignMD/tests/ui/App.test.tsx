@@ -290,7 +290,14 @@ describe('App: components.json option', () => {
       settings: { options: { ...DEFAULT_EXPORT_OPTIONS, componentsJson: true } },
       fileSettings: { excludedPages: [], contrastPairs: [] },
     });
-    await scanAndGenerate();
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fromPlugin({ type: 'generation-complete', files: [{ path: 'design.md', content: '# x\n' }] });
+    fromPlugin({ type: 'structures-complete', cancelled: false });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
     openTab('Export');
     fireEvent.click(screen.getByLabelText('Include variant differences'));
     expect(screen.getByText(/Settings changed — generate again/)).toBeInTheDocument();
@@ -358,6 +365,101 @@ describe('App: cancel, chunks and progress detail', () => {
     fromPlugin({ type: 'file-chunk', path: 'a.json', part: 0, parts: 2, data: 'x' });
     fromPlugin({ type: 'generation-complete', files: [], chunked: ['a.json'] });
     expect(screen.getByRole('alert')).toHaveTextContent('a.json arrived incomplete');
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+  });
+});
+
+describe('App: components.json is built in the UI', () => {
+  const structure = (name: string) => ({
+    properties: [],
+    defaultVariantId: 'variant:1',
+    tree: {
+      id: 'variant:1',
+      name,
+      type: 'FRAME',
+      role: 'root' as const,
+      roleSource: 'type' as const,
+      visible: true,
+      children: [],
+    },
+    variantDiffs: [],
+    treeTruncated: false,
+    usedVariableIds: [],
+    usedStyleIds: [],
+    warnings: [],
+  });
+  const settle = () =>
+    act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  const startRun = (extra: Partial<typeof DEFAULT_EXPORT_OPTIONS>) => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: { options: { ...DEFAULT_EXPORT_OPTIONS, ...extra } },
+      fileSettings: { excludedPages: [], contrastPairs: [] },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+  };
+
+  it('asks the plugin for the layers, and for the other files only when they are selected', () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    expect(messagesOfType('generate')).toHaveLength(0);
+    expect(messagesOfType('read-structures')).toEqual([
+      { type: 'read-structures', excludedPages: [], includeText: true, includeVariantDiffs: true },
+    ]);
+  });
+
+  it('asks for both when both are selected', () => {
+    startRun({ componentsJson: true });
+    expect(messagesOfType('generate')).toHaveLength(1);
+    expect(messagesOfType('read-structures')).toHaveLength(1);
+  });
+
+  it('waits for the layers, then assembles components.json next to the plugin files', async () => {
+    startRun({ componentsJson: true });
+    fromPlugin({ type: 'generation-complete', files: [{ path: 'design.md', content: '# d\n' }] });
+    expect(screen.queryByRole('button', { name: /Download/ })).not.toBeInTheDocument();
+
+    fromPlugin({ type: 'structures', items: [['component:1', structure('Button')]] });
+    fromPlugin({ type: 'structures-complete', cancelled: false });
+    await settle();
+
+    expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
+    expect(screen.getAllByText('design.md').length).toBeGreaterThan(0);
+    fireEvent.click(screen.getAllByText('components.json')[0]);
+    const preview = screen.getByLabelText('Preview of components.json').textContent ?? '';
+    expect(preview).toContain('"schema": "designmd.components/v1"');
+    expect(preview).toMatch(/"contentHash": "[0-9a-f]{64}"/);
+  });
+
+  it('works with components.json alone', async () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    fromPlugin({ type: 'structures', items: [['component:1', structure('Button')]] });
+    fromPlugin({ type: 'structures-complete', cancelled: false });
+    await settle();
+    expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
+    expect(screen.getByText('1 file ready')).toBeInTheDocument();
+  });
+
+  it('marks components the plugin never reported when the run was cancelled', async () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    fromPlugin({ type: 'structures-complete', cancelled: true });
+    await settle();
+    const preview = screen.getByLabelText('Preview of components.json').textContent ?? '';
+    expect(preview).toContain('SCAN_CANCELLED');
+  });
+
+  it('shows the plugin error and stops waiting if reading the layers fails', () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    fromPlugin({
+      type: 'error',
+      stage: 'generation',
+      message: 'Failed to read the component layers: x',
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to read the component layers');
     expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
   });
 });

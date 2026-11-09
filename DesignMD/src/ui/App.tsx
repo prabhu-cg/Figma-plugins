@@ -23,6 +23,7 @@ import { ErrorBanner } from './components/ErrorBanner';
 import { WarningsList } from './components/WarningsList';
 import { postToPlugin, usePluginMessages } from './hooks/usePluginBridge';
 import { ChunkAssembler } from '@shared/chunking';
+import { GenerationRun, planRun } from './generationRun';
 import { downloadAsZip, downloadIndividually } from './zip';
 
 type Status = 'idle' | 'extracting' | 'ready' | 'generating' | 'done';
@@ -61,6 +62,8 @@ export default function App() {
   const [cancelling, setCancelling] = useState(false);
   // Pieces of a large result, put back together when generation-complete arrives.
   const assembler = useRef(new ChunkAssembler());
+  // The Generate press in progress: waits for the plugin's files and the component layers.
+  const run = useRef<GenerationRun | null>(null);
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
   const [failures, setFailures] = useState<OutputFailure[]>([]);
@@ -80,6 +83,45 @@ export default function App() {
   useEffect(() => {
     postToPlugin({ type: 'ready' });
   }, []);
+
+  const finishRun = useCallback(() => {
+    const current = run.current;
+    run.current = null;
+    if (!current) return;
+    try {
+      const result = current.finish();
+      setFiles(result.files);
+      setFailures(result.failures);
+      setStatus('done');
+      setActiveTab('files');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus('ready');
+    }
+    setProgress(null);
+    setCancelling(false);
+  }, []);
+
+  const completeIfReady = () => {
+    const current = run.current;
+    if (!current || !current.isReady()) return;
+    if (!current.buildsComponentsJson) {
+      finishRun();
+      return;
+    }
+    // Building components.json takes a moment; show that before the work starts.
+    setProgress({ stage: 'assemble', percent: 100 });
+    setTimeout(finishRun, 0);
+  };
+
+  const abortRun = (message: string) => {
+    run.current = null;
+    assembler.current.reset();
+    setError(message);
+    setStatus(designSystem ? 'ready' : 'idle');
+    setProgress(null);
+    setCancelling(false);
+  };
 
   usePluginMessages((message) => {
     switch (message.type) {
@@ -101,9 +143,6 @@ export default function App() {
           total: message.total,
         });
         break;
-      case 'file-chunk':
-        assembler.current.add(message);
-        break;
       case 'extraction-complete':
         setDesignSystem(message.designSystem);
         // Restore this file's excluded pages, keeping only pages that exist in this scan.
@@ -122,29 +161,37 @@ export default function App() {
           setBaseName(slugify(message.designSystem.metadata.fileName) || 'designmd-export');
         }
         break;
-      case 'generation-complete':
+      case 'file-chunk':
+        assembler.current.add(message);
+        break;
+      case 'generation-complete': {
+        let received = message.files;
         try {
-          setFiles(message.chunked ? assembler.current.take(message.chunked) : message.files);
+          if (message.chunked) received = assembler.current.take(message.chunked);
         } catch (err) {
-          assembler.current.reset();
-          setError(err instanceof Error ? err.message : String(err));
-          setStatus('ready');
-          setProgress(null);
-          setCancelling(false);
+          abortRun(err instanceof Error ? err.message : String(err));
           break;
         }
-        setFailures(message.failures ?? []);
-        setProgress(null);
-        setCancelling(false);
-        setStatus('done');
-        setActiveTab('files');
+        // A result nobody asked for (no Generate pressed here) is treated as a plugin-only run.
+        run.current ??= new GenerationRun(
+          { needPlugin: true, needStructures: false },
+          designSystem ?? ({ components: [] } as unknown as DesignSystem),
+          [],
+          options,
+        );
+        run.current.addPluginResult(received, message.failures ?? []);
+        completeIfReady();
+        break;
+      }
+      case 'structures':
+        run.current?.addStructures(message.items);
+        break;
+      case 'structures-complete':
+        run.current?.structuresDone(message.cancelled);
+        completeIfReady();
         break;
       case 'error':
-        setError(message.message);
-        setStatus(designSystem ? 'ready' : 'idle');
-        setProgress(null);
-        setCancelling(false);
-        assembler.current.reset();
+        abortRun(message.message);
         break;
     }
   });
@@ -222,13 +269,22 @@ export default function App() {
     assembler.current.reset();
     setStatus('generating');
     setOutdated(false);
-    postToPlugin({
-      type: 'generate',
-      options,
-      excludedPages: Array.from(excludedPages),
-      contrastPairs,
-    });
-  }, [options, excludedPages, contrastPairs]);
+    const pages = Array.from(excludedPages);
+    const plan = planRun(options);
+    if (!designSystem) return;
+    run.current = new GenerationRun(plan, designSystem, pages, options);
+    if (plan.needPlugin) {
+      postToPlugin({ type: 'generate', options, excludedPages: pages, contrastPairs });
+    }
+    if (plan.needStructures) {
+      postToPlugin({
+        type: 'read-structures',
+        excludedPages: pages,
+        includeText: options.includeText,
+        includeVariantDiffs: options.includeVariantDiffs,
+      });
+    }
+  }, [options, excludedPages, contrastPairs, designSystem]);
 
   const handleDownload = useCallback(async () => {
     if (!files) return;

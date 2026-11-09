@@ -1,4 +1,5 @@
 import type { FileChunk } from './chunking';
+import type { StructureResult } from './structureTypes';
 import type { ContrastPairSpec, DesignSystem, ExtractionScope } from './types';
 
 export interface ExportOptions {
@@ -97,6 +98,17 @@ export type UIToPluginMessage =
     }
   | { type: 'save-settings'; settings: SavedSettings }
   | { type: 'save-file-settings'; fileSettings: FileSettings }
+  /**
+   * Read the layers of the components (components.json). The plugin streams the results back as
+   * 'structures' messages; the UI assembles, hashes and splits the file so that work never blocks
+   * Figma's main thread.
+   */
+  | {
+      type: 'read-structures';
+      excludedPages: string[];
+      includeText: boolean;
+      includeVariantDiffs: boolean;
+    }
   /** Stop the running scan or generation and return what is done so far. */
   | { type: 'cancel' };
 
@@ -113,6 +125,8 @@ export type PluginToUIMessage =
   | { type: 'settings'; settings: SavedSettings | null; fileSettings: FileSettings }
   | { type: 'extraction-complete'; designSystem: DesignSystem }
   | FileChunk
+  | { type: 'structures'; items: Array<[string, StructureResult]> }
+  | { type: 'structures-complete'; cancelled: boolean }
   | {
       type: 'generation-complete';
       /** Empty when `chunked` is set: the files arrived as file-chunk messages. */

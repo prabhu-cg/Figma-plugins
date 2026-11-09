@@ -122,7 +122,12 @@ and none of them can take the plugin down:
 - **Progress and Cancel.** The scan and the layer reading show "done of total" and a **Cancel**
   button. Cancelling returns what is finished with a warning (`SCAN_CANCELLED` on the components not
   read), not an error.
-- **Large results.** Results over 2 MB are sent from the plugin to the UI in 512 KB pieces. If
+- **Keeping Figma responsive.** Plugin code runs on Figma's main thread, so a long stretch of it
+  freezes the editor. Reading component layers is time-sliced (it hands control back about every
+  12 ms), and the heavy part of `components.json` (assembling, hashing and splitting a file that can
+  be tens of megabytes) runs in the plugin's UI iframe instead of the plugin. The plugin only reads
+  from Figma and streams the results over.
+- **Large results.** Other results over 2 MB are sent from the plugin to the UI in 512 KB pieces. If
   `components.json` would pass 20 MB it is split automatically: `components.json` keeps the index and
   tokens, and each component gets its own valid file in `components/<name>.json`.
 - **Partial success.** If one output fails to generate, the others are still offered and the Files
@@ -136,9 +141,14 @@ and none of them can take the plugin down:
 | Rayna UI community file (2,581 components, 493 sets)              | 2,581      | scan 8.5 s, generate 3 min 36 s | not measured | not checked yet   |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
-600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected: the scan took 8.5 s and
-generating took 3 min 36 s. Heap growth and output size were not recorded, and the generated file
-has not been checked yet. After a generate, the plugin console (Plugins > Development > Open
+600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected, made before layer reading
+was time-sliced and before `components.json` was assembled in the UI: the scan took 8.5 s and
+generating took 3 min 36 s, and Figma froze while it ran. The plugin console reported 1,173 layer
+trees (28,819 layers) read in 17 s, with 5,722 instance lookups adding up to 35 s of overlapping
+waits, so reading was not where most of the time went. Profiling the synthetic file in Node showed
+hashing its 36 MB output alone takes about 2 s with a JIT; the plugin's interpreter is much
+slower, which is the likely cause of the freeze. That run needs repeating with this version.
+Heap growth and output size were not recorded, and the generated file has not been checked yet. After a generate, the plugin console (Plugins > Development > Open
 console) prints how many layers were read and how long instance lookups took. The README's earlier
 claim that 10,000+ variables and 5,000+ components stay responsive has not been measured.
 

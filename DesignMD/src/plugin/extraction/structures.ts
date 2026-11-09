@@ -15,7 +15,7 @@ import type { ComponentDoc } from '@shared/types';
 import { cleanPropertyName } from '@shared/naming';
 import { assignRoles } from '../transform/roles';
 import { diffVariant } from '../transform/variantDiffs';
-import { isCancelled, processInBatches } from '../utils/async';
+import { createTimeSlicer, isCancelled, processInBatches } from '../utils/async';
 import { defaultVariantOf } from './components';
 import { readLayerTree, type ReadLayerOptions, type ReadStats } from './layers';
 
@@ -31,7 +31,8 @@ export const COMPONENT_TIME_BUDGET_MS = 5000;
 export const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1000;
 /** Budget for the serialized variant diffs of one component. Keeps one huge set from dominating memory. */
 export const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
-const BATCH_SIZE = 10;
+/** Small: a batch runs its components side by side, and Figma's API calls are not parallel anyway. */
+const BATCH_SIZE = 4;
 
 export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
   includeVariantDiffs?: boolean;
@@ -44,26 +45,15 @@ export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' |
   now?: () => number;
   /** Absolute time (same clock as `now`) after which no further layers are read. */
   deadline?: number;
+  /** Hands control back to Figma now and then. Defaults to a 12 ms time slicer per component. */
+  yieldIfDue?: () => Promise<void>;
   /** Receives counters for the run. */
   stats?: ReadStats;
 }
 
-export interface ComponentStructure {
-  properties: ComponentPropertyV1[];
-  defaultVariantId: string;
-  tree: Layer;
-  variantDiffs: VariantDiff[];
-  treeTruncated: boolean;
-  usedVariableIds: string[];
-  usedStyleIds: string[];
-  warnings: ComponentsWarning[];
-}
-
-export type StructureResult =
-  ComponentStructure | { error: string; cancelled?: boolean; timedOut?: boolean };
-
-export const isStructure = (r: StructureResult | undefined): r is ComponentStructure =>
-  !!r && !('error' in r);
+export type { ComponentStructure, StructureResult } from '@shared/structureTypes';
+export { isStructure } from '@shared/structureTypes';
+import type { ComponentStructure, StructureResult } from '@shared/structureTypes';
 
 type Def = {
   type?: string;
@@ -134,6 +124,7 @@ export async function extractComponentStructure(
     resolveToken: options.resolveToken,
     shouldStop,
     stats: options.stats,
+    yieldIfDue: options.yieldIfDue ?? createTimeSlicer(),
   };
   const warnings: ComponentsWarning[] = [];
 
@@ -258,32 +249,60 @@ export async function extractStructures(
   components: readonly ComponentDoc[],
   options: StructureOptions = {},
   onProgress?: (done: number, total: number) => void,
+  /**
+   * Called after each batch with the results finished since the last call. With this, results do
+   * not need to be kept: pass `retain: false` and the returned map stays empty.
+   */
+  onResults?: (items: Array<[string, StructureResult]>) => void,
+  retain = true,
 ): Promise<Map<string, StructureResult>> {
   const now = options.now ?? Date.now;
   const deadline = options.deadline ?? now() + (options.totalBudgetMs ?? TOTAL_TIME_BUDGET_MS);
-  const results = await processInBatches(
+  // One slicer for the whole run, so the time between yields is counted across components.
+  const yieldIfDue = options.yieldIfDue ?? createTimeSlicer();
+  const kept = new Map<string, StructureResult>();
+  let pending: Array<[string, StructureResult]> = [];
+
+  const record = (id: string, result: StructureResult) => {
+    if (retain) kept.set(id, result);
+    pending.push([id, result]);
+  };
+  const flush = () => {
+    if (pending.length > 0 && onResults) onResults(pending);
+    pending = [];
+  };
+
+  await processInBatches(
     [...components],
     BATCH_SIZE,
-    async (doc): Promise<[string, StructureResult]> => {
+    async (doc) => {
       if (now() > deadline) {
-        return [doc.id, { error: 'The overall time limit was reached.', timedOut: true }];
+        record(doc.id, { error: 'The overall time limit was reached.', timedOut: true });
+        return;
       }
       try {
         const node = await figma.getNodeByIdAsync(doc.id);
         if (!node || (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET')) {
-          return [doc.id, { error: 'The component could not be found in the file.' }];
+          record(doc.id, { error: 'The component could not be found in the file.' });
+          return;
         }
-        return [doc.id, await extractComponentStructure(node, { ...options, deadline })];
+        record(doc.id, await extractComponentStructure(node, { ...options, deadline, yieldIfDue }));
       } catch (err) {
-        return [doc.id, { error: err instanceof Error ? err.message : String(err) }];
+        record(doc.id, { error: err instanceof Error ? err.message : String(err) });
       }
     },
-    onProgress,
+    (done, total) => {
+      flush();
+      onProgress?.(done, total);
+    },
   );
-  const map = new Map(results);
+  flush();
+
   // A cancelled run stops before some batches; those components are marked, not dropped.
   for (const doc of components) {
-    if (!map.has(doc.id)) map.set(doc.id, { error: 'Generation was cancelled.', cancelled: true });
+    if (!kept.has(doc.id) && retain) {
+      kept.set(doc.id, { error: 'Generation was cancelled.', cancelled: true });
+    }
   }
-  return map;
+  return kept;
 }

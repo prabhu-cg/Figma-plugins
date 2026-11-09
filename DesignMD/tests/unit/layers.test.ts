@@ -305,6 +305,16 @@ describe('readLayerTree', () => {
       expect(r.warnings.map((w) => w.code)).toContain('TREE_TRUNCATED');
     });
 
+    it('hands control back before every layer when yieldIfDue is given', async () => {
+      let yields = 0;
+      await readLayerTree(wide(6), {
+        yieldIfDue: async () => {
+          yields++;
+        },
+      });
+      expect(yields).toBe(7); // the root and six children
+    });
+
     it('counts trees, layers and instance lookups, with the time the lookups took', async () => {
       const instance = (id: string) => ({
         id,

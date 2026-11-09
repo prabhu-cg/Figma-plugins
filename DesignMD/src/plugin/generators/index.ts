@@ -1,5 +1,5 @@
 import type { DesignSystem } from '@shared/types';
-import type { StructureResult } from '../extraction/structures';
+import type { StructureResult } from '@shared/structureTypes';
 import type { ExportOptions, GeneratedFile, OutputFailure } from '@shared/messages';
 import { generateComponentDocs } from './componentMd';
 import { generateComponentsJsonFiles } from './componentsJson';

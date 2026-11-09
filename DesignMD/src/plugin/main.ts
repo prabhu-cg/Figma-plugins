@@ -147,45 +147,10 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
       contrastPairs: options.contrastPairs ?? [],
     };
-    // Layer trees are read only when components.json is selected: they cost far more than the scan.
-    cancelRequested = false;
-    const stats = newReadStats();
-    const readStarted = Date.now();
-    const structures = options.options.componentsJson
-      ? await withCancellation(
-          () => cancelRequested,
-          () =>
-            extractStructures(
-              designSystem.components,
-              {
-                includeText: options.options.includeText,
-                includeVariantDiffs: options.options.includeVariantDiffs,
-                resolveToken: tokenResolver(designSystem),
-                stats,
-              },
-              (done, total) =>
-                post({
-                  type: 'progress',
-                  stage: 'structure',
-                  percent: total > 0 ? Math.round((done / total) * 100) : 100,
-                  done,
-                  total,
-                }),
-            ),
-        )
-      : undefined;
-    if (structures) {
-      // Visible in the plugin's console (Plugins > Development > Open console) so slow runs can be explained.
-      const seconds = Math.round((Date.now() - readStarted) / 1000);
-      const perLayer =
-        stats.layers > 0 ? ((Date.now() - readStarted) / stats.layers).toFixed(2) : '0';
-      console.log(
-        `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ` +
-          `${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1000)}s`,
-      );
-    }
-    const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
-      structures,
+    // components.json is assembled in the UI (see handleReadStructures), never here.
+    const { files, failures } = generateOutputsDetailed(designSystem, {
+      ...options.options,
+      componentsJson: false,
     });
 
     if (files.length === 0 && failures.length > 0) {
@@ -235,6 +200,67 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
   }
 }
 
+/**
+ * Reads the layers of every component and streams the results to the UI. This is the only part of
+ * components.json that needs Figma; the UI builds, hashes and splits the file. Reading is sliced
+ * into short stretches (see createTimeSlicer) so Figma stays responsive.
+ */
+async function handleReadStructures(
+  message: UIToPluginMessage & { type: 'read-structures' },
+): Promise<void> {
+  try {
+    if (!cachedDesignSystem) {
+      post({
+        type: 'error',
+        stage: 'generation',
+        message: 'Nothing to generate yet — extract the design system first.',
+      });
+      return;
+    }
+    const designSystem = filterDesignSystemByPages(cachedDesignSystem, message.excludedPages);
+    cancelRequested = false;
+    const stats = newReadStats();
+    const started = Date.now();
+    await withCancellation(
+      () => cancelRequested,
+      () =>
+        extractStructures(
+          designSystem.components,
+          {
+            includeText: message.includeText,
+            includeVariantDiffs: message.includeVariantDiffs,
+            resolveToken: tokenResolver(designSystem),
+            stats,
+          },
+          (done, total) =>
+            post({
+              type: 'progress',
+              stage: 'structure',
+              percent: total > 0 ? Math.round((done / total) * 100) : 100,
+              done,
+              total,
+            }),
+          (items) => post({ type: 'structures', items }),
+          false,
+        ),
+    );
+    // Visible in the plugin's console (Plugins > Development > Open console).
+    const seconds = Math.round((Date.now() - started) / 1000);
+    const perLayer = stats.layers > 0 ? ((Date.now() - started) / stats.layers).toFixed(2) : '0';
+    console.log(
+      `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ` +
+        `${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1000)}s`,
+    );
+    post({ type: 'structures-complete', cancelled: cancelRequested });
+  } catch (err) {
+    post({
+      type: 'error',
+      stage: 'generation',
+      message: `Failed to read the component layers: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+}
+
 figma.ui.onmessage = async (message: UIToPluginMessage) => {
   switch (message.type) {
     case 'ready':
@@ -251,6 +277,9 @@ figma.ui.onmessage = async (message: UIToPluginMessage) => {
       break;
     case 'generate':
       await handleGenerate(message);
+      break;
+    case 'read-structures':
+      await handleReadStructures(message);
       break;
     case 'cancel':
       cancelRequested = true;

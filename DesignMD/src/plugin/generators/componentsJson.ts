@@ -25,7 +25,7 @@ import type {
   VariableToken,
 } from '@shared/types';
 import { assignComponentDocPaths } from './componentMd';
-import { isStructure, type StructureResult } from '../extraction/structures';
+import { isStructure, type StructureResult } from '@shared/structureTypes';
 import { defaultModeValue } from './tokenValue';
 
 const OUTPUT_PATH = 'components.json';

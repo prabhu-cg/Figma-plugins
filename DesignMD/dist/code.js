@@ -40,6 +40,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   function yieldToEventLoop() {
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
+  function createTimeSlicer(intervalMs = 12, now = Date.now) {
+    let last = now();
+    return async () => {
+      if (now() - last < intervalMs) return;
+      await yieldToEventLoop();
+      last = now();
+    };
+  }
   let cancelCheck = null;
   function isCancelled() {
     return (cancelCheck == null ? void 0 : cancelCheck()) === true;
@@ -986,6 +994,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const visit = async (n, depth) => {
       var _a;
       count++;
+      if (options.yieldIfDue) await options.yieldIfDue();
       if (options.stats) options.stats.layers++;
       const id = str(n, "id") ?? "";
       const type = str(n, "type") ?? "UNKNOWN";
@@ -1228,8 +1237,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const COMPONENT_TIME_BUDGET_MS = 5e3;
   const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1e3;
   const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
-  const BATCH_SIZE = 10;
-  const isStructure = (r) => !!r && !("error" in r);
+  const BATCH_SIZE = 4;
   async function nodeById(id) {
     var _a;
     try {
@@ -1276,7 +1284,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       includeText: options.includeText,
       resolveToken: options.resolveToken,
       shouldStop,
-      stats: options.stats
+      stats: options.stats,
+      yieldIfDue: options.yieldIfDue ?? createTimeSlicer()
     };
     const warnings = [];
     const members = node.type === "COMPONENT_SET" ? node.children.filter((c) => c.type === "COMPONENT") : [node];
@@ -1381,33 +1390,51 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings: warnings.map((w) => w.componentId ? w : { ...w, componentId: node.id })
     };
   }
-  async function extractStructures(components, options = {}, onProgress) {
+  async function extractStructures(components, options = {}, onProgress, onResults, retain = true) {
     const now = options.now ?? Date.now;
     const deadline = options.deadline ?? now() + (options.totalBudgetMs ?? TOTAL_TIME_BUDGET_MS);
-    const results = await processInBatches(
+    const yieldIfDue = options.yieldIfDue ?? createTimeSlicer();
+    const kept = /* @__PURE__ */ new Map();
+    let pending = [];
+    const record = (id, result) => {
+      if (retain) kept.set(id, result);
+      pending.push([id, result]);
+    };
+    const flush = () => {
+      if (pending.length > 0 && onResults) onResults(pending);
+      pending = [];
+    };
+    await processInBatches(
       [...components],
       BATCH_SIZE,
       async (doc) => {
         if (now() > deadline) {
-          return [doc.id, { error: "The overall time limit was reached.", timedOut: true }];
+          record(doc.id, { error: "The overall time limit was reached.", timedOut: true });
+          return;
         }
         try {
           const node = await figma.getNodeByIdAsync(doc.id);
           if (!node || node.type !== "COMPONENT" && node.type !== "COMPONENT_SET") {
-            return [doc.id, { error: "The component could not be found in the file." }];
+            record(doc.id, { error: "The component could not be found in the file." });
+            return;
           }
-          return [doc.id, await extractComponentStructure(node, { ...options, deadline })];
+          record(doc.id, await extractComponentStructure(node, { ...options, deadline, yieldIfDue }));
         } catch (err) {
-          return [doc.id, { error: err instanceof Error ? err.message : String(err) }];
+          record(doc.id, { error: err instanceof Error ? err.message : String(err) });
         }
       },
-      onProgress
+      (done, total) => {
+        flush();
+        onProgress == null ? void 0 : onProgress(done, total);
+      }
     );
-    const map = new Map(results);
+    flush();
     for (const doc of components) {
-      if (!map.has(doc.id)) map.set(doc.id, { error: "Generation was cancelled.", cancelled: true });
+      if (!kept.has(doc.id) && retain) {
+        kept.set(doc.id, { error: "Generation was cancelled.", cancelled: true });
+      }
     }
-    return map;
+    return kept;
   }
   function escapeCell(value) {
     return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
@@ -1577,142 +1604,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const paths = assignComponentDocPaths(ds.components);
     return ds.components.map((c) => generateComponentMd(c, ds, paths.get(c.id)));
   }
-  const COMPONENTS_SCHEMA_ID = "designmd.components/v1";
-  const COMPONENTS_SCHEMA_URL = "https://raw.githubusercontent.com/prabhu-cg/Figma-plugins/main/DesignMD/schemas/designmd-components-v1.json";
-  const K = new Uint32Array([
-    1116352408,
-    1899447441,
-    3049323471,
-    3921009573,
-    961987163,
-    1508970993,
-    2453635748,
-    2870763221,
-    3624381080,
-    310598401,
-    607225278,
-    1426881987,
-    1925078388,
-    2162078206,
-    2614888103,
-    3248222580,
-    3835390401,
-    4022224774,
-    264347078,
-    604807628,
-    770255983,
-    1249150122,
-    1555081692,
-    1996064986,
-    2554220882,
-    2821834349,
-    2952996808,
-    3210313671,
-    3336571891,
-    3584528711,
-    113926993,
-    338241895,
-    666307205,
-    773529912,
-    1294757372,
-    1396182291,
-    1695183700,
-    1986661051,
-    2177026350,
-    2456956037,
-    2730485921,
-    2820302411,
-    3259730800,
-    3345764771,
-    3516065817,
-    3600352804,
-    4094571909,
-    275423344,
-    430227734,
-    506948616,
-    659060556,
-    883997877,
-    958139571,
-    1322822218,
-    1537002063,
-    1747873779,
-    1955562222,
-    2024104815,
-    2227730452,
-    2361852424,
-    2428436474,
-    2756734187,
-    3204031479,
-    3329325298
-  ]);
-  function utf8(input) {
-    const out = [];
-    for (const ch of input) {
-      const c = ch.codePointAt(0);
-      if (c < 128) out.push(c);
-      else if (c < 2048) out.push(192 | c >> 6, 128 | c & 63);
-      else if (c < 65536) out.push(224 | c >> 12, 128 | c >> 6 & 63, 128 | c & 63);
-      else
-        out.push(240 | c >> 18, 128 | c >> 12 & 63, 128 | c >> 6 & 63, 128 | c & 63);
-    }
-    return Uint8Array.from(out);
-  }
-  function sha256(input) {
-    const bytes = utf8(input);
-    const bitLength = bytes.length * 8;
-    const padded = new Uint8Array(bytes.length + 9 + 63 >> 6 << 6);
-    padded.set(bytes);
-    padded[bytes.length] = 128;
-    const view = new DataView(padded.buffer);
-    view.setUint32(padded.length - 8, Math.floor(bitLength / 4294967296));
-    view.setUint32(padded.length - 4, bitLength >>> 0);
-    const h = new Uint32Array([
-      1779033703,
-      3144134277,
-      1013904242,
-      2773480762,
-      1359893119,
-      2600822924,
-      528734635,
-      1541459225
-    ]);
-    const w = new Uint32Array(64);
-    const rotr = (x, n) => x >>> n | x << 32 - n;
-    for (let offset = 0; offset < padded.length; offset += 64) {
-      for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4);
-      for (let i = 16; i < 64; i++) {
-        const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ w[i - 15] >>> 3;
-        const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ w[i - 2] >>> 10;
-        w[i] = w[i - 16] + s0 + w[i - 7] + s1 >>> 0;
-      }
-      let [a, b, c, d, e, f, g, hh] = h;
-      for (let i = 0; i < 64; i++) {
-        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
-        const ch = e & f ^ ~e & g;
-        const t1 = hh + S1 + ch + K[i] + w[i] >>> 0;
-        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
-        const maj = a & b ^ a & c ^ b & c;
-        const t2 = S0 + maj >>> 0;
-        hh = g;
-        g = f;
-        f = e;
-        e = d + t1 >>> 0;
-        d = c;
-        c = b;
-        b = a;
-        a = t1 + t2 >>> 0;
-      }
-      h[0] += a;
-      h[1] += b;
-      h[2] += c;
-      h[3] += d;
-      h[4] += e;
-      h[5] += f;
-      h[6] += g;
-      h[7] += hh;
-    }
-    return Array.from(h, (x) => x.toString(16).padStart(8, "0")).join("");
-  }
   function defaultModeEntry(variable) {
     return variable.valuesByMode[0];
   }
@@ -1734,281 +1625,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   }
   function aliasCssName(variableName) {
     return toCssVarName(toPathSegments(variableName));
-  }
-  const OUTPUT_PATH = "components.json";
-  const MAX_ALIAS_DEPTH = 20;
-  const colorOf = (c) => ({
-    hex: c.hex.slice(0, 7).toLowerCase(),
-    alpha: Math.round(c.a * 1e3) / 1e3,
-    r: c.r,
-    g: c.g,
-    b: c.b
-  });
-  function resolveVariable(variable, byId) {
-    let current = variable;
-    for (let depth = 0; current && depth < MAX_ALIAS_DEPTH; depth++) {
-      const value = defaultModeValue(current);
-      if (!value) return void 0;
-      switch (value.kind) {
-        case "color":
-          return { cssName: variable.cssName, type: "color", value: colorOf(value.color) };
-        case "float":
-          return {
-            cssName: variable.cssName,
-            type: variable.category === "spacing" ? "dimension" : "number",
-            value: value.value
-          };
-        case "string":
-          return {
-            cssName: variable.cssName,
-            type: /font.?family/i.test(variable.name) ? "fontFamily" : "string",
-            value: value.value
-          };
-        case "boolean":
-          return { cssName: variable.cssName, type: "boolean", value: value.value };
-        case "alias":
-          current = byId.get(value.variableId);
-          break;
-        default:
-          return void 0;
-      }
-    }
-    return void 0;
-  }
-  function styleEntry(style) {
-    var _a, _b;
-    if (style.type === "PAINT") {
-      if (style.paint) return { cssName: style.cssName, type: "color", value: colorOf(style.paint) };
-      if (style.paintIsGradientOrImage) {
-        return {
-          cssName: style.cssName,
-          type: "gradient",
-          value: { description: "gradient or image paint" }
-        };
-      }
-      return void 0;
-    }
-    if (style.type === "TEXT" && style.textProperties) {
-      const p = style.textProperties;
-      return {
-        cssName: style.cssName,
-        type: "typography",
-        value: {
-          fontFamily: p.fontFamily,
-          fontStyle: p.fontStyle,
-          fontWeight: p.fontWeight,
-          fontSize: p.fontSize,
-          lineHeight: p.lineHeight,
-          letterSpacing: p.letterSpacing,
-          textCase: p.textCase,
-          textDecoration: p.textDecoration
-        }
-      };
-    }
-    if (style.type === "EFFECT" && ((_a = style.effects) == null ? void 0 : _a.length)) {
-      const e = style.effects[0];
-      const value = {
-        effectType: e.type,
-        effectCount: style.effects.length
-      };
-      if (e.color) value.color = colorOf(e.color).hex;
-      if (e.offsetX !== void 0) value.offsetX = e.offsetX;
-      if (e.offsetY !== void 0) value.offsetY = e.offsetY;
-      if (e.radius !== void 0) value.radius = e.radius;
-      if (e.spread !== void 0) value.spread = e.spread;
-      return { cssName: style.cssName, type: "shadow", value };
-    }
-    if (style.type === "GRID" && ((_b = style.grids) == null ? void 0 : _b.length)) {
-      const g = style.grids[0];
-      const value = { pattern: g.pattern };
-      if (g.count !== void 0) value.count = g.count;
-      if (g.sectionSize !== void 0) value.sectionSize = g.sectionSize;
-      if (g.gutterSize !== void 0) value.gutterSize = g.gutterSize;
-      return { cssName: style.cssName, type: "grid", value };
-    }
-    return void 0;
-  }
-  const stubTree = (doc) => ({
-    id: doc.id,
-    name: doc.name,
-    type: doc.isComponentSet ? "COMPONENT_SET" : "COMPONENT",
-    visible: true,
-    children: []
-  });
-  const fallbackProperties = (doc) => doc.properties.map((p) => ({
-    key: p.key ?? p.name,
-    name: cleanPropertyName(p.name),
-    type: p.type,
-    defaultValue: p.defaultValue,
-    ...p.defaultResolvedName ? { defaultResolved: { id: p.defaultValue, name: p.defaultResolvedName } } : {},
-    ...p.variantOptions ? { variantOptions: p.variantOptions } : {}
-  }));
-  const byPageThenName = (a, b) => a.pageName.localeCompare(b.pageName) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
-  function buildComponentsFile(ds, structures) {
-    const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
-    const stylesById = new Map(
-      [...ds.styles.text, ...ds.styles.color, ...ds.styles.effect, ...ds.styles.grid].map((s) => [
-        s.id,
-        s
-      ])
-    );
-    const warnings = [];
-    const used = /* @__PURE__ */ new Set();
-    const tokens = {};
-    const addToken = (id, componentId) => {
-      if (id in tokens) return true;
-      const variable = variablesById.get(id);
-      const style = stylesById.get(id);
-      const entry = variable ? resolveVariable(variable, variablesById) : style && styleEntry(style);
-      if (!entry) {
-        if (!used.has(`warn:${id}`)) {
-          used.add(`warn:${id}`);
-          warnings.push({
-            code: "UNRESOLVED_REFERENCE",
-            message: `The token ${id} is used by a component but is not available in this file's tokens (hidden from publishing, or has no representable value).`,
-            componentId
-          });
-        }
-        return false;
-      }
-      tokens[id] = entry;
-      return true;
-    };
-    const docs = [...ds.components].sort(byPageThenName);
-    const components = docs.map((doc) => {
-      var _a;
-      const result = structures.get(doc.id);
-      const structure = isStructure(result) ? result : void 0;
-      if (!structure && result && "cancelled" in result && result.cancelled) {
-        warnings.push({
-          code: "SCAN_CANCELLED",
-          message: `Generation was cancelled before "${doc.name}" was read, so its layer tree is empty.`,
-          componentId: doc.id
-        });
-      } else if (!structure && result && "timedOut" in result && result.timedOut) {
-        warnings.push({
-          code: "TIME_BUDGET_EXCEEDED",
-          message: `The overall time limit was reached before "${doc.name}" was read, so its layer tree is empty. Turn off variant differences, or scan a selection, to read more within the limit.`,
-          componentId: doc.id
-        });
-      } else if (!structure) {
-        warnings.push({
-          code: "COMPONENT_FAILED",
-          message: `"${doc.name}" (${doc.id}) could not be read: ${result && "error" in result ? result.error : "its structure was not extracted"}. Its layer tree is empty.`,
-          componentId: doc.id
-        });
-      } else {
-        warnings.push(...structure.warnings);
-      }
-      const variableIds = /* @__PURE__ */ new Set([...doc.boundVariableIds, ...(structure == null ? void 0 : structure.usedVariableIds) ?? []]);
-      const styleIds = /* @__PURE__ */ new Set([...doc.styleIds ?? [], ...(structure == null ? void 0 : structure.usedStyleIds) ?? []]);
-      const boundVariableIds = [...variableIds].sort().filter((id) => addToken(id, doc.id));
-      const resolvedStyleIds = [...styleIds].sort().filter((id) => addToken(id, doc.id));
-      const component = {
-        id: doc.id,
-        key: doc.key,
-        name: doc.name,
-        description: doc.description,
-        isComponentSet: doc.isComponentSet,
-        pageName: doc.pageName,
-        variants: doc.variants.map((v) => ({
-          id: v.id,
-          name: v.name,
-          variantProperties: v.variantProperties,
-          description: v.description
-        })),
-        properties: (structure == null ? void 0 : structure.properties) ?? fallbackProperties(doc),
-        states: doc.states,
-        sizes: doc.sizes,
-        relatedComponentNames: doc.relatedComponentNames,
-        boundVariableIds,
-        styleIds: resolvedStyleIds,
-        ...doc.layout ? { layout: doc.layout } : {},
-        defaultVariantId: (structure == null ? void 0 : structure.defaultVariantId) ?? ((_a = doc.variants[0]) == null ? void 0 : _a.id) ?? doc.id,
-        tree: (structure == null ? void 0 : structure.tree) ?? stubTree(doc),
-        variantDiffs: (structure == null ? void 0 : structure.variantDiffs) ?? [],
-        treeTruncated: structure ? structure.treeTruncated : true
-      };
-      return component;
-    });
-    const sortedTokens = Object.fromEntries(
-      Object.entries(tokens).sort(([a], [b]) => a.localeCompare(b))
-    );
-    return {
-      $schema: COMPONENTS_SCHEMA_URL,
-      schema: COMPONENTS_SCHEMA_ID,
-      metadata: {
-        fileName: ds.metadata.fileName,
-        scope: ds.metadata.scope,
-        generatedAt: ds.metadata.generatedAt,
-        pluginVersion: ds.metadata.pluginVersion,
-        contentHash: ""
-      },
-      index: {
-        componentCount: components.length,
-        components: components.map((c) => ({ id: c.id, name: c.name }))
-      },
-      tokens: sortedTokens,
-      components,
-      warnings
-    };
-  }
-  function hashAndSerialize(file) {
-    const blank = JSON.stringify(
-      { ...file, metadata: { ...file.metadata, generatedAt: "", contentHash: "" } },
-      null,
-      2
-    );
-    const contentHash = sha256(blank + "\n");
-    return {
-      content: JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + "\n",
-      contentHash
-    };
-  }
-  function serializeComponentsFile(file) {
-    return hashAndSerialize(file).content;
-  }
-  const COMPONENTS_JSON_SPLIT_BYTES = 20 * 1024 * 1024;
-  const mb = (bytes) => (bytes / 1048576).toFixed(1);
-  function generateComponentsJsonFiles(ds, structures, options = {}) {
-    const threshold = options.splitThresholdBytes ?? COMPONENTS_JSON_SPLIT_BYTES;
-    const file = buildComponentsFile(ds, structures);
-    const single = hashAndSerialize(file);
-    if (single.content.length <= threshold) return [{ path: OUTPUT_PATH, content: single.content }];
-    const docPaths = assignComponentDocPaths(ds.components);
-    const parts = [];
-    const index = file.components.map((component) => {
-      const path = (docPaths.get(component.id) ?? `components/${component.id}.md`).replace(
-        /\.md$/,
-        ".json"
-      );
-      const usedTokenIds = [...component.boundVariableIds, ...component.styleIds];
-      const part = {
-        ...file,
-        index: { componentCount: 1, components: [{ id: component.id, name: component.name }] },
-        tokens: Object.fromEntries(
-          usedTokenIds.filter((id) => id in file.tokens).map((id) => [id, file.tokens[id]])
-        ),
-        components: [component],
-        warnings: file.warnings.filter((w) => w.componentId === component.id)
-      };
-      const { content, contentHash } = hashAndSerialize(part);
-      parts.push({ path, content });
-      return { id: component.id, name: component.name, file: path, contentHash };
-    });
-    const main = {
-      ...file,
-      index: { componentCount: file.components.length, components: index },
-      components: [],
-      warnings: [
-        ...file.warnings,
-        {
-          code: "OUTPUT_TOO_LARGE",
-          message: `components.json would be ${mb(single.content.length)} MB (limit ${mb(threshold)} MB), so each component is in its own file under components/ and this file holds the index and tokens.`
-        }
-      ]
-    };
-    return [{ path: OUTPUT_PATH, content: serializeComponentsFile(main) }, ...parts];
   }
   function unitFor(category) {
     return category === "spacing" || category === "typography" ? "px" : "";
@@ -3070,14 +2686,6 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     if (options.componentDocs) run("Component docs", () => generateComponentDocs(ds));
     if (options.tokensJson) run("tokens.json", () => generateTokensJson(ds));
     if (options.cssFile) run("tokens.css", () => generateCssFile(ds));
-    if (options.componentsJson) {
-      run(
-        "components.json",
-        () => generateComponentsJsonFiles(ds, extras.structures ?? /* @__PURE__ */ new Map(), {
-          splitThresholdBytes: extras.splitThresholdBytes
-        })
-      );
-    }
     return { files, failures };
   }
   function collectVariantPropertyValues(variants, propertyNamePattern) {
@@ -3608,37 +3216,9 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
         contrastPairs: options.contrastPairs ?? []
       };
-      cancelRequested = false;
-      const stats = newReadStats();
-      const readStarted = Date.now();
-      const structures = options.options.componentsJson ? await withCancellation(
-        () => cancelRequested,
-        () => extractStructures(
-          designSystem.components,
-          {
-            includeText: options.options.includeText,
-            includeVariantDiffs: options.options.includeVariantDiffs,
-            resolveToken: tokenResolver(designSystem),
-            stats
-          },
-          (done, total) => post({
-            type: "progress",
-            stage: "structure",
-            percent: total > 0 ? Math.round(done / total * 100) : 100,
-            done,
-            total
-          })
-        )
-      ) : void 0;
-      if (structures) {
-        const seconds = Math.round((Date.now() - readStarted) / 1e3);
-        const perLayer = stats.layers > 0 ? ((Date.now() - readStarted) / stats.layers).toFixed(2) : "0";
-        console.log(
-          `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1e3)}s`
-        );
-      }
-      const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
-        structures
+      const { files, failures } = generateOutputsDetailed(designSystem, {
+        ...options.options,
+        componentsJson: false
       });
       if (files.length === 0 && failures.length > 0) {
         post({
@@ -3681,6 +3261,55 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       });
     }
   }
+  async function handleReadStructures(message) {
+    try {
+      if (!cachedDesignSystem) {
+        post({
+          type: "error",
+          stage: "generation",
+          message: "Nothing to generate yet — extract the design system first."
+        });
+        return;
+      }
+      const designSystem = filterDesignSystemByPages(cachedDesignSystem, message.excludedPages);
+      cancelRequested = false;
+      const stats = newReadStats();
+      const started = Date.now();
+      await withCancellation(
+        () => cancelRequested,
+        () => extractStructures(
+          designSystem.components,
+          {
+            includeText: message.includeText,
+            includeVariantDiffs: message.includeVariantDiffs,
+            resolveToken: tokenResolver(designSystem),
+            stats
+          },
+          (done, total) => post({
+            type: "progress",
+            stage: "structure",
+            percent: total > 0 ? Math.round(done / total * 100) : 100,
+            done,
+            total
+          }),
+          (items) => post({ type: "structures", items }),
+          false
+        )
+      );
+      const seconds = Math.round((Date.now() - started) / 1e3);
+      const perLayer = stats.layers > 0 ? ((Date.now() - started) / stats.layers).toFixed(2) : "0";
+      console.log(
+        `[DesignMD] read ${stats.trees} layer trees (${stats.layers} layers) in ${seconds}s, ${perLayer} ms per layer; ${stats.instanceLookups} instance lookups took ${Math.round(stats.instanceMs / 1e3)}s`
+      );
+      post({ type: "structures-complete", cancelled: cancelRequested });
+    } catch (err) {
+      post({
+        type: "error",
+        stage: "generation",
+        message: `Failed to read the component layers: ${err instanceof Error ? err.message : String(err)}`
+      });
+    }
+  }
   figma.ui.onmessage = async (message) => {
     switch (message.type) {
       case "ready":
@@ -3697,6 +3326,9 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         break;
       case "generate":
         await handleGenerate(message);
+        break;
+      case "read-structures":
+        await handleReadStructures(message);
         break;
       case "cancel":
         cancelRequested = true;
