@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { DEFAULT_EXPORT_OPTIONS, type ExportOptions, type GeneratedFile } from '@shared/messages';
+import {
+  DEFAULT_EXPORT_OPTIONS,
+  type ExportOptions,
+  type GeneratedFile,
+  type OutputFailure,
+} from '@shared/messages';
 import type { ContrastPairSpec, DesignSystem, ExtractionScope } from '@shared/types';
 import { Header } from './components/Header';
 import { SummaryPanel } from './components/SummaryPanel';
@@ -49,6 +54,7 @@ export default function App() {
   const [progress, setProgress] = useState<{ stage: string; percent: number } | null>(null);
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
+  const [failures, setFailures] = useState<OutputFailure[]>([]);
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   const [excludedPages, setExcludedPages] = useState<Set<string>>(new Set());
   const [baseName, setBaseName] = useState('designmd-export');
@@ -100,6 +106,7 @@ export default function App() {
         break;
       case 'generation-complete':
         setFiles(message.files);
+        setFailures(message.failures ?? []);
         setProgress(null);
         setStatus('done');
         setActiveTab('files');
@@ -125,6 +132,7 @@ export default function App() {
     if (!files) return;
     setStatus((current) => (current === 'done' ? 'ready' : current));
     setFiles(null);
+    setFailures([]);
     setOutdated(true);
     setActiveTab((current) => (current === 'files' ? 'export' : current));
   }, [files]);
@@ -287,7 +295,25 @@ export default function App() {
           </>
         )}
 
-        {showTabs && currentTab === 'files' && files && <FilePreview files={files} />}
+        {showTabs && currentTab === 'files' && files && (
+          <>
+            {failures.length > 0 && (
+              <div className="dmd-failures" role="alert">
+                <strong>
+                  {failures.length} output{failures.length === 1 ? '' : 's'} could not be generated
+                </strong>
+                <ul>
+                  {failures.map((f) => (
+                    <li key={f.output}>
+                      {f.output}: {f.reason}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <FilePreview files={files} />
+          </>
+        )}
       </div>
 
       <footer className="dmd-footer">

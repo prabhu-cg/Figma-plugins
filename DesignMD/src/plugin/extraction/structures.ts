@@ -23,11 +23,15 @@ import { readLayerTree, type ReadLayerOptions } from './layers';
 export const MAX_VARIANTS_FOR_DIFFS = 128;
 /** Wall-clock budget for the layers and diffs of one component. */
 export const COMPONENT_TIME_BUDGET_MS = 5000;
+/** Budget for the serialized variant diffs of one component. Keeps one huge set from dominating memory. */
+export const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
 const BATCH_SIZE = 10;
 
 export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
   includeVariantDiffs?: boolean;
   timeBudgetMs?: number;
+  /** Approximate cap, in serialized bytes, on the variant diffs of one component. */
+  memoryBudgetBytes?: number;
   /** Clock, injectable for tests. */
   now?: () => number;
 }
@@ -104,6 +108,8 @@ export async function extractComponentStructure(
   const now = options.now ?? Date.now;
   const started = now();
   const budget = options.timeBudgetMs ?? COMPONENT_TIME_BUDGET_MS;
+  const memoryBudget = options.memoryBudgetBytes ?? COMPONENT_MEMORY_BUDGET_BYTES;
+  let diffBytes = 0;
   const readOptions = { includeText: options.includeText, resolveToken: options.resolveToken };
   const warnings: ComponentsWarning[] = [];
 
@@ -153,6 +159,16 @@ export async function extractComponentStructure(
         componentId: node.id,
       });
       diff.added = diff.added.map((a) => ({ ...a, layer: assignRoles(a.layer, false) }));
+      diffBytes += JSON.stringify(diff).length;
+      if (diffBytes > memoryBudget) {
+        truncated = true;
+        warnings.push({
+          code: 'TREE_TRUNCATED',
+          message: `"${node.name}" has more variant differences than the size budget (${Math.round(memoryBudget / 1024)} KB), so diffs stop after ${diffs.length} of ${others.length} variants.`,
+          componentId: node.id,
+        });
+        break;
+      }
       diffs.push(diff);
       // Duplicate names repeat for every variant; one warning per layer is enough.
       for (const w of diffWarnings) {
@@ -166,10 +182,22 @@ export async function extractComponentStructure(
     }
   }
 
-  return {
-    properties: await readProperties(
+  let properties: ComponentPropertyV1[] = [];
+  try {
+    properties = await readProperties(
       node.componentPropertyDefinitions as unknown as Record<string, Def> | undefined,
-    ),
+    );
+  } catch (err) {
+    // The layers are still useful without the property list.
+    warnings.push({
+      code: 'PROPERTIES_UNREADABLE',
+      message: `The component properties of "${node.name}" could not be read: ${err instanceof Error ? err.message : String(err)}.`,
+      componentId: node.id,
+    });
+  }
+
+  return {
+    properties,
     defaultVariantId: defaultNode.id,
     tree: assignRoles(base.tree),
     variantDiffs: diffs,

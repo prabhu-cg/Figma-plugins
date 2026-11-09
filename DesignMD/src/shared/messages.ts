@@ -26,6 +26,12 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   zip: true,
 };
 
+/** An output that could not be generated; the others are still returned. */
+export interface OutputFailure {
+  output: string;
+  reason: string;
+}
+
 export interface GeneratedFile {
   /** Relative output path, e.g. "design.md" or "components/Button.md" */
   path: string;
@@ -96,7 +102,7 @@ export type PluginToUIMessage =
   | { type: 'selection'; count: number }
   | { type: 'settings'; settings: SavedSettings | null; fileSettings: FileSettings }
   | { type: 'extraction-complete'; designSystem: DesignSystem }
-  | { type: 'generation-complete'; files: GeneratedFile[] }
+  | { type: 'generation-complete'; files: GeneratedFile[]; failures?: OutputFailure[] }
   | { type: 'error'; stage: string; message: string };
 
 export interface FigmaPluginMessageEvent<T> {

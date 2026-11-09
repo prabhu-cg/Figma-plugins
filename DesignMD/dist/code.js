@@ -1191,6 +1191,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   }
   const MAX_VARIANTS_FOR_DIFFS = 128;
   const COMPONENT_TIME_BUDGET_MS = 5e3;
+  const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
   const BATCH_SIZE = 10;
   const isStructure = (r) => !!r && !("error" in r);
   async function nodeById(id) {
@@ -1232,6 +1233,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const now = options.now ?? Date.now;
     const started = now();
     const budget = options.timeBudgetMs ?? COMPONENT_TIME_BUDGET_MS;
+    const memoryBudget = options.memoryBudgetBytes ?? COMPONENT_MEMORY_BUDGET_BYTES;
+    let diffBytes = 0;
     const readOptions = { includeText: options.includeText, resolveToken: options.resolveToken };
     const warnings = [];
     const members = node.type === "COMPONENT_SET" ? node.children.filter((c) => c.type === "COMPONENT") : [node];
@@ -1274,6 +1277,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           componentId: node.id
         });
         diff.added = diff.added.map((a) => ({ ...a, layer: assignRoles(a.layer, false) }));
+        diffBytes += JSON.stringify(diff).length;
+        if (diffBytes > memoryBudget) {
+          truncated = true;
+          warnings.push({
+            code: "TREE_TRUNCATED",
+            message: `"${node.name}" has more variant differences than the size budget (${Math.round(memoryBudget / 1024)} KB), so diffs stop after ${diffs.length} of ${others.length} variants.`,
+            componentId: node.id
+          });
+          break;
+        }
         diffs.push(diff);
         for (const w of diffWarnings) {
           if (!warnings.some((x) => x.code === w.code && x.layerId === w.layerId)) warnings.push(w);
@@ -1285,10 +1298,20 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         }
       }
     }
-    return {
-      properties: await readProperties(
+    let properties = [];
+    try {
+      properties = await readProperties(
         node.componentPropertyDefinitions
-      ),
+      );
+    } catch (err) {
+      warnings.push({
+        code: "PROPERTIES_UNREADABLE",
+        message: `The component properties of "${node.name}" could not be read: ${err instanceof Error ? err.message : String(err)}.`,
+        componentId: node.id
+      });
+    }
+    return {
+      properties,
       defaultVariantId: defaultNode.id,
       tree: assignRoles(base.tree),
       variantDiffs: diffs,
@@ -2909,15 +2932,25 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       content: JSON.stringify(output, null, 2)
     };
   }
-  function generateOutputs(ds, options, extras = {}) {
+  function generateOutputsDetailed(ds, options, extras = {}) {
     const files = [];
-    if (options.designMd) files.push(generateDesignMd(ds));
-    if (options.componentDocs) files.push(...generateComponentDocs(ds));
-    if (options.tokensJson) files.push(generateTokensJson(ds));
-    if (options.cssFile) files.push(generateCssFile(ds));
-    if (options.componentsJson)
-      files.push(generateComponentsJson(ds, extras.structures ?? /* @__PURE__ */ new Map()));
-    return files;
+    const failures = [];
+    const run = (output, make) => {
+      try {
+        const made = make();
+        files.push(...Array.isArray(made) ? made : [made]);
+      } catch (err) {
+        failures.push({ output, reason: err instanceof Error ? err.message : String(err) });
+      }
+    };
+    if (options.designMd) run("design.md", () => generateDesignMd(ds));
+    if (options.componentDocs) run("Component docs", () => generateComponentDocs(ds));
+    if (options.tokensJson) run("tokens.json", () => generateTokensJson(ds));
+    if (options.cssFile) run("tokens.css", () => generateCssFile(ds));
+    if (options.componentsJson) {
+      run("components.json", () => generateComponentsJson(ds, extras.structures ?? /* @__PURE__ */ new Map()));
+    }
+    return { files, failures };
   }
   function collectVariantPropertyValues(variants, propertyNamePattern) {
     const values = /* @__PURE__ */ new Set();
@@ -3420,7 +3453,17 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
           percent: total > 0 ? Math.round(done / total * 100) : 100
         })
       ) : void 0;
-      const files = generateOutputs(designSystem, options.options, { structures });
+      const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
+        structures
+      });
+      if (files.length === 0 && failures.length > 0) {
+        post({
+          type: "error",
+          stage: "generation",
+          message: `Failed to generate output files: ${failures.map((f) => `${f.output} (${f.reason})`).join("; ")}`
+        });
+        return;
+      }
       if (files.length === 0) {
         post({
           type: "error",
@@ -3429,7 +3472,11 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         });
         return;
       }
-      post({ type: "generation-complete", files });
+      post({
+        type: "generation-complete",
+        files,
+        ...failures.length > 0 ? { failures } : {}
+      });
     } catch (err) {
       post({
         type: "error",

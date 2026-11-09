@@ -166,6 +166,56 @@ describe('extractComponentStructure', () => {
   });
 });
 
+describe('extractComponentStructure: budgets and hostile nodes', () => {
+  it('stops adding variant diffs once their size passes the memory budget', async () => {
+    const variants = Array.from({ length: 20 }, (_, i) => ({
+      props: { N: String(i) },
+      extra: { width: 100 + i, height: 36, fills: [solid(i / 20, 0, 0)] },
+      children: [text('Label'), text('Extra')],
+    }));
+    const set = componentSet('Wide', variants);
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const s = await extractComponentStructure(set as never, { memoryBudgetBytes: 2000 });
+    expect(s.variantDiffs.length).toBeGreaterThan(0);
+    expect(s.variantDiffs.length).toBeLessThan(19);
+    expect(s.treeTruncated).toBe(true);
+    expect(
+      s.warnings.some((w) => w.code === 'TREE_TRUNCATED' && w.message.includes('size budget')),
+    ).toBe(true);
+    const bytes = s.variantDiffs.reduce((sum, d) => sum + JSON.stringify(d).length, 0);
+    expect(bytes).toBeLessThanOrEqual(2000);
+  });
+
+  it('keeps the layers when the property list throws, and says so', async () => {
+    const set = componentSet('Odd', [{ props: { S: 'a' }, children: [text('Label')] }]);
+    Object.defineProperty(set, 'componentPropertyDefinitions', {
+      get() {
+        throw new Error('getter exploded');
+      },
+    });
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const s = await extractComponentStructure(set as never);
+    expect(s.properties).toEqual([]);
+    expect(s.tree.children).toHaveLength(1);
+    const w = s.warnings.find((x) => x.code === 'PROPERTIES_UNREADABLE')!;
+    expect(w.message).toContain('getter exploded');
+    expect(w.componentId).toBe(set.id);
+  });
+
+  it('survives a variant node whose property getters throw', async () => {
+    const set = componentSet('Bad', [{ props: { S: 'a' } }, { props: { S: 'b' } }]);
+    Object.defineProperty(set.children![1], 'fills', {
+      get() {
+        throw new Error('fills exploded');
+      },
+    });
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    await expect(extractComponentStructure(set as never)).resolves.toMatchObject({
+      treeTruncated: false,
+    });
+  });
+});
+
 describe('extractStructures: isolation', () => {
   it('reports a missing node and a throwing node, and still reads the others', async () => {
     const { root, set } = buildFile();

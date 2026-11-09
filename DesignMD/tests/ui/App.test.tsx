@@ -306,6 +306,29 @@ describe('App: components.json option', () => {
   });
 });
 
+describe('App: partial generation', () => {
+  it('shows which outputs failed next to the files that were generated', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fromPlugin({
+      type: 'generation-complete',
+      files: [{ path: 'design.md', content: '# x\n' }],
+      failures: [{ output: 'components.json', reason: 'out of memory' }],
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('1 output could not be generated');
+    expect(screen.getByRole('alert')).toHaveTextContent('components.json: out of memory');
+    expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
+  });
+
+  it('shows no failure banner after a clean run', async () => {
+    render(<App />);
+    await scanAndGenerate();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
 describe('App: per-file settings', () => {
   function twoPageSystem() {
     const ds = makeDesignSystem();

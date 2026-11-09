@@ -882,3 +882,23 @@ body {
   line-height: 1.45;
   color: var(--dmd-text-secondary);
 }
+
+/* ---------- Partial generation failures ---------- */
+
+.dmd-failures {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1.5px solid var(--dmd-border-strong);
+  background: var(--dmd-brand-bg);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dmd-text);
+}
+
+.dmd-failures ul {
+  margin: 0;
+  padding-left: 18px;
+}

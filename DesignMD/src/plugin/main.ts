@@ -10,7 +10,7 @@ import {
 } from '@shared/messages';
 import { extractDesignSystem } from './extraction';
 import { extractStructures } from './extraction/structures';
-import { generateOutputs } from './generators';
+import { generateOutputsDetailed } from './generators';
 import { transformToDesignSystem } from './transform';
 import { filterDesignSystemByPages } from './transform/pageFilter';
 
@@ -148,7 +148,20 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
             }),
         )
       : undefined;
-    const files = generateOutputs(designSystem, options.options, { structures });
+    const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
+      structures,
+    });
+
+    if (files.length === 0 && failures.length > 0) {
+      post({
+        type: 'error',
+        stage: 'generation',
+        message: `Failed to generate output files: ${failures
+          .map((f) => `${f.output} (${f.reason})`)
+          .join('; ')}`,
+      });
+      return;
+    }
 
     if (files.length === 0) {
       post({
@@ -159,7 +172,11 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       return;
     }
 
-    post({ type: 'generation-complete', files });
+    post({
+      type: 'generation-complete',
+      files,
+      ...(failures.length > 0 ? { failures } : {}),
+    });
   } catch (err) {
     post({
       type: 'error',
