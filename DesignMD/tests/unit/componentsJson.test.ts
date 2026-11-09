@@ -26,6 +26,7 @@ import {
   node,
   page,
   resetFakeIds,
+  type FakeNode,
 } from './helpers/fakeFigma';
 import { makeDesignSystem } from './fixtures';
 
@@ -39,6 +40,8 @@ const solid = (r: number, g: number, b: number, extra: object = {}) => ({
   visible: true,
   ...extra,
 });
+const frameLike = (name: string, children: FakeNode[]) =>
+  node('FRAME', name, { visible: true, width: 10, height: 10 }, children);
 const text = (name: string, props: object = {}) =>
   node('TEXT', name, {
     visible: true,
@@ -273,6 +276,28 @@ describe('overall time budget', () => {
     const docs = transformComponents(await extractComponents());
     const out = await extractStructures(docs);
     expect([...out.values()].every((r) => !('error' in r))).toBe(true);
+  });
+});
+
+describe('duplicate sibling names', () => {
+  it('are one warning per component, not one per group of layers', async () => {
+    const dupes = () => [
+      text('Icon'),
+      text('Icon'),
+      frameLike('Row', [text('Dot'), text('Dot')]),
+      frameLike('Row', [text('Dot'), text('Dot')]),
+    ];
+    const set = componentSet('Busy', [
+      { props: { S: 'a' }, children: dupes() },
+      { props: { S: 'b' }, children: dupes() },
+      { props: { S: 'c' }, children: dupes() },
+    ]);
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const s = await extractComponentStructure(set as never);
+    const dup = s.warnings.filter((w) => w.code === 'DUPLICATE_SIBLING_NAME');
+    expect(dup).toHaveLength(1);
+    expect(dup[0].message).toMatch(/^\d+ groups of sibling layers in "Busy"/);
+    expect(dup[0].componentId).toBe(set.id);
   });
 });
 

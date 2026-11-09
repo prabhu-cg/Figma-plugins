@@ -1299,6 +1299,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const variables = new Set(base.usedVariableIds);
     const styles = new Set(base.usedStyleIds);
     const diffs = [];
+    const duplicateGroups = /* @__PURE__ */ new Map();
     const others = members.filter((m) => m.id !== defaultNode.id);
     const wantDiffs = options.includeVariantDiffs !== false && others.length > 0;
     if (wantDiffs && members.length > MAX_VARIANTS_FOR_DIFFS) {
@@ -1358,7 +1359,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         }
         diffs.push(diff);
         for (const w of diffWarnings) {
-          if (!warnings.some((x) => x.code === w.code && x.layerId === w.layerId)) warnings.push(w);
+          if (w.code === "DUPLICATE_SIBLING_NAME" && w.layerId) duplicateGroups.set(w.layerId, w);
+          else warnings.push(w);
         }
         for (const w of read2.warnings) {
           if (w.code === "UNRESOLVED_REFERENCE") {
@@ -1366,6 +1368,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           }
         }
       }
+    }
+    if (duplicateGroups.size > 0) {
+      const first = [...duplicateGroups.values()][0];
+      warnings.push({
+        code: "DUPLICATE_SIBLING_NAME",
+        message: `${duplicateGroups.size} group${duplicateGroups.size === 1 ? "" : "s"} of sibling layers in "${node.name}" share a name, so variant differences tell them apart by index (for example: ${first.message}).`,
+        componentId: node.id,
+        layerId: first.layerId
+      });
     }
     let properties = [];
     try {

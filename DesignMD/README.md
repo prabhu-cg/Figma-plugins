@@ -135,10 +135,10 @@ and none of them can take the plugin down:
 
 ### Large-file checks
 
-| File                                                                                        | Components | Time                                                                 | Heap growth  | `components.json` |
-| ------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------- | ------------ | ----------------- |
-| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                           | 1,000      | ~5 s                                                                 | ~130 MB      | 37.6 MB (unsplit) |
-| Rayna UI community file (2,581 components incl. variants, 493 sets), variant differences on | 2,581      | read 16 s: 2,174 layer trees, 34,790 layers; Figma stayed responsive | not measured | not checked yet   |
+| File                                                                                           | Components | Time                                                                      | Heap growth  | `components.json`             |
+| ---------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------- | ------------ | ----------------------------- |
+| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                              | 1,000      | ~5 s                                                                      | ~130 MB      | 37.6 MB (unsplit)             |
+| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on | 2,581      | layers read in 16 s (2,174 trees, 34,790 layers); Figma stayed responsive | not measured | 23.8 MB, split into 501 files |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
 600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected, made before layer reading

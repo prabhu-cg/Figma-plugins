@@ -145,6 +145,7 @@ export async function extractComponentStructure(
   const styles = new Set(base.usedStyleIds);
 
   const diffs: VariantDiff[] = [];
+  const duplicateGroups = new Map<string, ComponentsWarning>();
   const others = members.filter((m) => m.id !== defaultNode.id);
   const wantDiffs = options.includeVariantDiffs !== false && others.length > 0;
   if (wantDiffs && members.length > MAX_VARIANTS_FOR_DIFFS) {
@@ -203,9 +204,11 @@ export async function extractComponentStructure(
         break;
       }
       diffs.push(diff);
-      // Duplicate names repeat for every variant; one warning per layer is enough.
+      // Duplicate names are common and repeat for every variant, so they are counted per
+      // component (one warning below) instead of one warning per group of layers.
       for (const w of diffWarnings) {
-        if (!warnings.some((x) => x.code === w.code && x.layerId === w.layerId)) warnings.push(w);
+        if (w.code === 'DUPLICATE_SIBLING_NAME' && w.layerId) duplicateGroups.set(w.layerId, w);
+        else warnings.push(w);
       }
       for (const w of read.warnings) {
         if (w.code === 'UNRESOLVED_REFERENCE') {
@@ -213,6 +216,16 @@ export async function extractComponentStructure(
         }
       }
     }
+  }
+
+  if (duplicateGroups.size > 0) {
+    const first = [...duplicateGroups.values()][0];
+    warnings.push({
+      code: 'DUPLICATE_SIBLING_NAME',
+      message: `${duplicateGroups.size} group${duplicateGroups.size === 1 ? '' : 's'} of sibling layers in "${node.name}" share a name, so variant differences tell them apart by index (for example: ${first.message}).`,
+      componentId: node.id,
+      layerId: first.layerId,
+    });
   }
 
   let properties: ComponentPropertyV1[] = [];
