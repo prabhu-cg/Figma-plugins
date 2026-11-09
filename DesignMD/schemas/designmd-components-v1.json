@@ -1075,7 +1075,7 @@
         },
         "fontFamily": {
           "type": "string",
-          "description": "Font family name."
+          "description": "Font family name. Empty when the font could not be read."
         },
         "fontWeight": {
           "type": "number",
@@ -1116,7 +1116,7 @@
         },
         "token": {
           "$ref": "#/definitions/TokenRef",
-          "description": "The color token bound to the text fill, when there is one."
+          "description": "The text style token, when styleId resolves to a token in the file."
         },
         "characters": {
           "type": "string",
@@ -1190,7 +1190,7 @@
         },
         "fontFamily": {
           "type": "string",
-          "description": "Font family name."
+          "description": "Font family name. Empty when the font could not be read."
         },
         "fontWeight": {
           "type": "number",
@@ -1231,7 +1231,7 @@
         },
         "token": {
           "$ref": "#/definitions/TokenRef",
-          "description": "The color token bound to the text fill, when there is one."
+          "description": "The text style token, when styleId resolves to a token in the file."
         },
         "characters": {
           "type": "string",

@@ -207,7 +207,7 @@ export interface CornerRadii {
 export interface TextStyleFields {
   /** Figma text style id, when one is applied. */
   styleId?: string;
-  /** Font family name. */
+  /** Font family name. Empty when the font could not be read. */
   fontFamily: string;
   /** Numeric font weight, for example 600. */
   fontWeight: number;
@@ -221,7 +221,7 @@ export interface TextStyleFields {
   textCase: 'ORIGINAL' | 'UPPER' | 'LOWER' | 'TITLE' | 'SMALL_CAPS' | 'SMALL_CAPS_FORCED';
   /** Text decoration. */
   textDecoration: 'NONE' | 'UNDERLINE' | 'STRIKETHROUGH';
-  /** The color token bound to the text fill, when there is one. */
+  /** The text style token, when styleId resolves to a token in the file. */
   token?: TokenRef;
 }
 
