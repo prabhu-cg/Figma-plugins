@@ -4,11 +4,8 @@ export interface ExportOptions {
   designMd: boolean;
   componentDocs: boolean;
   tokensJson: boolean;
-  cssTokensJson: boolean;
   /** tokens.css: CSS custom properties with a [data-theme] block per extra mode. */
   cssFile: boolean;
-  /** tailwind.tokens.js: a Tailwind preset that references the CSS variables. */
-  tailwindPreset: boolean;
   zip: boolean;
 }
 
@@ -16,9 +13,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   designMd: true,
   componentDocs: true,
   tokensJson: false,
-  cssTokensJson: false,
   cssFile: false,
-  tailwindPreset: false,
   zip: true,
 };
 

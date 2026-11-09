@@ -43,26 +43,10 @@ export function BracesIcon({ className }: IconProps) {
   );
 }
 
-export function HashIcon({ className }: IconProps) {
-  return (
-    <svg {...base} className={className}>
-      <path d="M9.5 3.5 7 20.5M17 3.5l-2.5 17M4 8.5h16M3 15.5h16" />
-    </svg>
-  );
-}
-
 export function CodeIcon({ className }: IconProps) {
   return (
     <svg {...base} className={className}>
       <path d="m8.5 7-5 5 5 5M15.5 7l5 5-5 5M13.5 5l-3 14" />
-    </svg>
-  );
-}
-
-export function WindIcon({ className }: IconProps) {
-  return (
-    <svg {...base} className={className}>
-      <path d="M3 9h11a2.5 2.5 0 1 0-2.5-2.5M3 13h15a2.5 2.5 0 1 1-2.5 2.5M3 17h7" />
     </svg>
   );
 }

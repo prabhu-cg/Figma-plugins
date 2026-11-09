@@ -12,13 +12,28 @@ forever with no feature gating.
 | `design.md`          | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, token and style usage, accessibility notes (contrast per color mode), naming conventions        |
 | `components/*.md`    | One Markdown file per component/component set: variants, sizes, states, layout, properties, token references, related components                                                              |
 | `tokens.json`        | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes |
-| `css-tokens.json`    | CSS custom-property-ready export (`--color-primary-500`, etc.) with per-mode values                                                                                                           |
 | `tokens.css`         | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                      |
-| `tailwind.tokens.js` | A Tailwind preset: colors use RGB-channel variables so opacity modifiers (`bg-primary/50`) work, other values are `var(--token)` references                                                   |
 
 `design.md` and the component docs are on by default; the token files are opt-in. Variables are
 the source of truth: when a category has no variables (e.g. no color variables), the
 corresponding Styles (Paint/Text/Effect/Grid) are used as a fallback and the output says so.
+
+Each token in `tokens.json` carries its CSS name (`$extensions.figma.cssName`), its Figma id
+(`$extensions.figma.id`) and its value in every mode (`$extensions.figma.modes`).
+
+**Using the tokens with Tailwind.** Import `tokens.css`, then map the variables in your Tailwind v4
+CSS config:
+
+```css
+@import 'tailwindcss';
+@import './tokens.css';
+
+@theme inline {
+  --color-primary: var(--color-primary-500);
+}
+```
+
+With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
 
 ### What the docs cover
 

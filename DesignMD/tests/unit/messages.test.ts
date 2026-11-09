@@ -13,9 +13,8 @@ describe('DEFAULT_EXPORT_OPTIONS', () => {
     expect(DEFAULT_EXPORT_OPTIONS.zip).toBe(true);
   });
 
-  it('leaves tokens.json and css-tokens.json unchecked by default', () => {
+  it('leaves tokens.json unchecked by default', () => {
     expect(DEFAULT_EXPORT_OPTIONS.tokensJson).toBe(false);
-    expect(DEFAULT_EXPORT_OPTIONS.cssTokensJson).toBe(false);
   });
 });
 

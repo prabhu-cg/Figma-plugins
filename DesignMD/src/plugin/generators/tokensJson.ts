@@ -29,6 +29,8 @@ type JsonLeaf = {
   $description?: string;
   $extensions: {
     figma: {
+      /** Figma variable or style id; components.json refers to tokens by this id. */
+      id: string;
       source: 'variable' | 'style';
       collection?: string;
       cssName: string;
@@ -127,6 +129,7 @@ function variableToLeaf(variable: VariableToken, ctx: ValueContext): TokenTreeEn
       $description: variable.description || undefined,
       $extensions: {
         figma: {
+          id: variable.id,
           source: 'variable',
           collection: variable.collectionName,
           cssName: variable.cssName,
@@ -166,6 +169,7 @@ function shadowToJson(e: EffectValue): JsonValue {
 /** Returns null for styles with no DTCG-representable value (gradients, empty effects), so they're omitted. */
 function styleToLeaf(style: StyleToken, category: TokenCategory): TokenTreeEntry<JsonLeaf> | null {
   const figma: JsonLeaf['$extensions']['figma'] = {
+    id: style.id,
     source: 'style',
     cssName: style.cssName,
     usedBy: style.usedByComponents ?? [],

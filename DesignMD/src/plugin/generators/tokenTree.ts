@@ -2,7 +2,7 @@
  * Builds nested JSON objects from dotted/sliced token paths, e.g. entries
  * with path ["primary","500"] and ["primary","600"] become
  * { primary: { "500": <leaf>, "600": <leaf> } }. Shared by tokens.json and
- * css-tokens.json so both preserve the same variable/style hierarchy.
+ * other exports so both preserve the same variable/style hierarchy.
  */
 export interface TokenTreeEntry<TLeaf> {
   path: string[];

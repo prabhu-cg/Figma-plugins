@@ -145,13 +145,11 @@ describe('extraction -> transform -> generators (full pipeline)', () => {
     const files = generateOutputs(ds, {
       ...DEFAULT_EXPORT_OPTIONS,
       tokensJson: true,
-      cssTokensJson: true,
     });
     expect(files.map((f) => f.path)).toEqual([
       'design.md',
       'components/Button.md',
       'tokens.json',
-      'css-tokens.json',
     ]);
 
     const tokens = JSON.parse(files.find((f) => f.path === 'tokens.json')!.content);
@@ -159,9 +157,8 @@ describe('extraction -> transform -> generators (full pipeline)', () => {
     expect(tokens.semantic.Color.Danger.$value).toBe('{color.Primary.500}');
     expect(tokens.spacing.md.$value).toBe('16px');
 
-    const css = JSON.parse(files.find((f) => f.path === 'css-tokens.json')!.content);
-    expect(css.root['--color-primary-500']).toBe('#ff0000');
-    expect(css.root['--semantic-color-danger']).toBe('var(--color-primary-500)');
+    expect(tokens.color.Primary['500'].$extensions.figma.cssName).toBe('--color-primary-500');
+    expect(tokens.color.Primary['500'].$extensions.figma.id).toEqual(expect.any(String));
 
     const designMd = files.find((f) => f.path === 'design.md')!.content;
     expect(designMd).toContain('](./components/Button.md)');

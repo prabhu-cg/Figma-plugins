@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   generateCssFile,
   generateOutputs,
-  generateTailwindPreset,
 } from '../../src/plugin/generators';
 import { buildCssVariableMaps, modeOverrides } from '../../src/plugin/generators/cssVariables';
 import { DEFAULT_EXPORT_OPTIONS } from '../../src/shared/messages';
@@ -28,7 +27,6 @@ function variable(overrides: Partial<VariableToken>): VariableToken {
   };
 }
 
-const float = (value: number) => ({ kind: 'float' as const, value });
 const mode = (modeName: string, value: VariableToken['valuesByMode'][number]['value']) => ({
   modeId: modeName,
   modeName,
@@ -109,163 +107,9 @@ describe('generateCssFile', () => {
   });
 });
 
-describe('generateTailwindPreset', () => {
-  type Loaded = {
-    extend: Record<string, Record<string, unknown>>;
-    base: Record<string, Record<string, unknown>> | undefined;
-  };
-
-  /** Evaluates the preset with a stub for tailwindcss/plugin and returns theme.extend + addBase input. */
-  function load(ds: DesignSystem): Loaded {
-    const module = {
-      exports: {} as {
-        theme: { extend: Loaded['extend'] };
-        plugins?: Array<{ handler: (api: { addBase: (b: unknown) => void }) => void }>;
-      },
-    };
-    const fakeRequire = (name: string) => {
-      if (name !== 'tailwindcss/plugin') throw new Error(`unexpected require(${name})`);
-      return (handler: unknown) => ({ handler });
-    };
-    new Function('module', 'require', generateTailwindPreset(ds).content)(module, fakeRequire);
-    let base: Loaded['base'];
-    module.exports.plugins?.[0].handler({ addBase: (b) => (base = b as Loaded['base']) });
-    return { extend: module.exports.theme.extend, base };
-  }
-
-  it('is loadable CommonJS exposing theme.extend', () => {
-    const { extend } = load(makeDesignSystem());
-    expect(extend).toBeDefined();
-    expect(generateTailwindPreset(makeDesignSystem()).path).toBe('tailwind.tokens.js');
-  });
-
-  it('references CSS variables for colors, dropping redundant bucket prefixes', () => {
-    const { colors } = load(makeDesignSystem()).extend;
-    expect(colors).toEqual({
-      primary: { '500': 'rgb(var(--color-primary-500-rgb) / <alpha-value>)' },
-      danger: 'rgb(var(--semantic-color-danger-rgb) / <alpha-value>)',
-    });
-  });
-
-  it('maps text styles to fontSize tuples and effect styles to boxShadow', () => {
-    const { fontSize, boxShadow } = load(makeDesignSystem()).extend;
-    expect(fontSize['heading-large']).toEqual([
-      'var(--heading-large-font-size)',
-      {
-        lineHeight: 'var(--heading-large-line-height)',
-        letterSpacing: 'var(--heading-large-letter-spacing)',
-        fontWeight: 'var(--heading-large-font-weight)',
-      },
-    ]);
-    expect(boxShadow).toEqual({ card: 'var(--elevation-card)' });
-  });
-
-  it('splits spacing variables into spacing and borderRadius', () => {
-    const ds = makeDesignSystem();
-    ds.variables.push(
-      variable({
-        id: 's',
-        name: 'Spacing/md',
-        path: ['Spacing', 'md'],
-        resolvedType: 'FLOAT',
-        category: 'spacing',
-        cssName: '--spacing-md',
-        valuesByMode: [mode('Light', float(16))],
-      }),
-      variable({
-        id: 'r',
-        name: 'Radius/lg',
-        path: ['Radius', 'lg'],
-        resolvedType: 'FLOAT',
-        category: 'spacing',
-        scopes: ['CORNER_RADIUS'],
-        cssName: '--radius-lg',
-        valuesByMode: [mode('Light', float(12))],
-      }),
-    );
-    const { extend } = load(ds);
-    expect(extend.spacing).toEqual({ md: 'var(--spacing-md)' });
-    expect(extend.borderRadius).toEqual({ lg: 'var(--radius-lg)' });
-  });
-
-  it('only references variables that exist in tokens.css and omits empty groups', () => {
-    const ds = makeDesignSystem();
-    ds.variables = [];
-    ds.styles.effect = [];
-    ds.styles.text = [];
-    const { extend } = load(ds);
-    // Only the Surface/Background color style remains.
-    expect(extend.colors).toEqual({
-      surface: { background: 'rgb(var(--surface-background-rgb) / <alpha-value>)' },
-    });
-    expect(Object.keys(extend)).toEqual(['colors']);
-  });
-});
-
-describe('generateTailwindPreset opacity support', () => {
-  const evaluate = (ds: DesignSystem) => {
-    const module = {
-      exports: {} as {
-        plugins?: Array<{ handler: (api: { addBase: (b: unknown) => void }) => void }>;
-      },
-    };
-    new Function('module', 'require', generateTailwindPreset(ds).content)(
-      module,
-      () => (handler: unknown) => ({ handler }),
-    );
-    let base: Record<string, Record<string, unknown>> | undefined;
-    module.exports.plugins?.[0].handler({ addBase: (b) => (base = b as typeof base) });
-    return base;
-  };
-
-  it('defines RGB channels for opaque colors, with aliases pointing at the target channels', () => {
-    const base = evaluate(makeDesignSystem())!;
-    expect(base[':root']).toEqual({
-      '--color-primary-500-rgb': '51 102 255',
-      '--semantic-color-danger-rgb': 'var(--color-primary-500-rgb)',
-    });
-  });
-
-  it('overrides channels per mode and mirrors dark mode in a prefers-color-scheme rule', () => {
-    const base = evaluate(makeDesignSystem())!;
-    expect(base['[data-theme="dark"]']).toEqual({ '--color-primary-500-rgb': '26 51 153' });
-    expect(base['@media (prefers-color-scheme: dark)']).toEqual({
-      ':root:not([data-theme="light"])': { '--color-primary-500-rgb': '26 51 153' },
-    });
-  });
-
-  it('leaves translucent colors as plain var() references without channels', () => {
-    const ds = makeDesignSystem();
-    ds.variables.push(
-      variable({
-        id: 'o',
-        name: 'Color/Overlay',
-        path: ['Color', 'Overlay'],
-        cssName: '--color-overlay',
-        valuesByMode: [
-          mode('Light', { kind: 'color', color: { hex: '#00000080', r: 0, g: 0, b: 0, a: 0.5 } }),
-        ],
-      }),
-    );
-    const content = generateTailwindPreset(ds).content;
-    expect(content).toContain('"overlay": "var(--color-overlay)"');
-    expect(content).not.toContain('--color-overlay-rgb');
-  });
-
-  it('omits the plugin entirely when there are no opaque colors', () => {
-    const ds = makeDesignSystem();
-    ds.variables = [];
-    ds.styles.color = [];
-    const { content } = generateTailwindPreset(ds);
-    expect(content).not.toContain('tailwindcss/plugin');
-    expect(content).not.toContain('plugins');
-  });
-});
-
 describe('generateOutputs with code outputs', () => {
   it('is opt-in: none of the new files are in the default selection', () => {
     expect(DEFAULT_EXPORT_OPTIONS.cssFile).toBe(false);
-    expect(DEFAULT_EXPORT_OPTIONS.tailwindPreset).toBe(false);
     const paths = generateOutputs(makeDesignSystem(), DEFAULT_EXPORT_OPTIONS).map((f) => f.path);
     expect(paths).not.toContain('tokens.css');
   });
@@ -276,8 +120,7 @@ describe('generateOutputs with code outputs', () => {
       designMd: false,
       componentDocs: false,
       cssFile: true,
-      tailwindPreset: true,
     }).map((f) => f.path);
-    expect(paths).toEqual(['tokens.css', 'tailwind.tokens.js']);
+    expect(paths).toEqual(['tokens.css']);
   });
 });

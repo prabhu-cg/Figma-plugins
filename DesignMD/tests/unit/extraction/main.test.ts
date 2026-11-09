@@ -151,7 +151,6 @@ describe('plugin controller (main.ts)', () => {
         designMd: false,
         componentDocs: false,
         tokensJson: false,
-        cssTokensJson: false,
         zip: true,
       },
       excludedPages: [],

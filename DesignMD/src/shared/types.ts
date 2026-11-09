@@ -2,7 +2,7 @@
  * Normalized Design System schema.
  *
  * This is the single source of truth that every generator reads from.
- * Nothing downstream (design.md, component docs, tokens.json, css-tokens.json)
+ * Nothing downstream (design.md, component docs, tokens.json)
  * is ever produced directly from raw Figma nodes — everything is derived
  * from this schema so outputs stay consistent and independently testable.
  */

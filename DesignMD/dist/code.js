@@ -4,9 +4,7 @@
     designMd: true,
     componentDocs: true,
     tokensJson: false,
-    cssTokensJson: false,
     cssFile: false,
-    tailwindPreset: false,
     zip: true
   };
   function sanitizeSavedSettings(value) {
@@ -21,15 +19,15 @@
     return { options };
   }
   const EMPTY_FILE_SETTINGS = { excludedPages: [], contrastPairs: [] };
-  const isString$1 = (v) => typeof v === "string";
+  const isString = (v) => typeof v === "string";
   function sanitizeFileSettings(value) {
     if (typeof value !== "object" || value === null) return EMPTY_FILE_SETTINGS;
     const { excludedPages, contrastPairs } = value;
     return {
-      excludedPages: Array.isArray(excludedPages) ? excludedPages.filter(isString$1) : [],
+      excludedPages: Array.isArray(excludedPages) ? excludedPages.filter(isString) : [],
       contrastPairs: Array.isArray(contrastPairs) ? contrastPairs.flatMap((pair) => {
         const { foreground, background } = pair ?? {};
-        return isString$1(foreground) && isString$1(background) ? [{ foreground, background }] : [];
+        return isString(foreground) && isString(background) ? [{ foreground, background }] : [];
       }) : []
     };
   }
@@ -921,21 +919,6 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     }
     return { path: "tokens.css", content: sections.join("\n\n") + "\n" };
   }
-  function generateCssTokensJson(ds) {
-    const { root, modes } = buildCssVariableMaps(ds);
-    const output = {
-      metadata: {
-        fileName: ds.metadata.fileName,
-        generatedAt: ds.metadata.generatedAt
-      },
-      root,
-      modes
-    };
-    return {
-      path: "css-tokens.json",
-      content: JSON.stringify(output, null, 2)
-    };
-  }
   const MAX_REPORTED_PAIRS = 500;
   const AA_NORMAL_MIN_RATIO = 4.5;
   const AA_LARGE_MIN_RATIO = 3;
@@ -1626,156 +1609,6 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     }
     return path;
   }
-  const isString = (v) => typeof v === "string";
-  const REDUNDANT_PREFIXES = {
-    colors: ["color", "colors", "semantic", "semantics"],
-    spacing: ["spacing", "space", "spacings"],
-    borderRadius: ["radius", "radii", "border-radius", "corner-radius"],
-    fontSize: ["font-size", "fontsize", "size", "font", "text"],
-    fontFamily: ["font-family", "family", "font"],
-    boxShadow: ["shadow", "shadows", "elevation", "effect", "effects"]
-  };
-  function keyPath(path, bucket) {
-    const segments = path.map(kebabCase).filter(Boolean);
-    const prefixes = REDUNDANT_PREFIXES[bucket];
-    while (segments.length > 1 && prefixes.includes(segments[0])) segments.shift();
-    return segments;
-  }
-  function tree(entries) {
-    return buildTokenTree(entries, isString);
-  }
-  const HEX6 = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i;
-  const ALIAS = /^var\((--[^)]+)\)$/;
-  const rgbName = (cssName) => `${cssName}-rgb`;
-  function rgbValue(name, valueOf, depth = 0) {
-    const value = valueOf(name);
-    if (value === void 0 || depth > 10) return void 0;
-    const hex = HEX6.exec(value);
-    if (hex)
-      return hex.slice(1).map((h) => parseInt(h, 16)).join(" ");
-    const alias = ALIAS.exec(value);
-    if (alias && rgbValue(alias[1], valueOf, depth + 1) !== void 0) {
-      return `var(${rgbName(alias[1])})`;
-    }
-    return void 0;
-  }
-  function rgbChannelVars(names, valueOf) {
-    const vars = {};
-    for (const name of names) {
-      const channels = rgbValue(name, valueOf);
-      if (channels !== void 0) vars[rgbName(name)] = channels;
-    }
-    return vars;
-  }
-  function rgbBaseStyles(maps) {
-    const rootVars = rgbChannelVars(Object.keys(maps.root), (n) => maps.root[n]);
-    const base = { ":root": rootVars };
-    for (const { slug, modeName, vars } of modeOverrides(maps)) {
-      const modeValues = maps.modes[modeName] ?? {};
-      const valueOf = (n) => modeValues[n] ?? maps.root[n];
-      const modeVars = Object.fromEntries(
-        Object.entries(rgbChannelVars(Object.keys(vars), valueOf)).filter(
-          ([name, value]) => rootVars[name] !== value
-        )
-      );
-      if (Object.keys(modeVars).length === 0) continue;
-      base[`[data-theme="${slug}"]`] = modeVars;
-      if (slug === "dark") {
-        base["@media (prefers-color-scheme: dark)"] = { ':root:not([data-theme="light"])': modeVars };
-      }
-    }
-    return base;
-  }
-  function generateTailwindPreset(ds) {
-    const maps = buildCssVariableMaps(ds);
-    const { root } = maps;
-    const ref = (cssName) => cssName in root ? `var(${cssName})` : void 0;
-    const rgbBase = rgbBaseStyles(maps);
-    const rootRgb = rgbBase[":root"];
-    const colorRef = (cssName) => rgbName(cssName) in rootRgb ? `rgb(var(${rgbName(cssName)}) / <alpha-value>)` : ref(cssName);
-    const entriesFor = (bucket, variables, format = ref) => variables.flatMap((v) => {
-      const value = format(v.cssName);
-      return value ? [{ path: keyPath(v.path, bucket), leaf: value }] : [];
-    });
-    const styleEntries = (bucket, styles, cssName, format = ref) => styles.flatMap((s) => {
-      const value = format(cssName(s));
-      return value ? [{ path: keyPath(s.path, bucket), leaf: value }] : [];
-    });
-    const colorVariables = ds.variables.filter(
-      (v) => v.resolvedType === "COLOR" && (v.category === "color" || v.category === "semantic")
-    );
-    const colors = colorVariables.length > 0 ? tree(entriesFor("colors", colorVariables, colorRef)) : tree(styleEntries("colors", ds.styles.color, (s) => s.cssName, colorRef));
-    const spacingVariables = ds.variables.filter((v) => v.category === "spacing");
-    const isRadius = (v) => v.scopes.includes("CORNER_RADIUS") || nameHasHint(v.name, ["radius", "radii"]);
-    const spacing = tree(
-      entriesFor(
-        "spacing",
-        spacingVariables.filter((v) => !isRadius(v))
-      )
-    );
-    const borderRadius = tree(entriesFor("borderRadius", spacingVariables.filter(isRadius)));
-    const typographyVariables = ds.variables.filter((v) => v.category === "typography");
-    const fontFamily = tree(
-      entriesFor(
-        "fontFamily",
-        typographyVariables.filter(
-          (v) => v.resolvedType === "STRING" && v.scopes.includes("FONT_FAMILY")
-        )
-      )
-    );
-    const fontSizeVariables = typographyVariables.filter(
-      (v) => v.resolvedType === "FLOAT" && (v.scopes.includes("FONT_SIZE") || nameHasHint(v.name, ["size"]))
-    );
-    const fontSize = tree(entriesFor("fontSize", fontSizeVariables));
-    if (typographyVariables.length === 0) {
-      for (const s of ds.styles.text) {
-        const size = ref(`${s.cssName}-font-size`);
-        if (!size) continue;
-        const details = Object.fromEntries(
-          [
-            ["lineHeight", `${s.cssName}-line-height`],
-            ["letterSpacing", `${s.cssName}-letter-spacing`],
-            ["fontWeight", `${s.cssName}-font-weight`]
-          ].flatMap(([prop, name]) => ref(name) ? [[prop, ref(name)]] : [])
-        );
-        const [first, ...rest] = keyPath(s.path, "fontSize");
-        fontSize[[first, ...rest].join("-")] = [size, details];
-      }
-    }
-    const boxShadow = tree(styleEntries("boxShadow", ds.styles.effect, (s) => s.cssName));
-    const extend = {
-      colors,
-      spacing,
-      borderRadius,
-      fontFamily,
-      fontSize,
-      boxShadow
-    };
-    const theme = Object.fromEntries(
-      Object.entries(extend).filter(([, v]) => Object.keys(v).length > 0)
-    );
-    const header = `// Generated by DesignMD from "${ds.metadata.fileName.replace(/\n/g, " ")}" — do not edit by hand.
-// Non-color values are CSS variables from tokens.css, so import that file too and switch modes with
-// [data-theme="..."]. Colors use their own "<name>-rgb" channel variables (defined by the plugin
-// below) so opacity modifiers like bg-primary/50 work.
-// Usage: presets: [require("./tailwind.tokens.js")] in tailwind.config.js.
-`;
-    const config = JSON.stringify({ theme: { extend: theme } }, null, 2).replace(/\n}$/, "");
-    const hasRgb = Object.keys(rootRgb).length > 0;
-    const plugins = hasRgb ? `,
-  "plugins": [
-    plugin(({ addBase }) => {
-      addBase(${JSON.stringify(rgbBase, null, 2).replace(/\n/g, "\n      ")});
-    })
-  ]
-}` : "\n}";
-    const prelude = hasRgb ? "const plugin = require('tailwindcss/plugin');\n\n" : "";
-    return {
-      path: "tailwind.tokens.js",
-      content: `${header}${prelude}module.exports = ${config}${plugins};
-`
-    };
-  }
   const CATEGORIES = [
     "color",
     "typography",
@@ -1855,6 +1688,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         $description: variable.description || void 0,
         $extensions: {
           figma: {
+            id: variable.id,
             source: "variable",
             collection: variable.collectionName,
             cssName: variable.cssName,
@@ -1890,6 +1724,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   }
   function styleToLeaf(style, category) {
     const figma2 = {
+      id: style.id,
       source: "style",
       cssName: style.cssName,
       usedBy: style.usedByComponents ?? []
@@ -2004,9 +1839,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     if (options.designMd) files.push(generateDesignMd(ds));
     if (options.componentDocs) files.push(...generateComponentDocs(ds));
     if (options.tokensJson) files.push(generateTokensJson(ds));
-    if (options.cssTokensJson) files.push(generateCssTokensJson(ds));
     if (options.cssFile) files.push(generateCssFile(ds));
-    if (options.tailwindPreset) files.push(generateTailwindPreset(ds));
     return files;
   }
   function collectVariantPropertyValues(variants, propertyNamePattern) {

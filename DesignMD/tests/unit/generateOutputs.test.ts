@@ -3,18 +3,16 @@ import { generateOutputs } from '../../src/plugin/generators';
 import { makeDesignSystem } from './fixtures';
 
 describe('generateOutputs', () => {
-  it('generates all four output kinds when every option is enabled', () => {
+  it('generates every output kind when every option is enabled', () => {
     const files = generateOutputs(makeDesignSystem(), {
       designMd: true,
       componentDocs: true,
       tokensJson: true,
-      cssTokensJson: true,
       zip: true,
     });
     const paths = files.map((f) => f.path);
     expect(paths).toContain('design.md');
     expect(paths).toContain('tokens.json');
-    expect(paths).toContain('css-tokens.json');
     expect(paths.some((p) => p.startsWith('components/'))).toBe(true);
   });
 
@@ -23,7 +21,6 @@ describe('generateOutputs', () => {
       designMd: true,
       componentDocs: false,
       tokensJson: false,
-      cssTokensJson: false,
       zip: false,
     });
     expect(files).toHaveLength(1);
@@ -35,7 +32,6 @@ describe('generateOutputs', () => {
       designMd: false,
       componentDocs: false,
       tokensJson: false,
-      cssTokensJson: false,
       zip: false,
     });
     expect(files).toEqual([]);

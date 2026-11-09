@@ -4,9 +4,7 @@ import {
   BracesIcon,
   CodeIcon,
   DocumentIcon,
-  HashIcon,
   StackIcon,
-  WindIcon,
 } from './icons';
 
 interface OutputSelectionProps {
@@ -51,22 +49,10 @@ const OUTPUT_GROUPS: Array<{ title: string; items: OutputItem[] }> = [
         icon: BracesIcon,
       },
       {
-        key: 'cssTokensJson',
-        title: 'css-tokens.json',
-        description: 'CSS custom-property-ready export, e.g. --color-primary-500',
-        icon: HashIcon,
-      },
-      {
         key: 'cssFile',
         title: 'tokens.css',
         description: 'CSS custom properties, with a [data-theme] block for each mode',
         icon: CodeIcon,
-      },
-      {
-        key: 'tailwindPreset',
-        title: 'tailwind.tokens.js',
-        description: 'Tailwind preset that points at the CSS variables (pair with tokens.css)',
-        icon: WindIcon,
       },
     ],
   },

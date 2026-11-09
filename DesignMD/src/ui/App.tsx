@@ -28,9 +28,7 @@ const SELECTABLE_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'designMd',
   'componentDocs',
   'tokensJson',
-  'cssTokensJson',
   'cssFile',
-  'tailwindPreset',
 ];
 
 function countSelectedOutputs(options: ExportOptions): number {
