@@ -24,15 +24,24 @@ type TabId = 'summary' | 'contrast' | 'export' | 'files';
 
 const TAB_PREFIX = 'dmd';
 
-const SELECTABLE_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
+/** The options that each produce a file; the footer counts how many are on. */
+const OUTPUT_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'designMd',
   'componentDocs',
   'tokensJson',
   'cssFile',
+  'componentsJson',
+];
+
+/** Every option that changes what gets generated (the outputs plus components.json's sub-options). */
+const GENERATION_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
+  ...OUTPUT_KEYS,
+  'includeText',
+  'includeVariantDiffs',
 ];
 
 function countSelectedOutputs(options: ExportOptions): number {
-  return SELECTABLE_KEYS.filter((key) => options[key]).length;
+  return OUTPUT_KEYS.filter((key) => options[key]).length;
 }
 
 export default function App() {
@@ -91,6 +100,7 @@ export default function App() {
         break;
       case 'generation-complete':
         setFiles(message.files);
+        setProgress(null);
         setStatus('done');
         setActiveTab('files');
         break;
@@ -124,7 +134,7 @@ export default function App() {
       setOptions(next);
       postToPlugin({ type: 'save-settings', settings: { options: next } });
       // `zip` only affects how files are downloaded, not what is generated.
-      if (SELECTABLE_KEYS.some((key) => next[key] !== options[key])) invalidateGenerated();
+      if (GENERATION_KEYS.some((key) => next[key] !== options[key])) invalidateGenerated();
     },
     [invalidateGenerated, options],
   );
@@ -245,7 +255,7 @@ export default function App() {
 
         {status === 'idle' && scopeToggle}
 
-        {status === 'extracting' && progress && (
+        {(status === 'extracting' || status === 'generating') && progress && (
           <ProgressBar stage={progress.stage} percent={progress.percent} />
         )}
 

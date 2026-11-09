@@ -145,16 +145,38 @@ export function readLayout(node: ComponentNode): ComponentLayout | undefined {
   return layout;
 }
 
-function mapPropertyDefinitions(
+/** Name of the component an INSTANCE_SWAP property defaults to (the definition only holds its id). */
+async function resolveDefaultName(id: unknown): Promise<string | undefined> {
+  if (typeof id !== 'string' || id === '') return undefined;
+  try {
+    const target = await figma.getNodeByIdAsync(id);
+    if (!target) return undefined;
+    // A variant is named "State=Default"; the set's name is the useful one.
+    return target.parent?.type === 'COMPONENT_SET' ? target.parent.name : target.name;
+  } catch {
+    return undefined;
+  }
+}
+
+async function mapPropertyDefinitions(
   defs: ComponentPropertyDefinitions | undefined,
-): RawComponentProperty[] {
+): Promise<RawComponentProperty[]> {
   if (!defs) return [];
-  return Object.entries(defs).map(([name, def]) => ({
-    name,
-    type: def.type,
-    defaultValue: String(def.defaultValue ?? ''),
-    variantOptions: def.variantOptions,
-  }));
+  return Promise.all(
+    Object.entries(defs).map(async ([name, def]) => {
+      const property: RawComponentProperty = {
+        name,
+        type: def.type,
+        defaultValue: String(def.defaultValue ?? ''),
+        variantOptions: def.variantOptions,
+      };
+      if (def.type === 'INSTANCE_SWAP') {
+        const resolved = await resolveDefaultName(def.defaultValue);
+        if (resolved) property.defaultResolvedName = resolved;
+      }
+      return property;
+    }),
+  );
 }
 
 function mapVariant(node: ComponentNode): { variant: RawComponentVariant; bindings: NodeBindings } {
@@ -261,7 +283,7 @@ export async function extractComponents(
   const fromSets = await processInBatches(
     componentSets,
     COMPONENT_BATCH_SIZE,
-    (set): RawComponent => {
+    async (set): Promise<RawComponent> => {
       const variantMembers = set.children.filter((c): c is ComponentNode => c.type === 'COMPONENT');
       const mapped = variantMembers.map(mapVariant);
       if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
@@ -272,7 +294,7 @@ export async function extractComponents(
         description: set.description ?? '',
         isComponentSet: true,
         pageName: findPageName(set),
-        properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
+        properties: await mapPropertyDefinitions(set.componentPropertyDefinitions),
         variants: mapped.map((m) => m.variant),
         layout:
           variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : undefined,
@@ -286,7 +308,7 @@ export async function extractComponents(
   const fromStandalone = await processInBatches(
     standaloneComponents,
     COMPONENT_BATCH_SIZE,
-    (node): RawComponent => {
+    async (node): Promise<RawComponent> => {
       const { variant, bindings } = mapVariant(node);
       if (bindings.truncated) truncatedCount++;
       return {
@@ -296,7 +318,7 @@ export async function extractComponents(
         description: node.description ?? '',
         isComponentSet: false,
         pageName: findPageName(node),
-        properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
+        properties: await mapPropertyDefinitions(node.componentPropertyDefinitions),
         variants: [variant],
         layout: readLayout(node),
         boundVariableIds: bindings.variableIds,

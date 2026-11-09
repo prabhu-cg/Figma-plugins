@@ -129,10 +129,15 @@ export interface StyleToken {
 export type ComponentPropertyType = 'BOOLEAN' | 'TEXT' | 'INSTANCE_SWAP' | 'VARIANT';
 
 export interface ComponentProperty {
+  /** Cleaned name, e.g. "icon". Figma's raw key ("icon#3287:0") is in `key`. */
   name: string;
+  /** The raw Figma property key. */
+  key: string;
   type: ComponentPropertyType;
   defaultValue: string;
   variantOptions?: string[];
+  /** For INSTANCE_SWAP, the name of the default component when it could be resolved. */
+  defaultResolvedName?: string;
 }
 
 export interface ComponentVariant {

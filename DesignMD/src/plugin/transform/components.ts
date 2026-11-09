@@ -1,5 +1,6 @@
 import type { ComponentDoc, ComponentProperty, ComponentVariant } from '@shared/types';
 import type { RawComponent } from '../extraction/rawTypes';
+import { cleanPropertyName } from '@shared/naming';
 
 function collectVariantPropertyValues(
   variants: ComponentVariant[],
@@ -32,10 +33,12 @@ export function transformComponents(raw: RawComponent[]): ComponentDoc[] {
     }));
 
     const properties: ComponentProperty[] = c.properties.map((p) => ({
-      name: p.name,
+      name: cleanPropertyName(p.name),
+      key: p.name,
       type: p.type as ComponentProperty['type'],
       defaultValue: p.defaultValue,
       variantOptions: p.variantOptions,
+      ...(p.defaultResolvedName ? { defaultResolvedName: p.defaultResolvedName } : {}),
     }));
 
     return {

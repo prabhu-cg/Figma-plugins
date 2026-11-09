@@ -232,6 +232,80 @@ describe('App: stale results', () => {
   });
 });
 
+describe('App: components.json option', () => {
+  const toExport = async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Export');
+  };
+
+  it('is off by default, and its sub-options and privacy note only show once it is on', async () => {
+    await toExport();
+    expect(checkbox(/^components\.json$/)).not.toBeChecked();
+    expect(screen.queryByText('Include text content')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Nothing leaves the plugin/)).not.toBeInTheDocument();
+
+    fireEvent.click(checkbox(/^components\.json$/));
+    expect(screen.getByLabelText('Include text content')).toBeChecked();
+    expect(screen.getByLabelText('Include variant differences')).toBeChecked();
+    expect(screen.getByText(/text content, layer names and design values/)).toBeInTheDocument();
+  });
+
+  it('counts as an output, and is remembered with its sub-options', async () => {
+    await toExport();
+    expect(screen.getByText('2 outputs selected')).toBeInTheDocument();
+    fireEvent.click(checkbox(/^components\.json$/));
+    fireEvent.click(screen.getByLabelText('Include text content'));
+    expect(screen.getByText('3 outputs selected')).toBeInTheDocument();
+    const saved = messagesOfType('save-settings').at(-1) as {
+      settings: { options: typeof DEFAULT_EXPORT_OPTIONS };
+    };
+    expect(saved.settings.options).toMatchObject({
+      componentsJson: true,
+      includeText: false,
+      includeVariantDiffs: true,
+    });
+  });
+
+  it('restores saved sub-options', async () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: {
+        options: { ...DEFAULT_EXPORT_OPTIONS, componentsJson: true, includeText: false },
+      },
+      fileSettings: { excludedPages: [], contrastPairs: [] },
+    });
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    openTab('Export');
+    expect(screen.getByLabelText('Include text content')).not.toBeChecked();
+    expect(screen.getByLabelText('Include variant differences')).toBeChecked();
+  });
+
+  it('invalidates generated files when a sub-option changes', async () => {
+    render(<App />);
+    fromPlugin({
+      type: 'settings',
+      settings: { options: { ...DEFAULT_EXPORT_OPTIONS, componentsJson: true } },
+      fileSettings: { excludedPages: [], contrastPairs: [] },
+    });
+    await scanAndGenerate();
+    openTab('Export');
+    fireEvent.click(screen.getByLabelText('Include variant differences'));
+    expect(screen.getByText(/Settings changed — generate again/)).toBeInTheDocument();
+  });
+
+  it('shows progress while component layers are read during generation', async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fromPlugin({ type: 'progress', stage: 'structure', percent: 40 });
+    expect(screen.getByRole('progressbar')).toHaveTextContent('Reading component layers… 40%');
+  });
+});
+
 describe('App: per-file settings', () => {
   function twoPageSystem() {
     const ds = makeDesignSystem();

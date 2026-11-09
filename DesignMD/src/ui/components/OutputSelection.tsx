@@ -1,11 +1,6 @@
+import { Fragment } from 'react';
 import type { ExportOptions } from '@shared/messages';
-import {
-  ArchiveIcon,
-  BracesIcon,
-  CodeIcon,
-  DocumentIcon,
-  StackIcon,
-} from './icons';
+import { ArchiveIcon, BracesIcon, CodeIcon, DocumentIcon, StackIcon, TreeIcon } from './icons';
 
 interface OutputSelectionProps {
   options: ExportOptions;
@@ -56,6 +51,23 @@ const OUTPUT_GROUPS: Array<{ title: string; items: OutputItem[] }> = [
       },
     ],
   },
+  {
+    title: 'Components',
+    items: [
+      {
+        key: 'componentsJson',
+        title: 'components.json',
+        description:
+          'Layer trees, variant differences, roles and the tokens each component uses, for code generators and AI tools',
+        icon: TreeIcon,
+      },
+    ],
+  },
+];
+
+const COMPONENT_SUBOPTIONS: Array<{ key: 'includeText' | 'includeVariantDiffs'; label: string }> = [
+  { key: 'includeText', label: 'Include text content' },
+  { key: 'includeVariantDiffs', label: 'Include variant differences' },
 ];
 
 interface OptionCardProps {
@@ -98,14 +110,33 @@ export function OutputSelection({ options, onChange }: OutputSelectionProps) {
           <h3 className="dmd-group-title">{group.title}</h3>
           <div className="dmd-option-list">
             {group.items.map((item) => (
-              <OptionCard
-                key={item.key}
-                checked={options[item.key]}
-                onToggle={() => toggle(item.key)}
-                title={item.title}
-                description={item.description}
-                icon={<item.icon />}
-              />
+              <Fragment key={item.key}>
+                <OptionCard
+                  checked={options[item.key]}
+                  onToggle={() => toggle(item.key)}
+                  title={item.title}
+                  description={item.description}
+                  icon={<item.icon />}
+                />
+                {item.key === 'componentsJson' && options.componentsJson && (
+                  <div className="dmd-suboptions">
+                    {COMPONENT_SUBOPTIONS.map((sub) => (
+                      <label className="dmd-suboption" key={sub.key}>
+                        <input
+                          type="checkbox"
+                          checked={options[sub.key]}
+                          onChange={() => toggle(sub.key)}
+                        />
+                        <span>{sub.label}</span>
+                      </label>
+                    ))}
+                    <p className="dmd-suboption-note">
+                      This file includes text content, layer names and design values from your Figma
+                      file. Nothing leaves the plugin; the file is only saved where you download it.
+                    </p>
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
         </div>

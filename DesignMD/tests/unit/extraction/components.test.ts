@@ -88,6 +88,22 @@ describe('extractComponents: discovery', () => {
     ]);
   });
 
+  it('resolves an INSTANCE_SWAP default to the component name (the set name for a variant)', async () => {
+    const arrow = componentSet('icon/arrow', [{ props: { Size: '16' } }], { id: 'set-arrow' });
+    const single = component('icon/plus', { id: 'plus-1' });
+    const button = component('Button', {
+      componentPropertyDefinitions: {
+        'start#1:0': { type: 'INSTANCE_SWAP', defaultValue: arrow.children![0].id },
+        'end#1:1': { type: 'INSTANCE_SWAP', defaultValue: 'plus-1' },
+        'gone#1:2': { type: 'INSTANCE_SWAP', defaultValue: 'does-not-exist' },
+      },
+    });
+    installFakeFigma({ root: document('File', [page('P', [arrow, single, button])]) });
+    const result = await extractComponents();
+    const props = result.find((c) => c.name === 'Button')!.properties;
+    expect(props.map((p) => p.defaultResolvedName)).toEqual(['icon/arrow', 'icon/plus', undefined]);
+  });
+
   it('returns an empty list with a warning when the document scan throws', async () => {
     installFakeFigma({ failures: { findAll: true } });
     const { list, warn } = collect();

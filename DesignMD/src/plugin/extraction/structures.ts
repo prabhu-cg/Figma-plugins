@@ -12,6 +12,7 @@ import type {
   VariantDiff,
 } from '@shared/componentsSchema';
 import type { ComponentDoc } from '@shared/types';
+import { cleanPropertyName } from '@shared/naming';
 import { assignRoles } from '../transform/roles';
 import { diffVariant } from '../transform/variantDiffs';
 import { processInBatches } from '../utils/async';
@@ -46,9 +47,6 @@ export type StructureResult = ComponentStructure | { error: string };
 
 export const isStructure = (r: StructureResult | undefined): r is ComponentStructure =>
   !!r && !('error' in r);
-
-/** "icon#3287:0" -> "icon". Variant properties have no suffix. */
-export const cleanPropertyName = (key: string) => key.replace(/#\d+:\d+$/, '');
 
 type Def = {
   type?: string;

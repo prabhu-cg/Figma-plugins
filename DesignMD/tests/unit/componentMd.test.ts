@@ -37,6 +37,26 @@ describe('generateComponentDocs', () => {
     expect(file.content).toContain('--color-primary-500');
   });
 
+  it('shows clean property names and a component name for swap defaults, never a node id', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].properties = [
+      {
+        name: 'icon',
+        key: 'icon#3287:0',
+        type: 'INSTANCE_SWAP',
+        defaultValue: '3253:139749',
+        defaultResolvedName: 'icon/arrow-right',
+      },
+      { name: 'trailing', key: 'trailing#1:1', type: 'INSTANCE_SWAP', defaultValue: '9:9' },
+    ];
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).toContain('| icon | INSTANCE_SWAP | icon/arrow-right |');
+    expect(file.content).not.toContain('#3287:0');
+    expect(file.content).not.toContain('3253:139749');
+    expect(file.content).not.toContain('9:9');
+    expect(file.content).toContain('| trailing | INSTANCE_SWAP | — |');
+  });
+
   it('disambiguates two components that sanitize to the same file name', () => {
     const ds = makeDesignSystem();
     ds.components = [...ds.components, { ...ds.components[0], id: 'dup', name: 'Button' }];

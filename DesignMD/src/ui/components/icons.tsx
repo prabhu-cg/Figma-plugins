@@ -110,3 +110,14 @@ export function LogoIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function TreeIcon({ className }: IconProps) {
+  return (
+    <svg {...base} className={className}>
+      <rect x="4" y="3.5" width="7" height="5" rx="1.2" />
+      <rect x="13" y="10" width="7" height="5" rx="1.2" />
+      <rect x="13" y="17" width="7" height="3.5" rx="1.2" />
+      <path d="M7.5 8.5v3.5a2 2 0 0 0 2 2H13M7.5 12v6a1.5 1.5 0 0 0 1.5 1.5h4" />
+    </svg>
+  );
+}

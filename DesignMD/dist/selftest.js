@@ -149,14 +149,34 @@
     if (radius !== void 0 && radius > 0) layout.cornerRadius = round(radius);
     return layout;
   }
-  function mapPropertyDefinitions(defs) {
+  async function resolveDefaultName(id) {
+    var _a;
+    if (typeof id !== "string" || id === "") return void 0;
+    try {
+      const target = await figma.getNodeByIdAsync(id);
+      if (!target) return void 0;
+      return ((_a = target.parent) == null ? void 0 : _a.type) === "COMPONENT_SET" ? target.parent.name : target.name;
+    } catch {
+      return void 0;
+    }
+  }
+  async function mapPropertyDefinitions(defs) {
     if (!defs) return [];
-    return Object.entries(defs).map(([name, def]) => ({
-      name,
-      type: def.type,
-      defaultValue: String(def.defaultValue ?? ""),
-      variantOptions: def.variantOptions
-    }));
+    return Promise.all(
+      Object.entries(defs).map(async ([name, def]) => {
+        const property = {
+          name,
+          type: def.type,
+          defaultValue: String(def.defaultValue ?? ""),
+          variantOptions: def.variantOptions
+        };
+        if (def.type === "INSTANCE_SWAP") {
+          const resolved = await resolveDefaultName(def.defaultValue);
+          if (resolved) property.defaultResolvedName = resolved;
+        }
+        return property;
+      })
+    );
   }
   function mapVariant(node) {
     const bindings = scanNodeBindings(node);
@@ -231,7 +251,7 @@
     const fromSets = await processInBatches(
       componentSets,
       COMPONENT_BATCH_SIZE,
-      (set) => {
+      async (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
         const mapped = variantMembers.map(mapVariant);
         if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
@@ -242,7 +262,7 @@
           description: set.description ?? "",
           isComponentSet: true,
           pageName: findPageName(set),
-          properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
+          properties: await mapPropertyDefinitions(set.componentPropertyDefinitions),
           variants: mapped.map((m) => m.variant),
           layout: variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : void 0,
           boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
@@ -253,7 +273,7 @@
     const fromStandalone = await processInBatches(
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
-      (node) => {
+      async (node) => {
         const { variant, bindings } = mapVariant(node);
         if (bindings.truncated) truncatedCount++;
         return {
@@ -263,7 +283,7 @@
           description: node.description ?? "",
           isComponentSet: false,
           pageName: findPageName(node),
-          properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
+          properties: await mapPropertyDefinitions(node.componentPropertyDefinitions),
           variants: [variant],
           layout: readLayout(node),
           boundVariableIds: bindings.variableIds,

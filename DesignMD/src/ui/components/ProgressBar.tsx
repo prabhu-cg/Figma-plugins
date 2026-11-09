@@ -10,6 +10,7 @@ const STAGE_LABELS: Record<string, string> = {
   'effect-styles': 'Reading effect styles',
   'grid-styles': 'Reading grid styles',
   components: 'Reading components',
+  structure: 'Reading component layers',
 };
 
 export function ProgressBar({ stage, percent }: ProgressBarProps) {
@@ -20,7 +21,7 @@ export function ProgressBar({ stage, percent }: ProgressBarProps) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={percent}
-      aria-label="Scanning design system"
+      aria-label="Reading the design system"
     >
       <div className="dmd-progress-label">
         {STAGE_LABELS[stage] ?? stage}… {percent}%

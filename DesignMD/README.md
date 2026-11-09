@@ -7,12 +7,13 @@ forever with no feature gating.
 
 ## What it generates
 
-| File              | Contents                                                                                                                                                                                      |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `design.md`       | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, token and style usage, accessibility notes (contrast per color mode), naming conventions        |
-| `components/*.md` | One Markdown file per component/component set: variants, sizes, states, layout, properties, token references, related components                                                              |
-| `tokens.json`     | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes |
-| `tokens.css`      | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                      |
+| File              | Contents                                                                                                                                                                                                                                                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `design.md`       | Overview, variable collections, color/typography/spacing/effect/grid tokens, component index, token and style usage, accessibility notes (contrast per color mode), naming conventions                                                                                                                             |
+| `components/*.md` | One Markdown file per component/component set: variants, sizes, states, layout, properties, token references, related components                                                                                                                                                                                   |
+| `tokens.json`     | Nested W3C-style design tokens (`$type`/`$value`): real `color`, `dimension`, `fontWeight`, `fontFamily`, `typography` and `shadow` types, aliases that point at real token paths, plus modes                                                                                                                      |
+| `tokens.css`      | The same custom properties as a ready-to-import stylesheet: `:root` defaults, a `[data-theme="<mode>"]` block per extra mode, and a `prefers-color-scheme` rule for dark                                                                                                                                           |
+| `components.json` | Per component: the layer tree of the default variant (auto layout, fills, strokes, effects, text, instances, token bindings, inferred roles), how every other variant differs, full property details, and the tokens used. Schema `designmd.components/v1`, see [docs/components-json.md](docs/components-json.md) |
 
 `design.md` and the component docs are on by default; the token files are opt-in. Variables are
 the source of truth: when a category has no variables (e.g. no color variables), the
@@ -35,8 +36,9 @@ CSS config:
 
 With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
 
-`components.json` (`designmd.components/v1`) is specified and has a published JSON Schema and an example
-(see [docs/components-json.md](docs/components-json.md)); the export itself is not available yet.
+`components.json` is opt-in and read from your layers only when selected. It contains text content,
+layer names and design values from your file; turn off **Include text content** to leave the text out.
+Nothing leaves the plugin.
 
 ### What the docs cover
 
@@ -60,7 +62,7 @@ Run the plugin, choose a scope, and press **Scan**. After a scan the panel has f
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Summary**  | Scan scope, counts of collections, variables, components, styles and modes, extraction warnings, and **Include pages** to leave out draft pages |
 | **Contrast** | Add foreground/background pairs to check in every mode, with a live ratio and verdict. Hidden when the file has fewer than two color tokens     |
-| **Export**   | File name, the outputs to generate (grouped as Documentation and Tokens and code), and the ZIP option                                           |
+| **Export**   | File name, the outputs to generate (Documentation, Tokens and code, Components), and the ZIP option                                             |
 | **Files**    | Appears after generating: a file list with sizes, a code preview (first 300 lines) and **Copy**, before you download                            |
 
 - **Scope.** Scan the **whole file**, or only the **selected layers**: components inside the

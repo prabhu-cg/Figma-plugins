@@ -12,9 +12,36 @@ describe('transformComponents', () => {
   it('carries through component properties and variants', () => {
     const [doc] = transformComponents([makeComponent()]);
     expect(doc.properties).toEqual([
-      { name: 'Label', type: 'TEXT', defaultValue: 'Click me', variantOptions: undefined },
+      {
+        name: 'Label',
+        key: 'Label',
+        type: 'TEXT',
+        defaultValue: 'Click me',
+        variantOptions: undefined,
+      },
     ]);
     expect(doc.variants).toHaveLength(2);
+  });
+
+  it('cleans the #id:id suffix off property names, keeping the raw key', () => {
+    const [doc] = transformComponents([
+      makeComponent({
+        properties: [
+          {
+            name: 'icon#3287:0',
+            type: 'INSTANCE_SWAP',
+            defaultValue: '3253:1',
+            defaultResolvedName: 'icon/arrow',
+          },
+          { name: 'Size', type: 'VARIANT', defaultValue: 'L' },
+        ],
+      }),
+    ]);
+    expect(doc.properties.map((p) => [p.name, p.key])).toEqual([
+      ['icon', 'icon#3287:0'],
+      ['Size', 'Size'],
+    ]);
+    expect(doc.properties[0].defaultResolvedName).toBe('icon/arrow');
   });
 
   it('links components that share bound variables as related, excluding itself', () => {

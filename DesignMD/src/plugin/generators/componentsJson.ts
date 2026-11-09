@@ -15,6 +15,7 @@ import {
   type TokenEntry,
 } from '@shared/componentsSchema';
 import type { GeneratedFile } from '@shared/messages';
+import { cleanPropertyName } from '@shared/naming';
 import { sha256 } from '@shared/sha256';
 import type {
   ColorValue,
@@ -23,7 +24,7 @@ import type {
   StyleToken,
   VariableToken,
 } from '@shared/types';
-import { cleanPropertyName, isStructure, type StructureResult } from '../extraction/structures';
+import { isStructure, type StructureResult } from '../extraction/structures';
 import { defaultModeValue } from './tokenValue';
 
 const OUTPUT_PATH = 'components.json';
@@ -137,10 +138,13 @@ const stubTree = (doc: ComponentDoc): Layer => ({
 /** Properties from the plain ComponentDoc, for components whose structure could not be read. */
 const fallbackProperties = (doc: ComponentDoc): ComponentPropertyV1[] =>
   doc.properties.map((p) => ({
-    key: p.name,
+    key: p.key ?? p.name,
     name: cleanPropertyName(p.name),
     type: p.type,
     defaultValue: p.defaultValue,
+    ...(p.defaultResolvedName
+      ? { defaultResolved: { id: p.defaultValue, name: p.defaultResolvedName } }
+      : {}),
     ...(p.variantOptions ? { variantOptions: p.variantOptions } : {}),
   }));
 

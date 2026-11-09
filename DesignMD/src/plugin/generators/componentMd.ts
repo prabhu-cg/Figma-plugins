@@ -45,6 +45,12 @@ function layoutSection(c: ComponentDoc): string {
   ]);
 }
 
+/** The default as people read it: a swap's default is a component name, not a node id. */
+function defaultLabel(p: ComponentDoc['properties'][number]): string {
+  if (p.type === 'INSTANCE_SWAP') return p.defaultResolvedName || '—';
+  return p.defaultValue || '—';
+}
+
 function propertiesSection(c: ComponentDoc): string {
   if (c.properties.length === 0) {
     return joinSections([mdHeading(2, 'Properties'), '_No component properties defined._\n']);
@@ -52,7 +58,7 @@ function propertiesSection(c: ComponentDoc): string {
   const rows = c.properties.map((p) => [
     p.name,
     p.type,
-    p.defaultValue || '—',
+    defaultLabel(p),
     p.variantOptions?.join(', ') ?? '—',
   ]);
   return joinSections([

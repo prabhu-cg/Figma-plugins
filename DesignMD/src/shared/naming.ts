@@ -101,3 +101,8 @@ export function rgbaToHex(r: number, g: number, b: number, a: number): string {
   const base = `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
   return a < 1 ? `${base}${toHexByte(a)}` : base;
 }
+
+/** "icon#3287:0" -> "icon". Figma appends a "#id:id" suffix to the keys of non-variant properties. */
+export function cleanPropertyName(key: string): string {
+  return key.replace(/#\d+:\d+$/, '');
+}

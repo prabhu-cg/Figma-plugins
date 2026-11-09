@@ -104,6 +104,8 @@ export interface RawComponentProperty {
   type: string;
   defaultValue: string;
   variantOptions?: string[];
+  /** For INSTANCE_SWAP, the name of the default component (the value is only a node id). */
+  defaultResolvedName?: string;
 }
 
 export interface RawComponentVariant {

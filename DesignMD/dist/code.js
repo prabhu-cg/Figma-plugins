@@ -118,6 +118,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const base = `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
     return a < 1 ? `${base}${toHexByte(a)}` : base;
   }
+  function cleanPropertyName(key) {
+    return key.replace(/#\d+:\d+$/, "");
+  }
   const STYLE_BATCH_SIZE = 200;
   function boundVariablesOf(node) {
     return collectBoundVariableIds(node.boundVariables);
@@ -357,14 +360,34 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (radius !== void 0 && radius > 0) layout.cornerRadius = round$1(radius);
     return layout;
   }
-  function mapPropertyDefinitions(defs) {
+  async function resolveDefaultName(id) {
+    var _a;
+    if (typeof id !== "string" || id === "") return void 0;
+    try {
+      const target = await figma.getNodeByIdAsync(id);
+      if (!target) return void 0;
+      return ((_a = target.parent) == null ? void 0 : _a.type) === "COMPONENT_SET" ? target.parent.name : target.name;
+    } catch {
+      return void 0;
+    }
+  }
+  async function mapPropertyDefinitions(defs) {
     if (!defs) return [];
-    return Object.entries(defs).map(([name, def]) => ({
-      name,
-      type: def.type,
-      defaultValue: String(def.defaultValue ?? ""),
-      variantOptions: def.variantOptions
-    }));
+    return Promise.all(
+      Object.entries(defs).map(async ([name, def]) => {
+        const property = {
+          name,
+          type: def.type,
+          defaultValue: String(def.defaultValue ?? ""),
+          variantOptions: def.variantOptions
+        };
+        if (def.type === "INSTANCE_SWAP") {
+          const resolved = await resolveDefaultName(def.defaultValue);
+          if (resolved) property.defaultResolvedName = resolved;
+        }
+        return property;
+      })
+    );
   }
   function mapVariant(node) {
     const bindings = scanNodeBindings(node);
@@ -439,7 +462,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const fromSets = await processInBatches(
       componentSets,
       COMPONENT_BATCH_SIZE,
-      (set) => {
+      async (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
         const mapped = variantMembers.map(mapVariant);
         if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
@@ -450,7 +473,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           description: set.description ?? "",
           isComponentSet: true,
           pageName: findPageName(set),
-          properties: mapPropertyDefinitions(set.componentPropertyDefinitions),
+          properties: await mapPropertyDefinitions(set.componentPropertyDefinitions),
           variants: mapped.map((m) => m.variant),
           layout: variantMembers.length > 0 ? readLayout$1(defaultVariantOf(set, variantMembers)) : void 0,
           boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
@@ -462,7 +485,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const fromStandalone = await processInBatches(
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
-      (node) => {
+      async (node) => {
         const { variant, bindings } = mapVariant(node);
         if (bindings.truncated) truncatedCount++;
         return {
@@ -472,7 +495,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           description: node.description ?? "",
           isComponentSet: false,
           pageName: findPageName(node),
-          properties: mapPropertyDefinitions(node.componentPropertyDefinitions),
+          properties: await mapPropertyDefinitions(node.componentPropertyDefinitions),
           variants: [variant],
           layout: readLayout$1(node),
           boundVariableIds: bindings.variableIds,
@@ -1170,7 +1193,6 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const COMPONENT_TIME_BUDGET_MS = 5e3;
   const BATCH_SIZE = 10;
   const isStructure = (r) => !!r && !("error" in r);
-  const cleanPropertyName = (key) => key.replace(/#\d+:\d+$/, "");
   async function nodeById(id) {
     var _a;
     try {
@@ -1356,6 +1378,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       mdTable(["Property", "Value"], rows)
     ]);
   }
+  function defaultLabel(p) {
+    if (p.type === "INSTANCE_SWAP") return p.defaultResolvedName || "—";
+    return p.defaultValue || "—";
+  }
   function propertiesSection(c) {
     if (c.properties.length === 0) {
       return joinSections([mdHeading(2, "Properties"), "_No component properties defined._\n"]);
@@ -1365,7 +1391,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return [
         p.name,
         p.type,
-        p.defaultValue || "—",
+        defaultLabel(p),
         ((_a = p.variantOptions) == null ? void 0 : _a.join(", ")) ?? "—"
       ];
     });
@@ -1718,10 +1744,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     children: []
   });
   const fallbackProperties = (doc) => doc.properties.map((p) => ({
-    key: p.name,
+    key: p.key ?? p.name,
     name: cleanPropertyName(p.name),
     type: p.type,
     defaultValue: p.defaultValue,
+    ...p.defaultResolvedName ? { defaultResolved: { id: p.defaultValue, name: p.defaultResolvedName } } : {},
     ...p.variantOptions ? { variantOptions: p.variantOptions } : {}
   }));
   const byPageThenName = (a, b) => a.pageName.localeCompare(b.pageName) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
@@ -2915,10 +2942,12 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         description: v.description
       }));
       const properties = c.properties.map((p) => ({
-        name: p.name,
+        name: cleanPropertyName(p.name),
+        key: p.name,
         type: p.type,
         defaultValue: p.defaultValue,
-        variantOptions: p.variantOptions
+        variantOptions: p.variantOptions,
+        ...p.defaultResolvedName ? { defaultResolvedName: p.defaultResolvedName } : {}
       }));
       return {
         id: c.id,
