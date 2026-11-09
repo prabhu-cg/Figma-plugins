@@ -123,6 +123,28 @@ describe('plugin controller (main.ts)', () => {
     ]);
   });
 
+  it('generate: reads component structure only when components.json is selected', async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({ type: 'extract' });
+    await h.send({
+      type: 'generate',
+      options: {
+        ...DEFAULT_EXPORT_OPTIONS,
+        designMd: false,
+        componentDocs: false,
+        componentsJson: true,
+      },
+      excludedPages: ['Drafts'],
+    });
+    const [done] = ofType(h, 'generation-complete');
+    const files = done.files as Array<{ path: string; content: string }>;
+    expect(files.map((f) => f.path)).toEqual(['components.json']);
+    const json = JSON.parse(files[0].content);
+    expect(json.schema).toBe('designmd.components/v1');
+    expect(json.components.map((c: { name: string }) => c.name)).toEqual(['Button']);
+    expect(ofType(h, 'progress').map((p) => p.stage)).toContain('structure');
+  });
+
   it('generate: excludes components from pages the user opted out of', async () => {
     const h = await bootPlugin(richFile());
     await h.send({ type: 'extract' });

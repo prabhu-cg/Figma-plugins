@@ -17,7 +17,7 @@ import {
 import { computeStyleUsage, computeVariableUsage, mergeStyleBoundVariables } from './usage';
 import { buildSummary } from './summary';
 
-const PLUGIN_VERSION = '1.0.0';
+const PLUGIN_VERSION = '1.1.0';
 
 export function transformToDesignSystem(
   raw: ExtractionResult,

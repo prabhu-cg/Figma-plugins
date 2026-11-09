@@ -26,6 +26,16 @@ styles the components use, with their default-mode values; full token data and m
 - Ignore fields and enum values you do not know. New optional fields and values can be added within `v1`.
 - Every id the file refers to exists in the file. `findBrokenRefs` in `src/shared/componentsRefs.ts` checks this.
 
+## Layer trees and variant diffs
+
+- `tree` is the default variant's layer tree. Its root layer is named after the component, not the variant
+  (variant names are in `variants[]`), so name paths in `variantDiffs` start at the same name as `tree`.
+- A layer missing an attribute in a variant is not reported as a change, except `radius`, where missing means
+  square corners (`radius: 0`).
+- A layer whose type changed is reported as removed plus added. Only the top-most added or removed layer is
+  listed; its children come inside it.
+- Layer trees are read only when `components.json` is selected, so a token-only export stays fast.
+
 ## Content hash
 
 `metadata.contentHash` is the SHA-256 of the file text with `generatedAt` and `contentHash` set to `""`.

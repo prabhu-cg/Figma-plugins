@@ -172,7 +172,7 @@ function mapVariant(node: ComponentNode): { variant: RawComponentVariant; bindin
 }
 
 /** The set's default variant when Figma exposes it, otherwise the first one. */
-function defaultVariantOf(set: ComponentSetNode, members: ComponentNode[]): ComponentNode {
+export function defaultVariantOf(set: ComponentSetNode, members: ComponentNode[]): ComponentNode {
   const declared = (set as unknown as { defaultVariant?: ComponentNode }).defaultVariant;
   return declared && members.some((m) => m.id === declared.id) ? declared : members[0];
 }

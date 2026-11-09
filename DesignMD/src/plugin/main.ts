@@ -9,6 +9,7 @@ import {
   type UIToPluginMessage,
 } from '@shared/messages';
 import { extractDesignSystem } from './extraction';
+import { extractStructures } from './extraction/structures';
 import { generateOutputs } from './generators';
 import { transformToDesignSystem } from './transform';
 import { filterDesignSystemByPages } from './transform/pageFilter';
@@ -105,6 +106,16 @@ async function handleExtract(scope: ExtractionScope): Promise<void> {
   }
 }
 
+/** Looks up the CSS name of a variable or style by id, for token references inside layer trees. */
+function tokenResolver(ds: DesignSystem) {
+  const names = new Map<string, string>();
+  for (const v of ds.variables) names.set(`variable:${v.id}`, v.cssName);
+  for (const s of [...ds.styles.text, ...ds.styles.color, ...ds.styles.effect, ...ds.styles.grid]) {
+    names.set(`style:${s.id}`, s.cssName);
+  }
+  return (kind: 'variable' | 'style', id: string) => names.get(`${kind}:${id}`);
+}
+
 async function handleGenerate(options: UIToPluginMessage & { type: 'generate' }): Promise<void> {
   try {
     if (!cachedDesignSystem) {
@@ -120,7 +131,24 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
       contrastPairs: options.contrastPairs ?? [],
     };
-    const files = generateOutputs(designSystem, options.options);
+    // Layer trees are read only when components.json is selected: they cost far more than the scan.
+    const structures = options.options.componentsJson
+      ? await extractStructures(
+          designSystem.components,
+          {
+            includeText: options.options.includeText,
+            includeVariantDiffs: options.options.includeVariantDiffs,
+            resolveToken: tokenResolver(designSystem),
+          },
+          (done, total) =>
+            post({
+              type: 'progress',
+              stage: 'structure',
+              percent: total > 0 ? Math.round((done / total) * 100) : 100,
+            }),
+        )
+      : undefined;
+    const files = generateOutputs(designSystem, options.options, { structures });
 
     if (files.length === 0) {
       post({

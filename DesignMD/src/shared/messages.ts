@@ -6,6 +6,12 @@ export interface ExportOptions {
   tokensJson: boolean;
   /** tokens.css: CSS custom properties with a [data-theme] block per extra mode. */
   cssFile: boolean;
+  /** components.json: layer trees, variant diffs and the tokens components use. */
+  componentsJson: boolean;
+  /** components.json: include text content (layer characters). */
+  includeText: boolean;
+  /** components.json: include how each variant differs from the default variant. */
+  includeVariantDiffs: boolean;
   zip: boolean;
 }
 
@@ -14,6 +20,9 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   componentDocs: true,
   tokensJson: false,
   cssFile: false,
+  componentsJson: false,
+  includeText: true,
+  includeVariantDiffs: true,
   zip: true,
 };
 

@@ -206,6 +206,17 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
       parent.appendChild(set);
       return set;
     },
+    getNodeByIdAsync: (id: string) => {
+      const find = (n: FakeNode): FakeNode | null => {
+        if (n.id === id) return n;
+        for (const c of n.children ?? []) {
+          const hit = find(c);
+          if (hit) return hit;
+        }
+        return null;
+      };
+      return Promise.resolve(find(root));
+    },
     setCurrentPageAsync: (next: FakeNode) => {
       figma.currentPage = next;
       return Promise.resolve();

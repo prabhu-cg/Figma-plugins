@@ -1,0 +1,211 @@
+/**
+ * Reads the structure of components (layer tree, variant diffs, full property details) for
+ * components.json. Runs at generate time, only when that output is selected, because it is far
+ * more work than the token scan. Each component is isolated: one that fails or runs over budget
+ * becomes a warning, never a crash.
+ */
+import type {
+  ComponentPropertyV1,
+  ComponentsWarning,
+  Layer,
+  PreferredValue,
+  VariantDiff,
+} from '@shared/componentsSchema';
+import type { ComponentDoc } from '@shared/types';
+import { assignRoles } from '../transform/roles';
+import { diffVariant } from '../transform/variantDiffs';
+import { processInBatches } from '../utils/async';
+import { defaultVariantOf } from './components';
+import { readLayerTree, type ReadLayerOptions } from './layers';
+
+/** A set with more variants than this gets no diffs. */
+export const MAX_VARIANTS_FOR_DIFFS = 128;
+/** Wall-clock budget for the layers and diffs of one component. */
+export const COMPONENT_TIME_BUDGET_MS = 5000;
+const BATCH_SIZE = 10;
+
+export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
+  includeVariantDiffs?: boolean;
+  timeBudgetMs?: number;
+  /** Clock, injectable for tests. */
+  now?: () => number;
+}
+
+export interface ComponentStructure {
+  properties: ComponentPropertyV1[];
+  defaultVariantId: string;
+  tree: Layer;
+  variantDiffs: VariantDiff[];
+  treeTruncated: boolean;
+  usedVariableIds: string[];
+  usedStyleIds: string[];
+  warnings: ComponentsWarning[];
+}
+
+export type StructureResult = ComponentStructure | { error: string };
+
+export const isStructure = (r: StructureResult | undefined): r is ComponentStructure =>
+  !!r && !('error' in r);
+
+/** "icon#3287:0" -> "icon". Variant properties have no suffix. */
+export const cleanPropertyName = (key: string) => key.replace(/#\d+:\d+$/, '');
+
+type Def = {
+  type?: string;
+  defaultValue?: unknown;
+  variantOptions?: string[];
+  preferredValues?: Array<{ type?: string; key?: string }>;
+};
+
+async function nodeById(id: string): Promise<{ id: string; name: string } | undefined> {
+  try {
+    const n = (await figma.getNodeByIdAsync(id)) as
+      (BaseNode & { parent: (BaseNode & { name: string }) | null }) | null;
+    if (!n) return undefined;
+    const name = n.parent?.type === 'COMPONENT_SET' ? n.parent.name : n.name;
+    return { id: n.id, name };
+  } catch {
+    return undefined;
+  }
+}
+
+async function readProperties(
+  defs: Record<string, Def> | undefined,
+): Promise<ComponentPropertyV1[]> {
+  if (!defs) return [];
+  const out: ComponentPropertyV1[] = [];
+  for (const [key, def] of Object.entries(defs)) {
+    const type = def.type as ComponentPropertyV1['type'];
+    const prop: ComponentPropertyV1 = {
+      key,
+      name: cleanPropertyName(key),
+      type,
+      defaultValue: String(def.defaultValue ?? ''),
+    };
+    if (type === 'INSTANCE_SWAP' && typeof def.defaultValue === 'string') {
+      const resolved = await nodeById(def.defaultValue);
+      if (resolved) prop.defaultResolved = resolved;
+    }
+    if (def.variantOptions) prop.variantOptions = [...def.variantOptions];
+    const preferred: PreferredValue[] = (def.preferredValues ?? []).flatMap((p) =>
+      (p.type === 'COMPONENT' || p.type === 'COMPONENT_SET') && typeof p.key === 'string'
+        ? [{ type: p.type, key: p.key }]
+        : [],
+    );
+    if (preferred.length > 0) prop.preferredValues = preferred;
+    out.push(prop);
+  }
+  return out;
+}
+
+/** Reads one component or component set. Throws on failure; callers isolate. */
+export async function extractComponentStructure(
+  node: ComponentNode | ComponentSetNode,
+  options: StructureOptions = {},
+): Promise<ComponentStructure> {
+  const now = options.now ?? Date.now;
+  const started = now();
+  const budget = options.timeBudgetMs ?? COMPONENT_TIME_BUDGET_MS;
+  const readOptions = { includeText: options.includeText, resolveToken: options.resolveToken };
+  const warnings: ComponentsWarning[] = [];
+
+  const members =
+    node.type === 'COMPONENT_SET'
+      ? node.children.filter((c): c is ComponentNode => c.type === 'COMPONENT')
+      : [node];
+  if (members.length === 0) throw new Error('The component set has no variants.');
+  const defaultNode = node.type === 'COMPONENT_SET' ? defaultVariantOf(node, members) : node;
+
+  // Variants are named "State=Hover"; paths in diffs start at the component's own name instead.
+  const named = (tree: Layer): Layer => ({ ...tree, name: node.name });
+  const base = await readLayerTree(defaultNode, readOptions);
+  base.tree = named(base.tree);
+  warnings.push(...base.warnings);
+  let truncated = base.truncated;
+  const variables = new Set(base.usedVariableIds);
+  const styles = new Set(base.usedStyleIds);
+
+  const diffs: VariantDiff[] = [];
+  const others = members.filter((m) => m.id !== defaultNode.id);
+  const wantDiffs = options.includeVariantDiffs !== false && others.length > 0;
+  if (wantDiffs && members.length > MAX_VARIANTS_FOR_DIFFS) {
+    warnings.push({
+      code: 'VARIANT_DIFFS_SKIPPED',
+      message: `"${node.name}" has ${members.length} variants (more than ${MAX_VARIANTS_FOR_DIFFS}), so variant diffs were skipped.`,
+      componentId: node.id,
+    });
+  } else if (wantDiffs) {
+    for (const variant of others) {
+      if (now() - started > budget) {
+        truncated = true;
+        warnings.push({
+          code: 'TREE_TRUNCATED',
+          message: `"${node.name}" took longer than ${budget} ms, so variant diffs stop after ${diffs.length} of ${others.length} variants.`,
+          componentId: node.id,
+        });
+        break;
+      }
+      const read = await readLayerTree(variant, readOptions);
+      if (read.truncated) truncated = true;
+      read.usedVariableIds.forEach((id) => variables.add(id));
+      read.usedStyleIds.forEach((id) => styles.add(id));
+      const { diff, warnings: diffWarnings } = diffVariant(base.tree, named(read.tree), {
+        variantId: variant.id,
+        variantProperties: { ...(variant.variantProperties ?? {}) },
+        componentId: node.id,
+      });
+      diff.added = diff.added.map((a) => ({ ...a, layer: assignRoles(a.layer, false) }));
+      diffs.push(diff);
+      // Duplicate names repeat for every variant; one warning per layer is enough.
+      for (const w of diffWarnings) {
+        if (!warnings.some((x) => x.code === w.code && x.layerId === w.layerId)) warnings.push(w);
+      }
+      for (const w of read.warnings) {
+        if (w.code === 'UNRESOLVED_REFERENCE') {
+          if (!warnings.some((x) => x.message === w.message)) warnings.push(w);
+        }
+      }
+    }
+  }
+
+  return {
+    properties: await readProperties(
+      node.componentPropertyDefinitions as unknown as Record<string, Def> | undefined,
+    ),
+    defaultVariantId: defaultNode.id,
+    tree: assignRoles(base.tree),
+    variantDiffs: diffs,
+    treeTruncated: truncated,
+    usedVariableIds: Array.from(variables),
+    usedStyleIds: Array.from(styles),
+    warnings: warnings.map((w) => (w.componentId ? w : { ...w, componentId: node.id })),
+  };
+}
+
+/**
+ * Reads the structure of each component by id. A component that cannot be found or that throws is
+ * reported as `{ error }` and the rest continue.
+ */
+export async function extractStructures(
+  components: readonly ComponentDoc[],
+  options: StructureOptions = {},
+  onProgress?: (done: number, total: number) => void,
+): Promise<Map<string, StructureResult>> {
+  const results = await processInBatches(
+    [...components],
+    BATCH_SIZE,
+    async (doc): Promise<[string, StructureResult]> => {
+      try {
+        const node = await figma.getNodeByIdAsync(doc.id);
+        if (!node || (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET')) {
+          return [doc.id, { error: 'The component could not be found in the file.' }];
+        }
+        return [doc.id, await extractComponentStructure(node, options)];
+      } catch (err) {
+        return [doc.id, { error: err instanceof Error ? err.message : String(err) }];
+      }
+    },
+    onProgress,
+  );
+  return new Map(results);
+}
