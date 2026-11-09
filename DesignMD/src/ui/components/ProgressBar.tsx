@@ -1,6 +1,9 @@
 interface ProgressBarProps {
   stage: string;
   percent: number;
+  /** Items finished and in total, shown next to the percentage when known. */
+  done?: number;
+  total?: number;
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -13,7 +16,7 @@ const STAGE_LABELS: Record<string, string> = {
   structure: 'Reading component layers',
 };
 
-export function ProgressBar({ stage, percent }: ProgressBarProps) {
+export function ProgressBar({ stage, percent, done, total }: ProgressBarProps) {
   return (
     <div
       className="dmd-progress"
@@ -25,6 +28,7 @@ export function ProgressBar({ stage, percent }: ProgressBarProps) {
     >
       <div className="dmd-progress-label">
         {STAGE_LABELS[stage] ?? stage}… {percent}%
+        {done !== undefined && total !== undefined && total > 0 ? ` · ${done} of ${total}` : ''}
       </div>
       <div className="dmd-progress-track">
         <div className="dmd-progress-fill" style={{ transform: `scaleX(${percent / 100})` }} />

@@ -22,6 +22,7 @@ import { ProgressBar } from './components/ProgressBar';
 import { ErrorBanner } from './components/ErrorBanner';
 import { WarningsList } from './components/WarningsList';
 import { postToPlugin, usePluginMessages } from './hooks/usePluginBridge';
+import { ChunkAssembler } from '@shared/chunking';
 import { downloadAsZip, downloadIndividually } from './zip';
 
 type Status = 'idle' | 'extracting' | 'ready' | 'generating' | 'done';
@@ -51,7 +52,15 @@ function countSelectedOutputs(options: ExportOptions): number {
 
 export default function App() {
   const [status, setStatus] = useState<Status>('idle');
-  const [progress, setProgress] = useState<{ stage: string; percent: number } | null>(null);
+  const [progress, setProgress] = useState<{
+    stage: string;
+    percent: number;
+    done?: number;
+    total?: number;
+  } | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  // Pieces of a large result, put back together when generation-complete arrives.
+  const assembler = useRef(new ChunkAssembler());
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
   const [failures, setFailures] = useState<OutputFailure[]>([]);
@@ -85,7 +94,15 @@ export default function App() {
         setContrastPairs(message.fileSettings.contrastPairs);
         break;
       case 'progress':
-        setProgress({ stage: message.stage, percent: message.percent });
+        setProgress({
+          stage: message.stage,
+          percent: message.percent,
+          done: message.done,
+          total: message.total,
+        });
+        break;
+      case 'file-chunk':
+        assembler.current.add(message);
         break;
       case 'extraction-complete':
         setDesignSystem(message.designSystem);
@@ -100,14 +117,25 @@ export default function App() {
         setStatus('ready');
         setActiveTab('summary');
         setProgress(null);
+        setCancelling(false);
         if (!baseNameWasCustomized(baseName)) {
           setBaseName(slugify(message.designSystem.metadata.fileName) || 'designmd-export');
         }
         break;
       case 'generation-complete':
-        setFiles(message.files);
+        try {
+          setFiles(message.chunked ? assembler.current.take(message.chunked) : message.files);
+        } catch (err) {
+          assembler.current.reset();
+          setError(err instanceof Error ? err.message : String(err));
+          setStatus('ready');
+          setProgress(null);
+          setCancelling(false);
+          break;
+        }
         setFailures(message.failures ?? []);
         setProgress(null);
+        setCancelling(false);
         setStatus('done');
         setActiveTab('files');
         break;
@@ -115,6 +143,8 @@ export default function App() {
         setError(message.message);
         setStatus(designSystem ? 'ready' : 'idle');
         setProgress(null);
+        setCancelling(false);
+        assembler.current.reset();
         break;
     }
   });
@@ -182,8 +212,14 @@ export default function App() {
     [invalidateGenerated, saveFileSettings, excludedPages],
   );
 
+  const handleCancel = useCallback(() => {
+    setCancelling(true);
+    postToPlugin({ type: 'cancel' });
+  }, []);
+
   const handleGenerate = useCallback(() => {
     setError(null);
+    assembler.current.reset();
     setStatus('generating');
     setOutdated(false);
     postToPlugin({
@@ -264,7 +300,12 @@ export default function App() {
         {status === 'idle' && scopeToggle}
 
         {(status === 'extracting' || status === 'generating') && progress && (
-          <ProgressBar stage={progress.stage} percent={progress.percent} />
+          <ProgressBar
+            stage={progress.stage}
+            percent={progress.percent}
+            done={progress.done}
+            total={progress.total}
+          />
         )}
 
         {showTabs && designSystem && currentTab === 'summary' && (
@@ -324,9 +365,18 @@ export default function App() {
         )}
 
         {status === 'extracting' && (
-          <button className="dmd-btn dmd-btn-primary dmd-btn-full" disabled>
-            Scanning…
-          </button>
+          <>
+            <button
+              className="dmd-btn dmd-btn-secondary dmd-btn-full"
+              onClick={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+            <button className="dmd-btn dmd-btn-primary dmd-btn-full" disabled>
+              Scanning…
+            </button>
+          </>
         )}
 
         {(status === 'ready' || status === 'generating') && (
@@ -336,6 +386,15 @@ export default function App() {
                 ? 'Settings changed — generate again to refresh your files'
                 : `${selectedCount} output${selectedCount === 1 ? '' : 's'} selected`}
             </div>
+            {status === 'generating' && (
+              <button
+                className="dmd-btn dmd-btn-secondary dmd-btn-full"
+                onClick={handleCancel}
+                disabled={cancelling}
+              >
+                {cancelling ? 'Cancelling…' : 'Cancel'}
+              </button>
+            )}
             <GenerateButton
               onClick={handleGenerate}
               disabled={status === 'generating' || selectedCount === 0}

@@ -1,3 +1,4 @@
+import type { FileChunk } from './chunking';
 import type { ContrastPairSpec, DesignSystem, ExtractionScope } from './types';
 
 export interface ExportOptions {
@@ -95,14 +96,31 @@ export type UIToPluginMessage =
       contrastPairs?: ContrastPairSpec[];
     }
   | { type: 'save-settings'; settings: SavedSettings }
-  | { type: 'save-file-settings'; fileSettings: FileSettings };
+  | { type: 'save-file-settings'; fileSettings: FileSettings }
+  /** Stop the running scan or generation and return what is done so far. */
+  | { type: 'cancel' };
 
 export type PluginToUIMessage =
-  | { type: 'progress'; stage: string; percent: number; message?: string }
+  | {
+      type: 'progress';
+      stage: string;
+      percent: number;
+      done?: number;
+      total?: number;
+      message?: string;
+    }
   | { type: 'selection'; count: number }
   | { type: 'settings'; settings: SavedSettings | null; fileSettings: FileSettings }
   | { type: 'extraction-complete'; designSystem: DesignSystem }
-  | { type: 'generation-complete'; files: GeneratedFile[]; failures?: OutputFailure[] }
+  | FileChunk
+  | {
+      type: 'generation-complete';
+      /** Empty when `chunked` is set: the files arrived as file-chunk messages. */
+      files: GeneratedFile[];
+      /** Paths of the files sent as file-chunk messages, in order. */
+      chunked?: string[];
+      failures?: OutputFailure[];
+    }
   | { type: 'error'; stage: string; message: string };
 
 export interface FigmaPluginMessageEvent<T> {

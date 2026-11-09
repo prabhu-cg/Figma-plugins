@@ -1,3 +1,4 @@
+import { isCancelled } from '../utils/async';
 import { extractComponents } from './components';
 import {
   extractEffectStyles,
@@ -66,10 +67,12 @@ export async function extractDesignSystem(
     options.selection,
   );
 
-  if (collections.length === 0 && variables.length === 0) {
+  if (isCancelled()) {
+    warn('The scan was cancelled before it finished, so these results are partial.');
+  } else if (collections.length === 0 && variables.length === 0) {
     warn('No local variables found — falling back to styles as the token source of truth.');
   }
-  if (components.length === 0) {
+  if (components.length === 0 && !isCancelled()) {
     warn(
       options.selection
         ? 'No components or component sets found in the selection.'

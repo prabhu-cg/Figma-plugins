@@ -306,6 +306,62 @@ describe('App: components.json option', () => {
   });
 });
 
+describe('App: cancel, chunks and progress detail', () => {
+  it('offers Cancel while scanning, tells the plugin, and shows it is cancelling', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'progress', stage: 'components', percent: 25, done: 120, total: 480 });
+    expect(screen.getByRole('progressbar')).toHaveTextContent('25% · 120 of 480');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(messagesOfType('cancel')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Cancelling…' })).toBeDisabled();
+  });
+
+  it('offers Cancel while generating, and clears it when the result arrives', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(messagesOfType('cancel')).toHaveLength(1);
+    fromPlugin({ type: 'generation-complete', files: [{ path: 'design.md', content: '# x\n' }] });
+    expect(screen.queryByRole('button', { name: /Cancel/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download/ })).toBeInTheDocument();
+  });
+
+  it('puts chunked files back together in the listed order', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    const part = (path: string, i: number, parts: number, data: string) =>
+      fromPlugin({ type: 'file-chunk', path, part: i, parts, data });
+    part('components.json', 1, 2, 'world');
+    part('components.json', 0, 2, 'hello ');
+    part('notes.md', 0, 1, '# notes\n');
+    fromPlugin({
+      type: 'generation-complete',
+      files: [],
+      chunked: ['components.json', 'notes.md'],
+    });
+    expect(screen.getByRole('heading', { name: 'Generated files' })).toBeInTheDocument();
+    expect(screen.getAllByText('components.json').length).toBeGreaterThan(0);
+    expect(screen.getByText('notes.md')).toBeInTheDocument();
+    expect(screen.getByLabelText('Preview of components.json')).toHaveTextContent('hello world');
+  });
+
+  it('reports a file that arrived incomplete instead of showing a broken result', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+    fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+    fromPlugin({ type: 'file-chunk', path: 'a.json', part: 0, parts: 2, data: 'x' });
+    fromPlugin({ type: 'generation-complete', files: [], chunked: ['a.json'] });
+    expect(screen.getByRole('alert')).toHaveTextContent('a.json arrived incomplete');
+    expect(screen.getByRole('button', { name: 'Generate' })).toBeInTheDocument();
+  });
+});
+
 describe('App: partial generation', () => {
   it('shows which outputs failed next to the files that were generated', async () => {
     render(<App />);

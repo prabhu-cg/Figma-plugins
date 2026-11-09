@@ -4,8 +4,14 @@ import type { GeneratedFile } from '@shared/messages';
 
 export async function downloadAsZip(files: GeneratedFile[], zipFileName: string): Promise<void> {
   const zip = new JSZip();
+  let sinceYield = 0;
   for (const file of files) {
     zip.file(file.path, file.content);
+    // Hundreds of files: give the UI a turn now and then so it stays responsive.
+    if (++sinceYield >= 50) {
+      sinceYield = 0;
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
   }
   const blob = await zip.generateAsync({ type: 'blob' });
   saveAs(blob, zipFileName);

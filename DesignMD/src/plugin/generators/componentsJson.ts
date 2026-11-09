@@ -24,6 +24,7 @@ import type {
   StyleToken,
   VariableToken,
 } from '@shared/types';
+import { assignComponentDocPaths } from './componentMd';
 import { isStructure, type StructureResult } from '../extraction/structures';
 import { defaultModeValue } from './tokenValue';
 
@@ -191,7 +192,13 @@ export function buildComponentsFile(
   const components: ComponentV1[] = docs.map((doc) => {
     const result = structures.get(doc.id);
     const structure = isStructure(result) ? result : undefined;
-    if (!structure) {
+    if (!structure && result && 'cancelled' in result && result.cancelled) {
+      warnings.push({
+        code: 'SCAN_CANCELLED',
+        message: `Generation was cancelled before "${doc.name}" was read, so its layer tree is empty.`,
+        componentId: doc.id,
+      });
+    } else if (!structure) {
       warnings.push({
         code: 'COMPONENT_FAILED',
         message: `"${doc.name}" (${doc.id}) could not be read: ${
@@ -262,14 +269,22 @@ export function buildComponentsFile(
 }
 
 /** Serializes with the hash filled in: SHA-256 of the text with generatedAt and contentHash blanked. */
-export function serializeComponentsFile(file: ComponentsFileV1): string {
+export function hashAndSerialize(file: ComponentsFileV1): { content: string; contentHash: string } {
   const blank = JSON.stringify(
     { ...file, metadata: { ...file.metadata, generatedAt: '', contentHash: '' } },
     null,
     2,
   );
   const contentHash = sha256(blank + '\n');
-  return JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + '\n';
+  return {
+    content:
+      JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + '\n',
+    contentHash,
+  };
+}
+
+export function serializeComponentsFile(file: ComponentsFileV1): string {
+  return hashAndSerialize(file).content;
 }
 
 export function generateComponentsJson(
@@ -280,4 +295,61 @@ export function generateComponentsJson(
     path: OUTPUT_PATH,
     content: serializeComponentsFile(buildComponentsFile(ds, structures)),
   };
+}
+
+/** Above this size the output is split into one file per component. */
+export const COMPONENTS_JSON_SPLIT_BYTES = 20 * 1024 * 1024;
+
+const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
+
+/**
+ * components.json, split into `components.json` (index and tokens) plus one `components/<name>.json`
+ * per component when the single file would pass `splitThresholdBytes`. Each per-component file is
+ * a complete, valid file of its own (with the tokens it uses), so a tool can load one at a time.
+ */
+export function generateComponentsJsonFiles(
+  ds: DesignSystem,
+  structures: ReadonlyMap<string, StructureResult>,
+  options: { splitThresholdBytes?: number } = {},
+): GeneratedFile[] {
+  const threshold = options.splitThresholdBytes ?? COMPONENTS_JSON_SPLIT_BYTES;
+  const file = buildComponentsFile(ds, structures);
+  const single = hashAndSerialize(file);
+  if (single.content.length <= threshold) return [{ path: OUTPUT_PATH, content: single.content }];
+
+  const docPaths = assignComponentDocPaths(ds.components);
+  const parts: GeneratedFile[] = [];
+  const index = file.components.map((component) => {
+    const path = (docPaths.get(component.id) ?? `components/${component.id}.md`).replace(
+      /\.md$/,
+      '.json',
+    );
+    const usedTokenIds = [...component.boundVariableIds, ...component.styleIds];
+    const part: ComponentsFileV1 = {
+      ...file,
+      index: { componentCount: 1, components: [{ id: component.id, name: component.name }] },
+      tokens: Object.fromEntries(
+        usedTokenIds.filter((id) => id in file.tokens).map((id) => [id, file.tokens[id]]),
+      ),
+      components: [component],
+      warnings: file.warnings.filter((w) => w.componentId === component.id),
+    };
+    const { content, contentHash } = hashAndSerialize(part);
+    parts.push({ path, content });
+    return { id: component.id, name: component.name, file: path, contentHash };
+  });
+
+  const main: ComponentsFileV1 = {
+    ...file,
+    index: { componentCount: file.components.length, components: index },
+    components: [],
+    warnings: [
+      ...file.warnings,
+      {
+        code: 'OUTPUT_TOO_LARGE',
+        message: `components.json would be ${mb(single.content.length)} MB (limit ${mb(threshold)} MB), so each component is in its own file under components/ and this file holds the index and tokens.`,
+      },
+    ],
+  };
+  return [{ path: OUTPUT_PATH, content: serializeComponentsFile(main) }, ...parts];
 }

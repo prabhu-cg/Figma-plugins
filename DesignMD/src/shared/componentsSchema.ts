@@ -510,6 +510,8 @@ export interface ComponentIndexEntry {
   name: string;
   /** Path of the file holding this component, for example "components/Button.json". Present only when the output is split. */
   file?: string;
+  /** SHA-256 content hash of the file in `file`, so a change inside any component is visible from the index. Present only when the output is split. */
+  contentHash?: string;
 }
 
 /** Counts and names, so a tool can decide what to read. */

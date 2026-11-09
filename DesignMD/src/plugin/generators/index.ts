@@ -2,20 +2,22 @@ import type { DesignSystem } from '@shared/types';
 import type { StructureResult } from '../extraction/structures';
 import type { ExportOptions, GeneratedFile, OutputFailure } from '@shared/messages';
 import { generateComponentDocs } from './componentMd';
-import { generateComponentsJson } from './componentsJson';
+import { generateComponentsJsonFiles } from './componentsJson';
 import { generateCssFile } from './cssFile';
 import { generateDesignMd } from './designMd';
 import { generateTokensJson } from './tokensJson';
 
 export { generateComponentDocs, generateComponentMd } from './componentMd';
 export { generateDesignMd } from './designMd';
-export { generateComponentsJson } from './componentsJson';
+export { generateComponentsJson, generateComponentsJsonFiles } from './componentsJson';
 export { generateCssFile } from './cssFile';
 export { generateTokensJson } from './tokensJson';
 
 export interface GenerateExtras {
   /** Structure of each component by id, read from Figma. Needed for components.json. */
   structures?: ReadonlyMap<string, StructureResult>;
+  /** Size above which components.json is split into per-component files. Defaults to 20 MB. */
+  splitThresholdBytes?: number;
 }
 
 export interface GenerateResult {
@@ -48,7 +50,11 @@ export function generateOutputsDetailed(
   if (options.tokensJson) run('tokens.json', () => generateTokensJson(ds));
   if (options.cssFile) run('tokens.css', () => generateCssFile(ds));
   if (options.componentsJson) {
-    run('components.json', () => generateComponentsJson(ds, extras.structures ?? new Map()));
+    run('components.json', () =>
+      generateComponentsJsonFiles(ds, extras.structures ?? new Map(), {
+        splitThresholdBytes: extras.splitThresholdBytes,
+      }),
+    );
   }
   return { files, failures };
 }

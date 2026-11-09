@@ -13,10 +13,14 @@ import { extractStructures } from './extraction/structures';
 import { generateOutputsDetailed } from './generators';
 import { transformToDesignSystem } from './transform';
 import { filterDesignSystemByPages } from './transform/pageFilter';
+import { withCancellation, yieldToEventLoop } from './utils/async';
+import { chunkFile, needsChunking } from '@shared/chunking';
 
 figma.showUI(__html__, { width: 480, height: 700, themeColors: true });
 
 let cachedDesignSystem: DesignSystem | undefined;
+/** Set by the UI's Cancel button; read by the batched loops of the running scan or generation. */
+let cancelRequested = false;
 
 function post(message: PluginToUIMessage): void {
   figma.ui.postMessage(message);
@@ -84,13 +88,24 @@ async function handleExtract(scope: ExtractionScope): Promise<void> {
       return;
     }
 
-    const raw = await extractDesignSystem(
-      (progress) => {
-        const percent =
-          progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 100;
-        post({ type: 'progress', stage: progress.stage, percent });
-      },
-      { selection },
+    cancelRequested = false;
+    const raw = await withCancellation(
+      () => cancelRequested,
+      () =>
+        extractDesignSystem(
+          (progress) => {
+            const percent =
+              progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 100;
+            post({
+              type: 'progress',
+              stage: progress.stage,
+              percent,
+              done: progress.done,
+              total: progress.total,
+            });
+          },
+          { selection },
+        ),
     );
 
     const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
@@ -132,20 +147,27 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       contrastPairs: options.contrastPairs ?? [],
     };
     // Layer trees are read only when components.json is selected: they cost far more than the scan.
+    cancelRequested = false;
     const structures = options.options.componentsJson
-      ? await extractStructures(
-          designSystem.components,
-          {
-            includeText: options.options.includeText,
-            includeVariantDiffs: options.options.includeVariantDiffs,
-            resolveToken: tokenResolver(designSystem),
-          },
-          (done, total) =>
-            post({
-              type: 'progress',
-              stage: 'structure',
-              percent: total > 0 ? Math.round((done / total) * 100) : 100,
-            }),
+      ? await withCancellation(
+          () => cancelRequested,
+          () =>
+            extractStructures(
+              designSystem.components,
+              {
+                includeText: options.options.includeText,
+                includeVariantDiffs: options.options.includeVariantDiffs,
+                resolveToken: tokenResolver(designSystem),
+              },
+              (done, total) =>
+                post({
+                  type: 'progress',
+                  stage: 'structure',
+                  percent: total > 0 ? Math.round((done / total) * 100) : 100,
+                  done,
+                  total,
+                }),
+            ),
         )
       : undefined;
     const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
@@ -172,11 +194,24 @@ async function handleGenerate(options: UIToPluginMessage & { type: 'generate' })
       return;
     }
 
-    post({
-      type: 'generation-complete',
-      files,
-      ...(failures.length > 0 ? { failures } : {}),
-    });
+    const failureField = failures.length > 0 ? { failures } : {};
+    if (needsChunking(files)) {
+      // One huge message can fail or freeze the UI, so large results go over in pieces.
+      for (const file of files) {
+        for (const chunk of chunkFile(file)) {
+          post(chunk);
+          await yieldToEventLoop();
+        }
+      }
+      post({
+        type: 'generation-complete',
+        files: [],
+        chunked: files.map((f) => f.path),
+        ...failureField,
+      });
+    } else {
+      post({ type: 'generation-complete', files, ...failureField });
+    }
   } catch (err) {
     post({
       type: 'error',
@@ -202,6 +237,9 @@ figma.ui.onmessage = async (message: UIToPluginMessage) => {
       break;
     case 'generate':
       await handleGenerate(message);
+      break;
+    case 'cancel':
+      cancelRequested = true;
       break;
   }
 };

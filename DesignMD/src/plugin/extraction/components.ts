@@ -1,4 +1,4 @@
-import { processInBatches, safely } from '../utils/async';
+import { isCancelled, processInBatches, safely } from '../utils/async';
 import { boundVariablesOf } from './styles';
 import type { ComponentLayout } from '@shared/types';
 import type { RawComponent, RawComponentProperty, RawComponentVariant } from './rawTypes';
@@ -241,6 +241,7 @@ export async function extractComponents(
   selection?: readonly SceneNode[],
 ): Promise<RawComponent[]> {
   const warn = onWarning ?? (() => {});
+  if (isCancelled()) return [];
 
   if (!selection) {
     await safely(

@@ -137,6 +137,10 @@
         "file": {
           "type": "string",
           "description": "Path of the file holding this component, for example \"components/Button.json\". Present only when the output is split."
+        },
+        "contentHash": {
+          "type": "string",
+          "description": "SHA-256 content hash of the file in `file`, so a change inside any component is visible from the index. Present only when the output is split."
         }
       },
       "required": [

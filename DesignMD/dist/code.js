@@ -40,9 +40,26 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   function yieldToEventLoop() {
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
+  let cancelCheck = null;
+  function isCancelled() {
+    return (cancelCheck == null ? void 0 : cancelCheck()) === true;
+  }
+  async function withCancellation(check, fn) {
+    const previous = cancelCheck;
+    cancelCheck = check;
+    try {
+      return await fn();
+    } finally {
+      cancelCheck = previous;
+    }
+  }
   async function processInBatches(items, batchSize, fn, onBatch) {
     const results = new Array(items.length);
     for (let start = 0; start < items.length; start += batchSize) {
+      if (isCancelled()) {
+        results.length = start;
+        return results;
+      }
       const end = Math.min(start + batchSize, items.length);
       const batch = await Promise.all(
         items.slice(start, end).map((item, offset) => fn(item, start + offset))
@@ -430,6 +447,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   async function extractComponents(onProgress, onWarning, selection) {
     const warn = onWarning ?? (() => {
     });
+    if (isCancelled()) return [];
     if (!selection) {
       await safely(
         () => figma.loadAllPagesAsync(),
@@ -613,10 +631,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warn,
       options.selection
     );
-    if (collections.length === 0 && variables.length === 0) {
+    if (isCancelled()) {
+      warn("The scan was cancelled before it finished, so these results are partial.");
+    } else if (collections.length === 0 && variables.length === 0) {
       warn("No local variables found — falling back to styles as the token source of truth.");
     }
-    if (components.length === 0) {
+    if (components.length === 0 && !isCancelled()) {
       warn(
         options.selection ? "No components or component sets found in the selection." : "No components or component sets found in this file."
       );
@@ -1258,6 +1278,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       });
     } else if (wantDiffs) {
       for (const variant of others) {
+        if (isCancelled()) {
+          truncated = true;
+          warnings.push({
+            code: "SCAN_CANCELLED",
+            message: `Generation was cancelled while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
+            componentId: node.id
+          });
+          break;
+        }
         if (now() - started > budget) {
           truncated = true;
           warnings.push({
@@ -1338,7 +1367,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       },
       onProgress
     );
-    return new Map(results);
+    const map = new Map(results);
+    for (const doc of components) {
+      if (!map.has(doc.id)) map.set(doc.id, { error: "Generation was cancelled.", cancelled: true });
+    }
+    return map;
   }
   function escapeCell(value) {
     return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
@@ -1810,7 +1843,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       var _a;
       const result = structures.get(doc.id);
       const structure = isStructure(result) ? result : void 0;
-      if (!structure) {
+      if (!structure && result && "cancelled" in result && result.cancelled) {
+        warnings.push({
+          code: "SCAN_CANCELLED",
+          message: `Generation was cancelled before "${doc.name}" was read, so its layer tree is empty.`,
+          componentId: doc.id
+        });
+      } else if (!structure) {
         warnings.push({
           code: "COMPONENT_FAILED",
           message: `"${doc.name}" (${doc.id}) could not be read: ${result && "error" in result ? result.error : "its structure was not extracted"}. Its layer tree is empty.`,
@@ -1872,20 +1911,62 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
-  function serializeComponentsFile(file) {
+  function hashAndSerialize(file) {
     const blank = JSON.stringify(
       { ...file, metadata: { ...file.metadata, generatedAt: "", contentHash: "" } },
       null,
       2
     );
     const contentHash = sha256(blank + "\n");
-    return JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + "\n";
-  }
-  function generateComponentsJson(ds, structures) {
     return {
-      path: OUTPUT_PATH,
-      content: serializeComponentsFile(buildComponentsFile(ds, structures))
+      content: JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + "\n",
+      contentHash
     };
+  }
+  function serializeComponentsFile(file) {
+    return hashAndSerialize(file).content;
+  }
+  const COMPONENTS_JSON_SPLIT_BYTES = 20 * 1024 * 1024;
+  const mb = (bytes) => (bytes / 1048576).toFixed(1);
+  function generateComponentsJsonFiles(ds, structures, options = {}) {
+    const threshold = options.splitThresholdBytes ?? COMPONENTS_JSON_SPLIT_BYTES;
+    const file = buildComponentsFile(ds, structures);
+    const single = hashAndSerialize(file);
+    if (single.content.length <= threshold) return [{ path: OUTPUT_PATH, content: single.content }];
+    const docPaths = assignComponentDocPaths(ds.components);
+    const parts = [];
+    const index = file.components.map((component) => {
+      const path = (docPaths.get(component.id) ?? `components/${component.id}.md`).replace(
+        /\.md$/,
+        ".json"
+      );
+      const usedTokenIds = [...component.boundVariableIds, ...component.styleIds];
+      const part = {
+        ...file,
+        index: { componentCount: 1, components: [{ id: component.id, name: component.name }] },
+        tokens: Object.fromEntries(
+          usedTokenIds.filter((id) => id in file.tokens).map((id) => [id, file.tokens[id]])
+        ),
+        components: [component],
+        warnings: file.warnings.filter((w) => w.componentId === component.id)
+      };
+      const { content, contentHash } = hashAndSerialize(part);
+      parts.push({ path, content });
+      return { id: component.id, name: component.name, file: path, contentHash };
+    });
+    const main = {
+      ...file,
+      index: { componentCount: file.components.length, components: index },
+      components: [],
+      warnings: [
+        ...file.warnings,
+        {
+          code: "OUTPUT_TOO_LARGE",
+          message: `components.json would be ${mb(single.content.length)} MB (limit ${mb(threshold)} MB), so each component is in its own file under components/ and this file holds the index and tokens.`
+        }
+      ]
+    };
+    return [{ path: OUTPUT_PATH, content: serializeComponentsFile(main) }, ...parts];
   }
   function unitFor(category) {
     return category === "spacing" || category === "typography" ? "px" : "";
@@ -2948,7 +3029,12 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     if (options.tokensJson) run("tokens.json", () => generateTokensJson(ds));
     if (options.cssFile) run("tokens.css", () => generateCssFile(ds));
     if (options.componentsJson) {
-      run("components.json", () => generateComponentsJson(ds, extras.structures ?? /* @__PURE__ */ new Map()));
+      run(
+        "components.json",
+        () => generateComponentsJsonFiles(ds, extras.structures ?? /* @__PURE__ */ new Map(), {
+          splitThresholdBytes: extras.splitThresholdBytes
+        })
+      );
     }
     return { files, failures };
   }
@@ -3345,8 +3431,38 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       summary: buildSummary(base)
     };
   }
+  const CHUNK_CHARS = 512 * 1024;
+  const CHUNK_TOTAL_THRESHOLD = 2 * 1024 * 1024;
+  function needsChunking(files) {
+    let total = 0;
+    for (const f of files) {
+      total += f.content.length;
+      if (total > CHUNK_TOTAL_THRESHOLD) return true;
+    }
+    return false;
+  }
+  function chunkFile(file, size = CHUNK_CHARS) {
+    const pieces = [];
+    let start = 0;
+    while (start < file.content.length) {
+      let end = Math.min(start + size, file.content.length);
+      const last = file.content.charCodeAt(end - 1);
+      if (end < file.content.length && last >= 55296 && last <= 56319) end--;
+      pieces.push(file.content.slice(start, end));
+      start = end;
+    }
+    if (pieces.length === 0) pieces.push("");
+    return pieces.map((data, part) => ({
+      type: "file-chunk",
+      path: file.path,
+      part,
+      parts: pieces.length,
+      data
+    }));
+  }
   figma.showUI(__html__, { width: 480, height: 700, themeColors: true });
   let cachedDesignSystem;
+  let cancelRequested = false;
   function post(message) {
     figma.ui.postMessage(message);
   }
@@ -3400,12 +3516,22 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         });
         return;
       }
-      const raw = await extractDesignSystem(
-        (progress) => {
-          const percent = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 100;
-          post({ type: "progress", stage: progress.stage, percent });
-        },
-        { selection }
+      cancelRequested = false;
+      const raw = await withCancellation(
+        () => cancelRequested,
+        () => extractDesignSystem(
+          (progress) => {
+            const percent = progress.total > 0 ? Math.round(progress.done / progress.total * 100) : 100;
+            post({
+              type: "progress",
+              stage: progress.stage,
+              percent,
+              done: progress.done,
+              total: progress.total
+            });
+          },
+          { selection }
+        )
       );
       const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
       cachedDesignSystem = designSystem;
@@ -3440,18 +3566,24 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         ...filterDesignSystemByPages(cachedDesignSystem, options.excludedPages),
         contrastPairs: options.contrastPairs ?? []
       };
-      const structures = options.options.componentsJson ? await extractStructures(
-        designSystem.components,
-        {
-          includeText: options.options.includeText,
-          includeVariantDiffs: options.options.includeVariantDiffs,
-          resolveToken: tokenResolver(designSystem)
-        },
-        (done, total) => post({
-          type: "progress",
-          stage: "structure",
-          percent: total > 0 ? Math.round(done / total * 100) : 100
-        })
+      cancelRequested = false;
+      const structures = options.options.componentsJson ? await withCancellation(
+        () => cancelRequested,
+        () => extractStructures(
+          designSystem.components,
+          {
+            includeText: options.options.includeText,
+            includeVariantDiffs: options.options.includeVariantDiffs,
+            resolveToken: tokenResolver(designSystem)
+          },
+          (done, total) => post({
+            type: "progress",
+            stage: "structure",
+            percent: total > 0 ? Math.round(done / total * 100) : 100,
+            done,
+            total
+          })
+        )
       ) : void 0;
       const { files, failures } = generateOutputsDetailed(designSystem, options.options, {
         structures
@@ -3472,11 +3604,23 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         });
         return;
       }
-      post({
-        type: "generation-complete",
-        files,
-        ...failures.length > 0 ? { failures } : {}
-      });
+      const failureField = failures.length > 0 ? { failures } : {};
+      if (needsChunking(files)) {
+        for (const file of files) {
+          for (const chunk of chunkFile(file)) {
+            post(chunk);
+            await yieldToEventLoop();
+          }
+        }
+        post({
+          type: "generation-complete",
+          files: [],
+          chunked: files.map((f) => f.path),
+          ...failureField
+        });
+      } else {
+        post({ type: "generation-complete", files, ...failureField });
+      }
     } catch (err) {
       post({
         type: "error",
@@ -3501,6 +3645,9 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         break;
       case "generate":
         await handleGenerate(message);
+        break;
+      case "cancel":
+        cancelRequested = true;
         break;
     }
   };

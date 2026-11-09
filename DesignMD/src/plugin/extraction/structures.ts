@@ -15,7 +15,7 @@ import type { ComponentDoc } from '@shared/types';
 import { cleanPropertyName } from '@shared/naming';
 import { assignRoles } from '../transform/roles';
 import { diffVariant } from '../transform/variantDiffs';
-import { processInBatches } from '../utils/async';
+import { isCancelled, processInBatches } from '../utils/async';
 import { defaultVariantOf } from './components';
 import { readLayerTree, type ReadLayerOptions } from './layers';
 
@@ -47,7 +47,7 @@ export interface ComponentStructure {
   warnings: ComponentsWarning[];
 }
 
-export type StructureResult = ComponentStructure | { error: string };
+export type StructureResult = ComponentStructure | { error: string; cancelled?: boolean };
 
 export const isStructure = (r: StructureResult | undefined): r is ComponentStructure =>
   !!r && !('error' in r);
@@ -140,6 +140,15 @@ export async function extractComponentStructure(
     });
   } else if (wantDiffs) {
     for (const variant of others) {
+      if (isCancelled()) {
+        truncated = true;
+        warnings.push({
+          code: 'SCAN_CANCELLED',
+          message: `Generation was cancelled while reading "${node.name}", so its variant diffs stop after ${diffs.length} of ${others.length} variants.`,
+          componentId: node.id,
+        });
+        break;
+      }
       if (now() - started > budget) {
         truncated = true;
         warnings.push({
@@ -233,5 +242,10 @@ export async function extractStructures(
     },
     onProgress,
   );
-  return new Map(results);
+  const map = new Map(results);
+  // A cancelled run stops before some batches; those components are marked, not dropped.
+  for (const doc of components) {
+    if (!map.has(doc.id)) map.set(doc.id, { error: 'Generation was cancelled.', cancelled: true });
+  }
+  return map;
 }

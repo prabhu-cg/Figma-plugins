@@ -10,6 +10,7 @@ import { generateOutputs } from '../../src/plugin/generators';
 import {
   buildComponentsFile,
   generateComponentsJson,
+  generateComponentsJsonFiles,
 } from '../../src/plugin/generators/componentsJson';
 import { findBrokenRefs } from '../../src/shared/componentsRefs';
 import type { ComponentsFileV1 } from '../../src/shared/componentsSchema';
@@ -342,5 +343,97 @@ describe('generateComponentsJson', () => {
       { structures },
     );
     expect(on.map((f) => f.path)).toContain('components.json');
+  });
+});
+
+describe('splitting a large components.json', () => {
+  async function setup() {
+    const { root } = buildFile();
+    installFakeFigma({ root });
+    const ds = await dsFor();
+    ds.variables[0] = { ...ds.variables[0], id: 'var:1' };
+    ds.components.forEach((c) => (c.boundVariableIds = []));
+    const structures = await extractStructures(ds.components, {
+      resolveToken: (kind, id) =>
+        kind === 'variable' ? ds.variables.find((v) => v.id === id)?.cssName : undefined,
+    });
+    return { ds, structures };
+  }
+  const hashOf = (text: string) =>
+    createHash('sha256')
+      .update(
+        text
+          .replace(/"generatedAt": "[^"]*"/, '"generatedAt": ""')
+          .replace(/"contentHash": "[^"]*"/, '"contentHash": ""'),
+      )
+      .digest('hex');
+
+  it('stays one file under the threshold', async () => {
+    const { ds, structures } = await setup();
+    const files = generateComponentsJsonFiles(ds, structures);
+    expect(files.map((f) => f.path)).toEqual(['components.json']);
+    expect(files[0].content).toBe(generateComponentsJson(ds, structures).content);
+  });
+
+  it('splits into an index file plus one valid file per component above the threshold', async () => {
+    const { ds, structures } = await setup();
+    const files = generateComponentsJsonFiles(ds, structures, { splitThresholdBytes: 500 });
+    expect(files.map((f) => f.path)).toEqual([
+      'components.json',
+      'components/Button.json',
+      'components/IconArrow.json',
+    ]);
+
+    const main = JSON.parse(files[0].content) as ComponentsFileV1;
+    expect(main.components).toEqual([]);
+    expect(main.index.componentCount).toBe(2);
+    expect(main.index.components.map((c) => c.file)).toEqual([
+      'components/Button.json',
+      'components/IconArrow.json',
+    ]);
+    expect(main.warnings.map((w) => w.code)).toContain('OUTPUT_TOO_LARGE');
+    expect(Object.keys(main.tokens)).toContain('var:1');
+    expect(validate(main)).toBe(true);
+
+    files.slice(1).forEach((part, i) => {
+      const json = JSON.parse(part.content) as ComponentsFileV1;
+      expect(validate(json)).toBe(true);
+      expect(validate.errors ?? []).toEqual([]);
+      expect(json.components).toHaveLength(1);
+      expect(json.index.componentCount).toBe(1);
+      expect(findBrokenRefs(json, { checkInstances: false })).toEqual([]);
+      // index hash lets a tool see a change inside any component without opening it
+      expect(main.index.components[i].contentHash).toBe(json.metadata.contentHash);
+      expect(json.metadata.contentHash).toBe(hashOf(part.content));
+    });
+    expect(hashOf(files[0].content)).toBe(main.metadata.contentHash);
+  });
+
+  it('keeps each component with only the tokens and warnings it uses', async () => {
+    const { ds, structures } = await setup();
+    const files = generateComponentsJsonFiles(ds, structures, { splitThresholdBytes: 500 });
+    const icon = JSON.parse(files[2].content) as ComponentsFileV1;
+    expect(icon.components[0].name).toBe('Icon/Arrow');
+    expect(icon.tokens).toEqual({});
+    const button = JSON.parse(files[1].content) as ComponentsFileV1;
+    expect(Object.keys(button.tokens)).toEqual(['var:1']);
+  });
+
+  it('is reached through generateOutputs, and is deterministic', async () => {
+    const { ds, structures } = await setup();
+    const opts = {
+      ...DEFAULT_EXPORT_OPTIONS,
+      designMd: false,
+      componentDocs: false,
+      componentsJson: true,
+    };
+    const a = generateOutputs(ds, opts, { structures, splitThresholdBytes: 500 });
+    const b = generateOutputs(ds, opts, { structures, splitThresholdBytes: 500 });
+    expect(a.map((f) => f.path)).toEqual([
+      'components.json',
+      'components/Button.json',
+      'components/IconArrow.json',
+    ]);
+    expect(a).toEqual(b);
   });
 });

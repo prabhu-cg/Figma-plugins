@@ -12,6 +12,12 @@
 - Component structure is read only when `components.json` is selected, with a progress bar.
 - `tokens.json` tokens now carry their Figma id in `$extensions.figma.id`.
 
+- Whole-file safety for `components.json`: per-component time and size budgets, isolated failures
+  (`COMPONENT_FAILED`, `PROPERTIES_UNREADABLE`), progress as "done of total", a Cancel button that
+  returns partial results (`SCAN_CANCELLED`), large results sent in pieces, and automatic splitting
+  into `components/<name>.json` above 20 MB.
+- If one output fails to generate, the others are still offered and the failure is shown.
+
 ### Changed
 
 - Component docs show property names without Figma's `#id:id` suffix, and the default of an

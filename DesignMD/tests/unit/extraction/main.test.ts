@@ -145,6 +145,95 @@ describe('plugin controller (main.ts)', () => {
     expect(ofType(h, 'progress').map((p) => p.stage)).toContain('structure');
   });
 
+  it('cancel during a scan: returns the partial result with a warning, not an error', async () => {
+    const h = await bootPlugin(richFile());
+    const scan = h.send({ type: 'extract' });
+    await h.send({ type: 'cancel' });
+    await scan;
+    expect(ofType(h, 'error')).toEqual([]);
+    const [done] = ofType(h, 'extraction-complete');
+    const ds = done.designSystem as { warnings: string[]; components: unknown[] };
+    expect(ds.warnings.some((w) => w.includes('cancelled'))).toBe(true);
+    expect(ds.components).toEqual([]);
+  });
+
+  it('a cancel left over from an earlier run does not stop the next scan', async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({ type: 'cancel' }); // nothing is running
+    await h.send({ type: 'extract' });
+    const [done] = ofType(h, 'extraction-complete');
+    expect((done.designSystem as { components: unknown[] }).components.length).toBeGreaterThan(0);
+  });
+
+  it('cancel during generation: delivers components.json with SCAN_CANCELLED warnings', async () => {
+    // 25 components: the first batch of 10 is read before the cancel lands, the rest are not.
+    const many: FakeFigmaOptions = {
+      root: document('Acme', [
+        page(
+          'P',
+          Array.from({ length: 25 }, (_, i) => component(`C${i}`)),
+        ),
+      ]),
+    };
+    const h = await bootPlugin(many);
+    await h.send({ type: 'extract' });
+    const run = h.send({
+      type: 'generate',
+      options: {
+        ...DEFAULT_EXPORT_OPTIONS,
+        designMd: false,
+        componentDocs: false,
+        componentsJson: true,
+      },
+      excludedPages: [],
+    });
+    await h.send({ type: 'cancel' });
+    await run;
+    expect(ofType(h, 'error')).toEqual([]);
+    const [done] = ofType(h, 'generation-complete');
+    const json = JSON.parse((done.files as Array<{ content: string }>)[0].content);
+    expect(json.components).toHaveLength(25);
+    const cancelled = json.warnings.filter((w: { code: string }) => w.code === 'SCAN_CANCELLED');
+    expect(cancelled).toHaveLength(15);
+    expect(json.warnings.filter((w: { code: string }) => w.code === 'COMPONENT_FAILED')).toEqual(
+      [],
+    );
+    expect(json.components.filter((c: { treeTruncated: boolean }) => c.treeTruncated)).toHaveLength(
+      15,
+    );
+  });
+
+  it('generate: sends a large result in pieces, then a completion message that lists them', async () => {
+    const file = richFile();
+    const button = file.root!.children![0].children![0];
+    button.description = 'long description. '.repeat(160_000); // ~2.9 MB
+    const h = await bootPlugin(file);
+    await h.send({ type: 'extract' });
+    await h.send({
+      type: 'generate',
+      options: { ...DEFAULT_EXPORT_OPTIONS, designMd: false },
+      excludedPages: ['Drafts'],
+    });
+    const chunks = ofType(h, 'file-chunk');
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((c) => typeof c.data === 'string')).toBe(true);
+    const [done] = ofType(h, 'generation-complete');
+    expect(done.files).toEqual([]);
+    expect(done.chunked).toEqual(['components/Button.md']);
+    expect(messages(h).indexOf(done)).toBe(messages(h).length - 1);
+    expect(chunks.map((c) => c.data as string).join('')).toContain('long description.');
+  });
+
+  it('generate: small results still arrive in one message', async () => {
+    const h = await bootPlugin(richFile());
+    await h.send({ type: 'extract' });
+    await h.send({ type: 'generate', options: DEFAULT_EXPORT_OPTIONS, excludedPages: [] });
+    expect(ofType(h, 'file-chunk')).toEqual([]);
+    const [done] = ofType(h, 'generation-complete');
+    expect((done.files as unknown[]).length).toBeGreaterThan(0);
+    expect(done.chunked).toBeUndefined();
+  });
+
   it('generate: excludes components from pages the user opted out of', async () => {
     const h = await bootPlugin(richFile());
     await h.send({ type: 'extract' });

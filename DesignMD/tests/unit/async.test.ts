@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { processInBatches, safely } from '../../src/plugin/utils/async';
+import {
+  isCancelled,
+  processInBatches,
+  safely,
+  withCancellation,
+} from '../../src/plugin/utils/async';
 
 describe('processInBatches', () => {
   it('processes every item and preserves order', async () => {
@@ -56,5 +61,47 @@ describe('safely', () => {
 
     expect(result).toBeUndefined();
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
+  });
+});
+
+describe('cancellation', () => {
+  it('stops before the next batch and returns only the finished batches', async () => {
+    let cancelled = false;
+    const seen: number[] = [];
+    const result = await withCancellation(
+      () => cancelled,
+      () =>
+        processInBatches([1, 2, 3, 4, 5, 6], 2, (n) => {
+          seen.push(n);
+          if (n === 3) cancelled = true;
+          return n * 10;
+        }),
+    );
+    expect(seen).toEqual([1, 2, 3, 4]);
+    expect(result).toEqual([10, 20, 30, 40]);
+  });
+
+  it('does nothing outside withCancellation, and restores the previous state afterwards', async () => {
+    expect(isCancelled()).toBe(false);
+    await withCancellation(
+      () => true,
+      async () => {
+        expect(isCancelled()).toBe(true);
+      },
+    );
+    expect(isCancelled()).toBe(false);
+    expect(await processInBatches([1, 2, 3], 2, (n) => n)).toEqual([1, 2, 3]);
+  });
+
+  it('restores the state even when the work throws', async () => {
+    await expect(
+      withCancellation(
+        () => true,
+        async () => {
+          throw new Error('x');
+        },
+      ),
+    ).rejects.toThrow('x');
+    expect(isCancelled()).toBe(false);
   });
 });

@@ -902,3 +902,16 @@ body {
   margin: 0;
   padding-left: 18px;
 }
+
+/* ---------- Secondary button (Cancel) ---------- */
+
+.dmd-btn-secondary {
+  flex: 0 0 auto;
+  background: var(--dmd-bg);
+  color: var(--dmd-text);
+  border: 1.5px solid var(--dmd-border-strong);
+}
+
+.dmd-btn-secondary:hover:not(:disabled) {
+  border-color: var(--dmd-brand);
+}

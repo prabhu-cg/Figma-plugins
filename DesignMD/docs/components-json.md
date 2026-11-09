@@ -36,6 +36,17 @@ styles the components use, with their default-mode values; full token data and m
   listed; its children come inside it.
 - Layer trees are read only when `components.json` is selected, so a token-only export stays fast.
 
+## Large files
+
+Above 20 MB the output is split. `components.json` then holds `metadata`, `index`, `tokens` and
+`warnings` (including an `OUTPUT_TOO_LARGE` warning) with `components: []`. Each `index.components[]`
+entry has a `file` (for example `components/Button.json`) and that file's `contentHash`, so a change
+inside any component is visible without opening it. Each per-component file is a complete, valid
+`designmd.components/v1` file with a single component and only the tokens it uses.
+
+If a run is cancelled, components that were not read are still listed, with an empty `tree`,
+`treeTruncated: true` and a `SCAN_CANCELLED` warning.
+
 ## Content hash
 
 `metadata.contentHash` is the SHA-256 of the file text with `generatedAt` and `contentHash` set to `""`.

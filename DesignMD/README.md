@@ -108,6 +108,37 @@ a warning (shown in the plugin UI) rather than aborting the whole run. Each comp
 are scanned up to a budget (500 layers, 10 levels deep) and a warning is shown when a component
 exceeds it, since its token usage may then be under-reported.
 
+**Whole-file scans.** Scanning a large design-system file is a normal case, so every step is bounded
+and none of them can take the plugin down:
+
+- **Budgets.** `components.json` reads each component's layers inside the same budget (500 layers,
+  10 levels), plus a 5 s time budget and a 4 MB budget for its serialized variant diffs. A component
+  that goes over is written with `treeTruncated: true` and a warning, never skipped silently. Sets
+  with more than 128 variants get no diffs (a warning says so).
+- **Isolation.** Each component is read on its own. One that cannot be found, throws, or has
+  unreadable properties becomes a warning (`COMPONENT_FAILED`, `PROPERTIES_UNREADABLE`) and the scan
+  continues.
+- **Progress and Cancel.** The scan and the layer reading show "done of total" and a **Cancel**
+  button. Cancelling returns what is finished with a warning (`SCAN_CANCELLED` on the components not
+  read), not an error.
+- **Large results.** Results over 2 MB are sent from the plugin to the UI in 512 KB pieces. If
+  `components.json` would pass 20 MB it is split automatically: `components.json` keeps the index and
+  tokens, and each component gets its own valid file in `components/<name>.json`.
+- **Partial success.** If one output fails to generate, the others are still offered and the Files
+  tab says which failed and why.
+
+### Large-file checks
+
+| File                                                              | Components       | Time | Heap growth | `components.json` |
+| ----------------------------------------------------------------- | ---------------- | ---- | ----------- | ----------------- |
+| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide) | 1,000            | ~5 s | ~130 MB     | 37.6 MB (unsplit) |
+| Rayna UI community file (550+ components)                         | not yet measured |      |             |                   |
+
+The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
+600 MB heap). Run the plugin on the Rayna UI file in Figma and record the real numbers here before a
+release; the README's earlier claim that 10,000+ variables and 5,000+ components stay responsive has
+likewise not been measured against a real file.
+
 ## Development
 
 ```bash
