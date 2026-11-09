@@ -915,3 +915,12 @@ body {
 .dmd-btn-secondary:hover:not(:disabled) {
   border-color: var(--dmd-brand);
 }
+
+/* ---------- Layer reading summary ---------- */
+
+.dmd-read-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--dmd-text-secondary);
+}

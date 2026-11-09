@@ -24,6 +24,46 @@ export function planRun(options: ExportOptions): RunPlan {
   };
 }
 
+/** How the layer reading went, in numbers a person can check against the file. */
+export interface ReadSummary {
+  /** Components and component sets that were asked for. */
+  components: number;
+  /** Read in full. */
+  read: number;
+  /** Read but cut short by a budget (layers, depth, time or size). */
+  truncated: number;
+  /** Not read at all: failed, cancelled or out of time. */
+  notRead: number;
+  /** Warnings from reading, by code. */
+  warningsByCode: Record<string, number>;
+}
+
+export function summarizeReads(
+  componentIds: readonly string[],
+  structures: ReadonlyMap<string, StructureResult>,
+): ReadSummary {
+  const summary: ReadSummary = {
+    components: componentIds.length,
+    read: 0,
+    truncated: 0,
+    notRead: 0,
+    warningsByCode: {},
+  };
+  for (const id of componentIds) {
+    const result = structures.get(id);
+    if (!result || 'error' in result) {
+      summary.notRead++;
+      continue;
+    }
+    if (result.treeTruncated) summary.truncated++;
+    else summary.read++;
+    for (const w of result.warnings) {
+      summary.warningsByCode[w.code] = (summary.warningsByCode[w.code] ?? 0) + 1;
+    }
+  }
+  return summary;
+}
+
 export class GenerationRun {
   private pluginFiles: GeneratedFile[] | null = null;
   private pluginFailures: OutputFailure[] = [];
@@ -65,7 +105,7 @@ export class GenerationRun {
     return this.plan.needStructures;
   }
 
-  finish(): { files: GeneratedFile[]; failures: OutputFailure[] } {
+  finish(): { files: GeneratedFile[]; failures: OutputFailure[]; readSummary?: ReadSummary } {
     const files = [...(this.pluginFiles ?? [])];
     const failures = [...this.pluginFailures];
     if (this.plan.needStructures) {
@@ -94,6 +134,14 @@ export class GenerationRun {
       );
       files.push(...built.files);
       failures.push(...built.failures);
+      return {
+        files,
+        failures,
+        readSummary: summarizeReads(
+          ds.components.map((c) => c.id),
+          this.structures,
+        ),
+      };
     }
     return { files, failures };
   }

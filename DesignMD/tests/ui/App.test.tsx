@@ -435,6 +435,36 @@ describe('App: components.json is built in the UI', () => {
     expect(preview).toMatch(/"contentHash": "[0-9a-f]{64}"/);
   });
 
+  it('summarizes how the layer reading went, so a short count can be checked', async () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    fromPlugin({
+      type: 'structures',
+      items: [
+        [
+          'component:1',
+          {
+            ...structure('Button'),
+            treeTruncated: true,
+            warnings: [{ code: 'TREE_TRUNCATED', message: 'm', componentId: 'component:1' }],
+          },
+        ],
+      ],
+    });
+    fromPlugin({ type: 'structures-complete', cancelled: false });
+    await settle();
+    expect(
+      screen.getByText(/Component layers: 1 read \(0 in full, 1 cut short, 0 not read\)/),
+    ).toHaveTextContent('warnings: TREE_TRUNCATED 1');
+  });
+
+  it('says there were no warnings when there were none', async () => {
+    startRun({ componentsJson: true, designMd: false, componentDocs: false });
+    fromPlugin({ type: 'structures', items: [['component:1', structure('Button')]] });
+    fromPlugin({ type: 'structures-complete', cancelled: false });
+    await settle();
+    expect(screen.getByText(/1 in full, 0 cut short, 0 not read/)).toHaveTextContent('no warnings');
+  });
+
   it('works with components.json alone', async () => {
     startRun({ componentsJson: true, designMd: false, componentDocs: false });
     fromPlugin({ type: 'structures', items: [['component:1', structure('Button')]] });

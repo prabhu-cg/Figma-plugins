@@ -23,7 +23,7 @@ import { ErrorBanner } from './components/ErrorBanner';
 import { WarningsList } from './components/WarningsList';
 import { postToPlugin, usePluginMessages } from './hooks/usePluginBridge';
 import { ChunkAssembler } from '@shared/chunking';
-import { GenerationRun, planRun } from './generationRun';
+import { GenerationRun, planRun, type ReadSummary } from './generationRun';
 import { downloadAsZip, downloadIndividually } from './zip';
 
 type Status = 'idle' | 'extracting' | 'ready' | 'generating' | 'done';
@@ -67,6 +67,7 @@ export default function App() {
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
   const [failures, setFailures] = useState<OutputFailure[]>([]);
+  const [readSummary, setReadSummary] = useState<ReadSummary | null>(null);
   const [options, setOptions] = useState<ExportOptions>(DEFAULT_EXPORT_OPTIONS);
   const [excludedPages, setExcludedPages] = useState<Set<string>>(new Set());
   const [baseName, setBaseName] = useState('designmd-export');
@@ -92,6 +93,7 @@ export default function App() {
       const result = current.finish();
       setFiles(result.files);
       setFailures(result.failures);
+      setReadSummary(result.readSummary ?? null);
       setStatus('done');
       setActiveTab('files');
     } catch (err) {
@@ -210,6 +212,7 @@ export default function App() {
     setStatus((current) => (current === 'done' ? 'ready' : current));
     setFiles(null);
     setFailures([]);
+    setReadSummary(null);
     setOutdated(true);
     setActiveTab((current) => (current === 'files' ? 'export' : current));
   }, [files]);
@@ -408,6 +411,7 @@ export default function App() {
                 </ul>
               </div>
             )}
+            {readSummary && <ReadSummaryLine summary={readSummary} />}
             <FilePreview files={files} />
           </>
         )}
@@ -481,4 +485,17 @@ function slugify(value: string): string {
 
 function baseNameWasCustomized(current: string): boolean {
   return current !== '' && current !== 'designmd-export';
+}
+
+function ReadSummaryLine({ summary }: { summary: ReadSummary }) {
+  const codes = Object.entries(summary.warningsByCode)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([code, count]) => `${code} ${count}`);
+  return (
+    <p className="dmd-read-summary" role="status">
+      Component layers: {summary.components} read ({summary.read} in full, {summary.truncated} cut
+      short, {summary.notRead} not read)
+      {codes.length > 0 ? ` · warnings: ${codes.join(', ')}` : ' · no warnings'}
+    </p>
+  );
 }
