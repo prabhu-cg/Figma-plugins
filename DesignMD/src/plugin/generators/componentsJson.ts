@@ -153,9 +153,17 @@ const byPageThenName = (a: ComponentDoc, b: ComponentDoc) =>
   a.pageName.localeCompare(b.pageName) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id);
 
 /** Builds the file object, with `contentHash` empty. Exported for tests. */
+export interface ComponentsJsonOptions {
+  /** Whether text content was read. Recorded in the file's metadata. Default true. */
+  includeText?: boolean;
+  /** Whether variant differences were read. Recorded in the file's metadata. Default true. */
+  includeVariantDiffs?: boolean;
+}
+
 export function buildComponentsFile(
   ds: DesignSystem,
   structures: ReadonlyMap<string, StructureResult>,
+  chosen: ComponentsJsonOptions = {},
 ): ComponentsFileV1 {
   const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
   const stylesById = new Map(
@@ -262,6 +270,10 @@ export function buildComponentsFile(
       scope: ds.metadata.scope,
       generatedAt: ds.metadata.generatedAt,
       pluginVersion: ds.metadata.pluginVersion,
+      options: {
+        includeText: chosen.includeText !== false,
+        includeVariantDiffs: chosen.includeVariantDiffs !== false,
+      },
       contentHash: '',
     },
     index: {
@@ -296,10 +308,11 @@ export function serializeComponentsFile(file: ComponentsFileV1): string {
 export function generateComponentsJson(
   ds: DesignSystem,
   structures: ReadonlyMap<string, StructureResult>,
+  chosen: ComponentsJsonOptions = {},
 ): GeneratedFile {
   return {
     path: OUTPUT_PATH,
-    content: serializeComponentsFile(buildComponentsFile(ds, structures)),
+    content: serializeComponentsFile(buildComponentsFile(ds, structures, chosen)),
   };
 }
 
@@ -316,10 +329,10 @@ const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
 export function generateComponentsJsonFiles(
   ds: DesignSystem,
   structures: ReadonlyMap<string, StructureResult>,
-  options: { splitThresholdBytes?: number } = {},
+  options: { splitThresholdBytes?: number } & ComponentsJsonOptions = {},
 ): GeneratedFile[] {
   const threshold = options.splitThresholdBytes ?? COMPONENTS_JSON_SPLIT_BYTES;
-  const file = buildComponentsFile(ds, structures);
+  const file = buildComponentsFile(ds, structures, options);
   const single = hashAndSerialize(file);
   if (single.content.length <= threshold) return [{ path: OUTPUT_PATH, content: single.content }];
 

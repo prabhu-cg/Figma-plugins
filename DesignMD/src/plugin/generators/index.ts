@@ -53,6 +53,8 @@ export function generateOutputsDetailed(
     run('components.json', () =>
       generateComponentsJsonFiles(ds, extras.structures ?? new Map(), {
         splitThresholdBytes: extras.splitThresholdBytes,
+        includeText: options.includeText,
+        includeVariantDiffs: options.includeVariantDiffs,
       }),
     );
   }

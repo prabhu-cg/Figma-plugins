@@ -86,6 +86,10 @@
           "type": "string",
           "description": "Version of the DesignMD plugin that wrote the file."
         },
+        "options": {
+          "$ref": "#/definitions/ComponentsOptionsUsed",
+          "description": "The options this file was made with."
+        },
         "contentHash": {
           "type": "string",
           "description": "SHA-256 of the file with generatedAt and contentHash set to \"\". Use it to detect changes."
@@ -96,10 +100,30 @@
         "scope",
         "generatedAt",
         "pluginVersion",
+        "options",
         "contentHash"
       ],
       "additionalProperties": false,
       "description": "Details about the file the output was made from."
+    },
+    "ComponentsOptionsUsed": {
+      "type": "object",
+      "properties": {
+        "includeText": {
+          "type": "boolean",
+          "description": "True when text content (layer characters) is included. When false, `text.characters` is absent everywhere."
+        },
+        "includeVariantDiffs": {
+          "type": "boolean",
+          "description": "True when variant differences were read. When false, every `variantDiffs` is empty because nothing was compared, not because variants are identical."
+        }
+      },
+      "required": [
+        "includeText",
+        "includeVariantDiffs"
+      ],
+      "additionalProperties": false,
+      "description": "The export options the file was made with, so an empty list can be told from a switched-off option."
     },
     "ComponentsIndex": {
       "type": "object",

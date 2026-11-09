@@ -7,7 +7,8 @@
     "scope": "file",
     "generatedAt": "2026-11-09T10:00:00.000Z",
     "pluginVersion": "1.1.0",
-    "contentHash": "29c01ed22008a37607429dd07af94186ec32f943245598bea34272a85f0bf67e"
+    "options": { "includeText": true, "includeVariantDiffs": true },
+    "contentHash": "10f80549b0376d1d8539d5797131588ac44f41fc58133e91b0994410c5785b02"
   },
   "index": {
     "componentCount": 1,

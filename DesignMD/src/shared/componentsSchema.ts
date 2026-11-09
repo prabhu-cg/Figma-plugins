@@ -487,6 +487,14 @@ export interface ComponentsWarning {
   layerId?: string;
 }
 
+/** The export options the file was made with, so an empty list can be told from a switched-off option. */
+export interface ComponentsOptionsUsed {
+  /** True when text content (layer characters) is included. When false, `text.characters` is absent everywhere. */
+  includeText: boolean;
+  /** True when variant differences were read. When false, every `variantDiffs` is empty because nothing was compared, not because variants are identical. */
+  includeVariantDiffs: boolean;
+}
+
 /** Details about the file the output was made from. */
 export interface ComponentsMetadata {
   /** Name of the Figma file. */
@@ -499,6 +507,8 @@ export interface ComponentsMetadata {
   generatedAt: string;
   /** Version of the DesignMD plugin that wrote the file. */
   pluginVersion: string;
+  /** The options this file was made with. */
+  options: ComponentsOptionsUsed;
   /** SHA-256 of the file with generatedAt and contentHash set to "". Use it to detect changes. */
   contentHash: string;
 }

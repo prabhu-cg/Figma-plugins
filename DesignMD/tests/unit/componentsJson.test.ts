@@ -392,6 +392,28 @@ describe('generateComponentsJson', () => {
     expect(texts.every((t) => t === undefined)).toBe(true);
   });
 
+  it('records the options it was made with, so an empty variantDiffs can be understood', async () => {
+    const { ds, structures } = await generate();
+    const parse = (c: string) => (JSON.parse(c) as ComponentsFileV1).metadata.options;
+    expect(parse(generateComponentsJson(ds, structures).content)).toEqual({
+      includeText: true,
+      includeVariantDiffs: true,
+    });
+    const off = generateOutputs(
+      ds,
+      {
+        ...DEFAULT_EXPORT_OPTIONS,
+        designMd: false,
+        componentDocs: false,
+        componentsJson: true,
+        includeText: false,
+        includeVariantDiffs: false,
+      },
+      { structures },
+    );
+    expect(parse(off[0].content)).toEqual({ includeText: false, includeVariantDiffs: false });
+  });
+
   it('is only produced when selected', async () => {
     const { ds, structures } = await generate();
     const off = generateOutputs(ds, DEFAULT_EXPORT_OPTIONS, { structures }).map((f) => f.path);

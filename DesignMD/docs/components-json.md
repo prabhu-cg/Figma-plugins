@@ -49,6 +49,12 @@ inside any component is visible without opening it. Each per-component file is a
 If a run is cancelled, components that were not read are still listed, with an empty `tree`,
 `treeTruncated: true` and a `SCAN_CANCELLED` warning.
 
+## What was left out
+
+`metadata.options` says which options the file was made with. `includeVariantDiffs: false` means every
+`variantDiffs` is `[]` because nothing was compared, not because the variants are identical.
+`includeText: false` means `text.characters` is absent everywhere.
+
 ## Content hash
 
 `metadata.contentHash` is the SHA-256 of the file text with `generatedAt` and `contentHash` set to `""`.
