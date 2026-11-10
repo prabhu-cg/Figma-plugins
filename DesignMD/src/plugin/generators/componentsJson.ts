@@ -197,7 +197,7 @@ export function buildComponentsFile(
       }
       return false;
     }
-    tokens[id] = entry;
+    tokens[id] = style?.library ? { ...entry, library: true } : entry;
     return true;
   };
 

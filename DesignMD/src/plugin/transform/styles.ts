@@ -17,6 +17,7 @@ export function transformTextStyles(raw: RawTextStyle[]): StyleToken[] {
       type: 'TEXT',
       description: s.description,
       cssName: toCssVarName(path),
+      ...(s.library ? { library: true } : {}),
       textProperties: {
         fontFamily: s.fontFamily,
         fontStyle: s.fontStyle,
@@ -42,6 +43,7 @@ export function transformPaintStyles(raw: RawPaintStyle[]): StyleToken[] {
       type: 'PAINT',
       description: s.description,
       cssName: toCssVarName(path),
+      ...(s.library ? { library: true } : {}),
       paint: s.color
         ? { ...s.color, hex: rgbaToHex(s.color.r, s.color.g, s.color.b, s.color.a) }
         : undefined,
@@ -60,6 +62,7 @@ export function transformEffectStyles(raw: RawEffectStyle[]): StyleToken[] {
       type: 'EFFECT',
       description: s.description,
       cssName: toCssVarName(path),
+      ...(s.library ? { library: true } : {}),
       effects: s.effects.map((e) => ({
         type: e.type,
         color: e.color
@@ -85,6 +88,7 @@ export function transformGridStyles(raw: RawGridStyle[]): StyleToken[] {
       type: 'GRID',
       description: s.description,
       cssName: toCssVarName(path),
+      ...(s.library ? { library: true } : {}),
       grids: s.grids.map((g) => ({ ...g })),
     };
   });

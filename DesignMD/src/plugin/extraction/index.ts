@@ -1,5 +1,6 @@
 import { isCancelled } from '../utils/async';
 import { extractComponents } from './components';
+import { extractLibraryStyles } from './styles';
 import {
   extractEffectStyles,
   extractGridStyles,
@@ -107,6 +108,31 @@ export async function extractDesignSystem(
       ),
     (r) => r.length,
   );
+
+  // Styles from a library the file uses are not in the local lists. Components refer to them by id,
+  // so read the ones components use; otherwise their token links would be lost.
+  const localStyleIds = new Set(
+    [...textStyles, ...paintStyles, ...effectStyles, ...gridStyles].map((s) => s.id),
+  );
+  const libraryIds = Array.from(
+    new Set(components.flatMap((c) => c.styleIds ?? []).filter((id) => !localStyleIds.has(id))),
+  );
+  if (libraryIds.length > 0) {
+    const library = await timed(
+      'library styles',
+      () => extractLibraryStyles(libraryIds),
+      (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length,
+    );
+    textStyles.push(...library.text);
+    paintStyles.push(...library.paint);
+    effectStyles.push(...library.effect);
+    gridStyles.push(...library.grid);
+    if (library.unavailable.length > 0 && !isCancelled()) {
+      warn(
+        `${library.unavailable.length} style(s) used by components could not be read (the library they come from may not be available to this file), so their token links are left out. Their values are kept.`,
+      );
+    }
+  }
   console.log(`[DesignMD] scan: ${timings.join(', ')}`);
 
   if (isCancelled()) {

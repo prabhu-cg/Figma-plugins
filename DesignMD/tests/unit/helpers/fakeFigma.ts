@@ -137,6 +137,8 @@ export interface FakeFigmaOptions {
   paintStyles?: Props[];
   effectStyles?: Props[];
   gridStyles?: Props[];
+  /** Styles from a library the file uses: reachable by id only, not through the getLocal*StylesAsync lists. */
+  libraryStyles?: Props[];
   /** Make specific API calls reject, to exercise warning paths. */
   failures?: {
     loadAllPages?: boolean;
@@ -251,6 +253,16 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
         if (failures.variableIds?.includes(id)) return reject(`getVariableByIdAsync(${id})`);
         return Promise.resolve(variablesById.get(id) ?? null);
       },
+    },
+    getStyleByIdAsync: (id: string) => {
+      const all = [
+        ...(options.textStyles ?? []),
+        ...(options.paintStyles ?? []),
+        ...(options.effectStyles ?? []),
+        ...(options.gridStyles ?? []),
+        ...(options.libraryStyles ?? []),
+      ];
+      return Promise.resolve(all.find((s) => s.id === id) ?? null);
     },
     getLocalTextStylesAsync: () =>
       failures.textStyles

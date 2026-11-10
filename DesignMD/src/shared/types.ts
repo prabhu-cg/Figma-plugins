@@ -122,6 +122,8 @@ export interface StyleToken {
   paintIsGradientOrImage?: boolean;
   effects?: EffectValue[];
   grids?: GridValue[];
+  /** True for a style from a library the file uses, not one defined in this file. */
+  library?: boolean;
   /** Names of components that apply this style anywhere in their layers. Filled in by usage analysis. */
   usedByComponents?: string[];
 }

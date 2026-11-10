@@ -173,6 +173,8 @@ function styleToLeaf(style: StyleToken, category: TokenCategory): TokenTreeEntry
     source: 'style',
     cssName: style.cssName,
     usedBy: style.usedByComponents ?? [],
+    // A style from a library the file uses: it is not defined here.
+    ...(style.library ? { library: true } : {}),
   };
   let type: string;
   let value: JsonValue;
@@ -251,15 +253,26 @@ function buildCategorySection(
 ): Record<string, unknown> {
   const variables = ds.variables.filter((v) => v.category === category);
 
+  const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
+  const styles = fallbackKey ? ds.styles[fallbackKey] : [];
+  const toLeaves = (list: typeof styles) =>
+    list
+      .map((s) => styleToLeaf(s, category))
+      .filter((e): e is TokenTreeEntry<JsonLeaf> => e !== null);
+
   let entries: TokenTreeEntry<JsonLeaf>[];
   if (variables.length > 0) {
     entries = variables.map((v) => variableToLeaf(v, ctx));
+    // Variables are the source of truth here, but a style a component uses is still a token the
+    // component refers to (components.json lists it by id), so it must be findable. They go under
+    // "styles" so a style named like a variable cannot collide with it.
+    entries.push(
+      ...toLeaves(styles.filter((s) => (s.usedByComponents?.length ?? 0) > 0 || s.library)).map(
+        (e) => ({ ...e, path: ['styles', ...e.path] }),
+      ),
+    );
   } else {
-    const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
-    const fallbackStyles = fallbackKey ? ds.styles[fallbackKey] : [];
-    entries = fallbackStyles
-      .map((s) => styleToLeaf(s, category))
-      .filter((e): e is TokenTreeEntry<JsonLeaf> => e !== null);
+    entries = toLeaves(styles);
   }
 
   return buildTokenTree(entries, isJsonLeaf);

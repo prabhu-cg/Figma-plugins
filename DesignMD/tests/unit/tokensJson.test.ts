@@ -49,6 +49,34 @@ describe('generateTokensJson', () => {
     expect(parsed.color.Surface.Background.$value).toBe('#ffffff');
   });
 
+  it('also lists a color style that a component uses when color variables exist, under "styles"', () => {
+    const ds = makeDesignSystem();
+    const style = ds.styles.color[0];
+    style.usedByComponents = ['Button'];
+    const parsed = JSON.parse(generateTokensJson(ds).content);
+    // variables stay the source of truth for the category...
+    expect(parsed.color.Primary['500'].$value).toBe('#3366ff');
+    // ...and the style a component refers to is still findable, by its Figma id
+    const leaf = parsed.color.styles.Surface.Background;
+    expect(leaf.$value).toBe('#ffffff');
+    expect(leaf.$extensions.figma.id).toBe(style.id);
+  });
+
+  it('leaves out a color style no component uses when color variables exist', () => {
+    const ds = makeDesignSystem();
+    ds.styles.color[0].usedByComponents = [];
+    const parsed = JSON.parse(generateTokensJson(ds).content);
+    expect(parsed.color.styles).toBeUndefined();
+  });
+
+  it('flags a library style, and lists it even when no component is recorded as using it', () => {
+    const ds = makeDesignSystem();
+    ds.styles.color[0].library = true;
+    ds.styles.color[0].usedByComponents = [];
+    const parsed = JSON.parse(generateTokensJson(ds).content);
+    expect(parsed.color.styles.Surface.Background.$extensions.figma.library).toBe(true);
+  });
+
   it('handles an empty design system without throwing', () => {
     const ds = makeDesignSystem();
     ds.variables = [];

@@ -206,6 +206,10 @@
           "type": "string",
           "description": "CSS custom property name."
         },
+        "library": {
+          "type": "boolean",
+          "description": "True for a style from a library the file uses, not defined in this file."
+        },
         "type": {
           "type": "string",
           "const": "color",
@@ -265,6 +269,10 @@
           "type": "string",
           "description": "CSS custom property name."
         },
+        "library": {
+          "type": "boolean",
+          "description": "True for a style from a library the file uses, not defined in this file."
+        },
         "type": {
           "type": "string",
           "enum": [
@@ -292,6 +300,10 @@
         "cssName": {
           "type": "string",
           "description": "CSS custom property name."
+        },
+        "library": {
+          "type": "boolean",
+          "description": "True for a style from a library the file uses, not defined in this file."
         },
         "type": {
           "type": "string",
@@ -321,6 +333,10 @@
           "type": "string",
           "description": "CSS custom property name."
         },
+        "library": {
+          "type": "boolean",
+          "description": "True for a style from a library the file uses, not defined in this file."
+        },
         "type": {
           "type": "string",
           "const": "boolean",
@@ -345,6 +361,10 @@
         "cssName": {
           "type": "string",
           "description": "CSS custom property name."
+        },
+        "library": {
+          "type": "boolean",
+          "description": "True for a style from a library the file uses, not defined in this file."
         },
         "type": {
           "type": "string",

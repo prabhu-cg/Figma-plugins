@@ -186,49 +186,53 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     );
     return processInBatches(styles ?? [], STYLE_BATCH_SIZE, map, onProgress);
   }
+  function mapTextStyle(s) {
+    var _a, _b, _c;
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description ?? "",
+      fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? "Unknown",
+      fontStyle: ((_b = s.fontName) == null ? void 0 : _b.style) ?? "Regular",
+      fontWeight: fontWeightFromStyle(((_c = s.fontName) == null ? void 0 : _c.style) ?? "Regular"),
+      fontSize: s.fontSize ?? 0,
+      lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : "AUTO",
+      letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : "0px",
+      textCase: s.textCase ?? "ORIGINAL",
+      textDecoration: s.textDecoration ?? "NONE",
+      paragraphSpacing: s.paragraphSpacing ?? 0,
+      boundVariableIds: boundVariablesOf(s)
+    };
+  }
   function extractTextStyles(onProgress, onWarning) {
     return extractStyles(
       "text styles",
       () => figma.getLocalTextStylesAsync(),
-      (s) => {
-        var _a, _b, _c;
-        return {
-          id: s.id,
-          name: s.name,
-          description: s.description ?? "",
-          fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? "Unknown",
-          fontStyle: ((_b = s.fontName) == null ? void 0 : _b.style) ?? "Regular",
-          fontWeight: fontWeightFromStyle(((_c = s.fontName) == null ? void 0 : _c.style) ?? "Regular"),
-          fontSize: s.fontSize ?? 0,
-          lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : "AUTO",
-          letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : "0px",
-          textCase: s.textCase ?? "ORIGINAL",
-          textDecoration: s.textDecoration ?? "NONE",
-          paragraphSpacing: s.paragraphSpacing ?? 0,
-          boundVariableIds: boundVariablesOf(s)
-        };
-      },
+      mapTextStyle,
       onProgress,
       onWarning
     );
+  }
+  function mapPaintStyle(s) {
+    {
+      const paints = s.paints ?? [];
+      const solid = paints.find((p) => p.type === "SOLID" && p.visible !== false);
+      const hasNonSolid = paints.some((p) => p.type !== "SOLID");
+      return {
+        id: s.id,
+        name: s.name,
+        description: s.description ?? "",
+        color: solid ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 } : null,
+        isGradientOrImage: hasNonSolid || !solid,
+        boundVariableIds: boundVariablesOf(s)
+      };
+    }
   }
   function extractPaintStyles(onProgress, onWarning) {
     return extractStyles(
       "color styles",
       () => figma.getLocalPaintStylesAsync(),
-      (s) => {
-        const paints = s.paints ?? [];
-        const solid = paints.find((p) => p.type === "SOLID" && p.visible !== false);
-        const hasNonSolid = paints.some((p) => p.type !== "SOLID");
-        return {
-          id: s.id,
-          name: s.name,
-          description: s.description ?? "",
-          color: solid ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 } : null,
-          isGradientOrImage: hasNonSolid || !solid,
-          boundVariableIds: boundVariablesOf(s)
-        };
-      },
+      mapPaintStyle,
       onProgress,
       onWarning
     );
@@ -246,17 +250,20 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return base;
   }
+  function mapEffectStyle(s) {
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description ?? "",
+      effects: (s.effects ?? []).map(mapEffect),
+      boundVariableIds: boundVariablesOf(s)
+    };
+  }
   function extractEffectStyles(onProgress, onWarning) {
     return extractStyles(
       "effect styles",
       () => figma.getLocalEffectStylesAsync(),
-      (s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description ?? "",
-        effects: (s.effects ?? []).map(mapEffect),
-        boundVariableIds: boundVariablesOf(s)
-      }),
+      mapEffectStyle,
       onProgress,
       onWarning
     );
@@ -271,19 +278,55 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       alignment: "alignment" in g ? g.alignment : void 0
     };
   }
+  function mapGridStyle(s) {
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description ?? "",
+      grids: (s.layoutGrids ?? []).map(mapGrid)
+    };
+  }
   function extractGridStyles(onProgress, onWarning) {
     return extractStyles(
       "grid styles",
       () => figma.getLocalGridStylesAsync(),
-      (s) => ({
-        id: s.id,
-        name: s.name,
-        description: s.description ?? "",
-        grids: (s.layoutGrids ?? []).map(mapGrid)
-      }),
+      mapGridStyle,
       onProgress,
       onWarning
     );
+  }
+  async function extractLibraryStyles(ids) {
+    const found = { text: [], paint: [], effect: [], grid: [], unavailable: [] };
+    const results = await processInBatches([...ids], 20, async (id) => {
+      const style = await safely(
+        () => figma.getStyleByIdAsync(id),
+        () => void 0
+      );
+      return { id, style: style ?? null };
+    });
+    for (const { id, style } of results) {
+      if (!style) {
+        found.unavailable.push(id);
+        continue;
+      }
+      switch (style.type) {
+        case "TEXT":
+          found.text.push({ ...mapTextStyle(style), library: true });
+          break;
+        case "PAINT":
+          found.paint.push({ ...mapPaintStyle(style), library: true });
+          break;
+        case "EFFECT":
+          found.effect.push({ ...mapEffectStyle(style), library: true });
+          break;
+        case "GRID":
+          found.grid.push({ ...mapGridStyle(style), library: true });
+          break;
+        default:
+          found.unavailable.push(id);
+      }
+    }
+    return found;
   }
   const COMPONENT_BATCH_SIZE = 20;
   const MAX_DESCENDANTS_SCANNED = 500;
@@ -707,6 +750,28 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       ),
       (r) => r.length
     );
+    const localStyleIds = new Set(
+      [...textStyles, ...paintStyles, ...effectStyles, ...gridStyles].map((s) => s.id)
+    );
+    const libraryIds = Array.from(
+      new Set(components.flatMap((c) => c.styleIds ?? []).filter((id) => !localStyleIds.has(id)))
+    );
+    if (libraryIds.length > 0) {
+      const library = await timed(
+        "library styles",
+        () => extractLibraryStyles(libraryIds),
+        (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length
+      );
+      textStyles.push(...library.text);
+      paintStyles.push(...library.paint);
+      effectStyles.push(...library.effect);
+      gridStyles.push(...library.grid);
+      if (library.unavailable.length > 0 && !isCancelled()) {
+        warn(
+          `${library.unavailable.length} style(s) used by components could not be read (the library they come from may not be available to this file), so their token links are left out. Their values are kept.`
+        );
+      }
+    }
     console.log(`[DesignMD] scan: ${timings.join(", ")}`);
     if (isCancelled()) {
       warn("The scan was cancelled before it finished, so these results are partial.");
@@ -2672,7 +2737,9 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       id: style.id,
       source: "style",
       cssName: style.cssName,
-      usedBy: style.usedByComponents ?? []
+      usedBy: style.usedByComponents ?? [],
+      // A style from a library the file uses: it is not defined here.
+      ...style.library ? { library: true } : {}
     };
     let type;
     let value;
@@ -2741,13 +2808,22 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   };
   function buildCategorySection(ds, category, ctx) {
     const variables = ds.variables.filter((v) => v.category === category);
+    const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
+    const styles = fallbackKey ? ds.styles[fallbackKey] : [];
+    const toLeaves = (list) => list.map((s) => styleToLeaf(s, category)).filter((e) => e !== null);
     let entries;
     if (variables.length > 0) {
       entries = variables.map((v) => variableToLeaf(v, ctx));
+      entries.push(
+        ...toLeaves(styles.filter((s) => {
+          var _a;
+          return (((_a = s.usedByComponents) == null ? void 0 : _a.length) ?? 0) > 0 || s.library;
+        })).map(
+          (e) => ({ ...e, path: ["styles", ...e.path] })
+        )
+      );
     } else {
-      const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
-      const fallbackStyles = fallbackKey ? ds.styles[fallbackKey] : [];
-      entries = fallbackStyles.map((s) => styleToLeaf(s, category)).filter((e) => e !== null);
+      entries = toLeaves(styles);
     }
     return buildTokenTree(entries, isJsonLeaf);
   }
@@ -2876,6 +2952,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         type: "TEXT",
         description: s.description,
         cssName: toCssVarName(path),
+        ...s.library ? { library: true } : {},
         textProperties: {
           fontFamily: s.fontFamily,
           fontStyle: s.fontStyle,
@@ -2900,6 +2977,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         type: "PAINT",
         description: s.description,
         cssName: toCssVarName(path),
+        ...s.library ? { library: true } : {},
         paint: s.color ? { ...s.color, hex: rgbaToHex(s.color.r, s.color.g, s.color.b, s.color.a) } : void 0,
         paintIsGradientOrImage: s.isGradientOrImage
       };
@@ -2915,6 +2993,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         type: "EFFECT",
         description: s.description,
         cssName: toCssVarName(path),
+        ...s.library ? { library: true } : {},
         effects: s.effects.map((e) => ({
           type: e.type,
           color: e.color ? { ...e.color, hex: rgbaToHex(e.color.r, e.color.g, e.color.b, e.color.a) } : void 0,
@@ -2937,6 +3016,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         type: "GRID",
         description: s.description,
         cssName: toCssVarName(path),
+        ...s.library ? { library: true } : {},
         grids: s.grids.map((g) => ({ ...g }))
       };
     });
@@ -3116,10 +3196,10 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
         0
       ),
       componentSetsCount: system.components.filter((c) => c.isComponentSet).length,
-      textStylesCount: system.styles.text.length,
-      colorStylesCount: system.styles.color.length,
-      effectStylesCount: system.styles.effect.length,
-      gridStylesCount: system.styles.grid.length,
+      textStylesCount: system.styles.text.filter((s) => !s.library).length,
+      colorStylesCount: system.styles.color.filter((s) => !s.library).length,
+      effectStylesCount: system.styles.effect.filter((s) => !s.library).length,
+      gridStylesCount: system.styles.grid.filter((s) => !s.library).length,
       modesCount: modeIds.size
     };
   }

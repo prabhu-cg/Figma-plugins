@@ -26,6 +26,14 @@
 
 ### Changed
 
+- Styles that components use from a library the file has imported are now read (by id) and become tokens
+  in `components.json`, flagged `library: true`, and in `tokens.json` (`$extensions.figma.library`).
+  Before, their token link was dropped with a warning. A style from a library that is not available is
+  still left out with a warning; its values stay on the layer. Library styles are not counted in the
+  Summary's style counts.
+- `tokens.json` now also lists a style that a component uses when the file has variables for that
+  category, under a `styles` branch (for example `color.styles.…`). Before, such a style was in
+  `components.json` but not in `tokens.json`.
 - Fixed: the ZIP was not compressed (files were stored as they are), so a 35 MB export made a 37 MB
   zip. It is now compressed with DEFLATE; text like this typically shrinks about tenfold.
 - Fixed: the `r`, `g` and `b` of colour tokens in `components.json` were Figma's 0 to 1 fractions; they

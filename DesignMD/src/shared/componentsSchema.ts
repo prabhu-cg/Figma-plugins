@@ -55,6 +55,8 @@ export interface TokenRef {
 export interface ColorTokenEntry {
   /** CSS custom property name. */
   cssName: string;
+  /** True for a style from a library the file uses, not defined in this file. */
+  library?: boolean;
   /** Token type. */
   type: 'color';
   /** The resolved default-mode value. */
@@ -65,6 +67,8 @@ export interface ColorTokenEntry {
 export interface NumberTokenEntry {
   /** CSS custom property name. */
   cssName: string;
+  /** True for a style from a library the file uses, not defined in this file. */
+  library?: boolean;
   /** "dimension" is a length in px; "number" is unitless. */
   type: 'dimension' | 'number';
   /** The resolved default-mode value. */
@@ -75,6 +79,8 @@ export interface NumberTokenEntry {
 export interface StringTokenEntry {
   /** CSS custom property name. */
   cssName: string;
+  /** True for a style from a library the file uses, not defined in this file. */
+  library?: boolean;
   /** Token type. */
   type: 'string' | 'fontFamily';
   /** The resolved default-mode value. */
@@ -85,6 +91,8 @@ export interface StringTokenEntry {
 export interface BooleanTokenEntry {
   /** CSS custom property name. */
   cssName: string;
+  /** True for a style from a library the file uses, not defined in this file. */
+  library?: boolean;
   /** Token type. */
   type: 'boolean';
   /** The resolved default-mode value. */
@@ -95,6 +103,8 @@ export interface BooleanTokenEntry {
 export interface CompositeTokenEntry {
   /** CSS custom property name. */
   cssName: string;
+  /** True for a style from a library the file uses, not defined in this file. */
+  library?: boolean;
   /** Token type. */
   type: 'typography' | 'shadow' | 'gradient' | 'grid';
   /** Flat summary of the style. Numbers are px unless the key says otherwise. */

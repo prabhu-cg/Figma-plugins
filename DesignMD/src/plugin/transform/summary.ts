@@ -12,10 +12,10 @@ export function buildSummary(
       0,
     ),
     componentSetsCount: system.components.filter((c) => c.isComponentSet).length,
-    textStylesCount: system.styles.text.length,
-    colorStylesCount: system.styles.color.length,
-    effectStylesCount: system.styles.effect.length,
-    gridStylesCount: system.styles.grid.length,
+    textStylesCount: system.styles.text.filter((s) => !s.library).length,
+    colorStylesCount: system.styles.color.filter((s) => !s.library).length,
+    effectStylesCount: system.styles.effect.filter((s) => !s.library).length,
+    gridStylesCount: system.styles.grid.filter((s) => !s.library).length,
     modesCount: modeIds.size,
   };
 }

@@ -41,6 +41,8 @@ export interface RawVariable {
 }
 
 export interface RawTextStyle {
+  /** True for a style read from a library the file uses, not defined in this file. */
+  library?: boolean;
   id: string;
   name: string;
   description: string;
@@ -57,6 +59,8 @@ export interface RawTextStyle {
 }
 
 export interface RawPaintStyle {
+  /** True for a style read from a library the file uses, not defined in this file. */
+  library?: boolean;
   id: string;
   name: string;
   description: string;
@@ -76,6 +80,8 @@ export interface RawEffect {
 }
 
 export interface RawEffectStyle {
+  /** True for a style read from a library the file uses, not defined in this file. */
+  library?: boolean;
   id: string;
   name: string;
   description: string;
@@ -93,6 +99,8 @@ export interface RawGrid {
 }
 
 export interface RawGridStyle {
+  /** True for a style read from a library the file uses, not defined in this file. */
+  library?: boolean;
   id: string;
   name: string;
   description: string;

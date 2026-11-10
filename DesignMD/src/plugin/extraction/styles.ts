@@ -67,50 +67,58 @@ async function extractStyles<TStyle, TRaw>(
 type ProgressFn = (done: number, total: number) => void;
 type WarnFn = (message: string) => void;
 
+function mapTextStyle(s: TextStyle): RawTextStyle {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description ?? '',
+    fontFamily: s.fontName?.family ?? 'Unknown',
+    fontStyle: s.fontName?.style ?? 'Regular',
+    fontWeight: fontWeightFromStyle(s.fontName?.style ?? 'Regular'),
+    fontSize: s.fontSize ?? 0,
+    lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : 'AUTO',
+    letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : '0px',
+    textCase: s.textCase ?? 'ORIGINAL',
+    textDecoration: s.textDecoration ?? 'NONE',
+    paragraphSpacing: s.paragraphSpacing ?? 0,
+    boundVariableIds: boundVariablesOf(s),
+  };
+}
+
 export function extractTextStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
   return extractStyles<TextStyle, RawTextStyle>(
     'text styles',
     () => figma.getLocalTextStylesAsync(),
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description ?? '',
-      fontFamily: s.fontName?.family ?? 'Unknown',
-      fontStyle: s.fontName?.style ?? 'Regular',
-      fontWeight: fontWeightFromStyle(s.fontName?.style ?? 'Regular'),
-      fontSize: s.fontSize ?? 0,
-      lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : 'AUTO',
-      letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : '0px',
-      textCase: s.textCase ?? 'ORIGINAL',
-      textDecoration: s.textDecoration ?? 'NONE',
-      paragraphSpacing: s.paragraphSpacing ?? 0,
-      boundVariableIds: boundVariablesOf(s),
-    }),
+    mapTextStyle,
     onProgress,
     onWarning,
   );
+}
+
+function mapPaintStyle(s: PaintStyle): RawPaintStyle {
+  {
+    const paints = s.paints ?? [];
+    const solid = paints.find((p): p is SolidPaint => p.type === 'SOLID' && p.visible !== false);
+    const hasNonSolid = paints.some((p) => p.type !== 'SOLID');
+
+    return {
+      id: s.id,
+      name: s.name,
+      description: s.description ?? '',
+      color: solid
+        ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 }
+        : null,
+      isGradientOrImage: hasNonSolid || !solid,
+      boundVariableIds: boundVariablesOf(s),
+    };
+  }
 }
 
 export function extractPaintStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
   return extractStyles<PaintStyle, RawPaintStyle>(
     'color styles',
     () => figma.getLocalPaintStylesAsync(),
-    (s) => {
-      const paints = s.paints ?? [];
-      const solid = paints.find((p): p is SolidPaint => p.type === 'SOLID' && p.visible !== false);
-      const hasNonSolid = paints.some((p) => p.type !== 'SOLID');
-
-      return {
-        id: s.id,
-        name: s.name,
-        description: s.description ?? '',
-        color: solid
-          ? { r: solid.color.r, g: solid.color.g, b: solid.color.b, a: solid.opacity ?? 1 }
-          : null,
-        isGradientOrImage: hasNonSolid || !solid,
-        boundVariableIds: boundVariablesOf(s),
-      };
-    },
+    mapPaintStyle,
     onProgress,
     onWarning,
   );
@@ -130,17 +138,21 @@ function mapEffect(e: Effect): RawEffect {
   return base;
 }
 
+function mapEffectStyle(s: EffectStyle): RawEffectStyle {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description ?? '',
+    effects: (s.effects ?? []).map(mapEffect),
+    boundVariableIds: boundVariablesOf(s),
+  };
+}
+
 export function extractEffectStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
   return extractStyles<EffectStyle, RawEffectStyle>(
     'effect styles',
     () => figma.getLocalEffectStylesAsync(),
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description ?? '',
-      effects: (s.effects ?? []).map(mapEffect),
-      boundVariableIds: boundVariablesOf(s),
-    }),
+    mapEffectStyle,
     onProgress,
     onWarning,
   );
@@ -157,17 +169,69 @@ function mapGrid(g: LayoutGrid): RawGrid {
   };
 }
 
+function mapGridStyle(s: GridStyle): RawGridStyle {
+  return {
+    id: s.id,
+    name: s.name,
+    description: s.description ?? '',
+    grids: (s.layoutGrids ?? []).map(mapGrid),
+  };
+}
+
 export function extractGridStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
   return extractStyles<GridStyle, RawGridStyle>(
     'grid styles',
     () => figma.getLocalGridStylesAsync(),
-    (s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description ?? '',
-      grids: (s.layoutGrids ?? []).map(mapGrid),
-    }),
+    mapGridStyle,
     onProgress,
     onWarning,
   );
+}
+
+export interface LibraryStyles {
+  text: RawTextStyle[];
+  paint: RawPaintStyle[];
+  effect: RawEffectStyle[];
+  grid: RawGridStyle[];
+  /** Ids Figma could not give a style for (a library that is not available, or a deleted style). */
+  unavailable: string[];
+}
+
+/**
+ * Reads the styles components use that are not defined in this file: styles from a library the file
+ * has imported. Local styles are listed by getLocal*StylesAsync; these are only reachable by id.
+ */
+export async function extractLibraryStyles(ids: readonly string[]): Promise<LibraryStyles> {
+  const found: LibraryStyles = { text: [], paint: [], effect: [], grid: [], unavailable: [] };
+  const results = await processInBatches([...ids], 20, async (id) => {
+    const style = await safely(
+      () => figma.getStyleByIdAsync(id),
+      () => undefined,
+    );
+    return { id, style: style ?? null };
+  });
+  for (const { id, style } of results) {
+    if (!style) {
+      found.unavailable.push(id);
+      continue;
+    }
+    switch (style.type) {
+      case 'TEXT':
+        found.text.push({ ...mapTextStyle(style as TextStyle), library: true });
+        break;
+      case 'PAINT':
+        found.paint.push({ ...mapPaintStyle(style as PaintStyle), library: true });
+        break;
+      case 'EFFECT':
+        found.effect.push({ ...mapEffectStyle(style as EffectStyle), library: true });
+        break;
+      case 'GRID':
+        found.grid.push({ ...mapGridStyle(style as GridStyle), library: true });
+        break;
+      default:
+        found.unavailable.push(id);
+    }
+  }
+  // A cancelled run returns fewer results than ids; the rest are simply not looked up.
+  return found;
 }

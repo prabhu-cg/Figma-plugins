@@ -49,6 +49,13 @@ inside any component is visible without opening it. Each per-component file is a
 If a run is cancelled, components that were not read are still listed, with an empty `tree`,
 `treeTruncated: true` and a `SCAN_CANCELLED` warning.
 
+## Library styles
+
+A style from a library the file has imported is a token like any other, flagged `library: true`. Its
+`styleId` looks like `S:<key>,<node id>`, while a style defined in the file ends with a comma. If the
+library is not available to the file, the style cannot be read: the layer keeps its resolved values,
+the token link is left out, and an `UNRESOLVED_REFERENCE` warning says so.
+
 ## Nested instances
 
 By default the layers inside a nested instance are not read: the instance layer is listed with

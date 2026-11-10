@@ -279,6 +279,7 @@ function buildFile() {
 }
 
 async function scan(structureOptions: { includeInstanceInternals?: boolean } = {}) {
+  resetFakeIds();
   const { primitives, spacing, semantic, hidden } = buildVariables();
   const { root } = buildFile();
   installFakeFigma({
@@ -310,6 +311,13 @@ async function scan(structureOptions: { includeInstanceInternals?: boolean } = {
     textStyles: [fakeTextStyle({ id: 'S:text:body', name: 'Body/Regular', fontSize: 14 })],
     paintStyles: [fakePaintStyle({ id: 'S:paint:surface', name: 'Surface/Card' })],
     effectStyles: [fakeEffectStyle({ id: 'S:effect:card', name: 'Elevation/Card' })],
+    // a library paint style the Banner uses; the library text style it uses is not available
+    libraryStyles: [
+      {
+        ...fakePaintStyle({ id: 'S:remote,999:1', name: 'Library/Surface/Muted' }),
+        type: 'PAINT',
+      },
+    ],
   });
   const raw = await extractDesignSystem();
   const ds = transformToDesignSystem(raw, 'Design System', 'file');
@@ -482,21 +490,47 @@ describe('a token-rich design system, end to end', () => {
     expect(badge.children[0].propertyRefs).toBeUndefined();
   });
 
-  it('keeps values and warns, without dangling ids, for a hidden variable and library styles', async () => {
-    const { componentsJson } = await scan();
+  it('resolves a library style to a token flagged as library, and keeps values and warns for one that is unavailable', async () => {
+    const { componentsJson, tokensJson, ds } = await scan();
     const banner = componentsJson.components.find((c) => c.name === 'Banner')!;
+    // the hidden variable cannot be resolved, so the layer falls back to its library style
     expect(banner.tree.fills?.[0]).toMatchObject({ hex: '#808080' });
-    expect(banner.tree.fills?.[0].token).toBeUndefined();
-    // the library text style id is left out, not written as a dangling reference
+    expect(banner.tree.fills?.[0].token).toMatchObject({ styleId: 'S:remote,999:1' });
+    expect(banner.styleIds).toContain('S:remote,999:1');
+    expect(componentsJson.tokens['S:remote,999:1']).toMatchObject({
+      type: 'color',
+      library: true,
+      cssName: expect.stringContaining('library-surface-muted'),
+    });
+    // local tokens are not flagged
+    expect(componentsJson.tokens[ACTION].library).toBeUndefined();
+
+    // the unavailable library text style: no dangling id, values kept, and a warning
     const message = banner.tree.children.find((l) => l.name === 'Message')!;
     expect(message.text?.styleId).toBeUndefined();
     expect(message.text?.fontFamily).toBe('Inter');
-    expect(banner.boundVariableIds).not.toContain('VariableID:hidden-1');
-    expect(componentsJson.tokens['VariableID:hidden-1']).toBeUndefined();
-    const warned = componentsJson.warnings.filter(
-      (w) => w.code === 'UNRESOLVED_REFERENCE' && w.componentId === banner.id,
-    );
-    expect(warned.length).toBeGreaterThanOrEqual(2);
+    expect(
+      componentsJson.warnings.some(
+        (w) => w.code === 'UNRESOLVED_REFERENCE' && w.componentId === banner.id,
+      ),
+    ).toBe(true);
+
+    // tokens.json carries the same token, flagged
+    const leaves: Array<{ $extensions: { figma: { id: string; library?: boolean } } }> = [];
+    const walk = (o: Record<string, unknown>) => {
+      for (const v of Object.values(o)) {
+        if (v && typeof v === 'object' && '$value' in v) leaves.push(v as never);
+        else if (v && typeof v === 'object') walk(v as Record<string, unknown>);
+      }
+    };
+    walk(tokensJson);
+    expect(
+      leaves.find((l) => l.$extensions.figma.id === 'S:remote,999:1')?.$extensions.figma.library,
+    ).toBe(true);
+
+    // the summary counts what the file defines, not what it borrows
+    expect(ds.summary.colorStylesCount).toBe(1);
+    expect(ds.warnings.some((w) => w.includes('could not be read'))).toBe(true);
   });
 
   it('keeps hidden variables out of every output', async () => {
