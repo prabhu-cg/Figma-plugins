@@ -389,6 +389,22 @@ describe('readLayerTree', () => {
     });
   });
 
+  it('lists an instance but not its insides when includeInstanceInternals is false', async () => {
+    const instance = {
+      id: 'i1',
+      type: 'INSTANCE',
+      name: 'Badge',
+      visible: true,
+      componentPropertyReferences: { visible: 'has badge#1:1' },
+      children: [textNode({ id: 'inner' })],
+    };
+    const off = await readLayerTree(frame([instance]), { includeInstanceInternals: false });
+    expect(off.tree.children[0].children).toEqual([]);
+    expect(off.tree.children[0].propertyRefs).toEqual({ visible: 'has badge#1:1' });
+    const on = await readLayerTree(frame([instance]));
+    expect(on.tree.children[0].children).toHaveLength(1);
+  });
+
   describe('stopping early and counting', () => {
     const wide = (n: number) =>
       frame(Array.from({ length: n }, (_, i) => textNode({ id: `t${i}` })));

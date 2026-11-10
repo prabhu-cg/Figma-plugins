@@ -252,6 +252,18 @@ describe('App: components.json option', () => {
     expect(screen.getByText(/text content, layer names and design values/)).toBeInTheDocument();
   });
 
+  it('offers layers inside nested instances as an option that starts off', async () => {
+    await toExport();
+    fireEvent.click(checkbox(/^components\.json$/));
+    const box = screen.getByLabelText(/Include layers inside nested instances/);
+    expect(box).not.toBeChecked();
+    fireEvent.click(box);
+    const saved = messagesOfType('save-settings').at(-1) as {
+      settings: { options: typeof DEFAULT_EXPORT_OPTIONS };
+    };
+    expect(saved.settings.options.includeInstanceInternals).toBe(true);
+  });
+
   it('counts as an output, and is remembered with its sub-options', async () => {
     await toExport();
     expect(screen.getByText('2 outputs selected')).toBeInTheDocument();
@@ -444,7 +456,13 @@ describe('App: components.json is built in the UI', () => {
     startRun({ componentsJson: true, designMd: false, componentDocs: false });
     expect(messagesOfType('generate')).toHaveLength(0);
     expect(messagesOfType('read-structures')).toEqual([
-      { type: 'read-structures', excludedPages: [], includeText: true, includeVariantDiffs: true },
+      {
+        type: 'read-structures',
+        excludedPages: [],
+        includeText: true,
+        includeVariantDiffs: true,
+        includeInstanceInternals: false,
+      },
     ]);
   });
 

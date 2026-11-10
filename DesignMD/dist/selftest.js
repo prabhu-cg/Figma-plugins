@@ -107,6 +107,7 @@
       await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
+      if (n.type === "INSTANCE") return;
       if ("children" in n) {
         for (const child of n.children) {
           await visit(child, depth + 1);

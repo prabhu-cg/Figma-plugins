@@ -7,8 +7,12 @@
     "scope": "file",
     "generatedAt": "2026-11-09T10:00:00.000Z",
     "pluginVersion": "1.1.0",
-    "options": { "includeText": true, "includeVariantDiffs": true },
-    "contentHash": "10f80549b0376d1d8539d5797131588ac44f41fc58133e91b0994410c5785b02"
+    "options": {
+      "includeText": true,
+      "includeVariantDiffs": true,
+      "includeInstanceInternals": true
+    },
+    "contentHash": "2b8ae64d7c0a948245face254839bc39a6da8fddbe4cd104e958ba1e044565cc"
   },
   "index": {
     "componentCount": 1,

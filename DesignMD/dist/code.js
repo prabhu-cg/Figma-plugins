@@ -11,6 +11,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     componentsJson: false,
     includeText: true,
     includeVariantDiffs: true,
+    includeInstanceInternals: false,
     zip: true
   };
   function sanitizeSavedSettings(value) {
@@ -335,6 +336,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
+      if (n.type === "INSTANCE") return;
       if ("children" in n) {
         for (const child of n.children) {
           await visit(child, depth + 1);
@@ -1123,7 +1125,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (instanceOf) layer.instanceOf = instanceOf;
       const propertyRefs = insideInstance ? void 0 : readPropertyRefs(n);
       if (propertyRefs) layer.propertyRefs = propertyRefs;
-      const kids = childrenOf(n);
+      const kids = type === "INSTANCE" && options.includeInstanceInternals === false ? [] : childrenOf(n);
       if (kids.length > 0) {
         if (depth >= maxDepth) {
           truncated = true;
@@ -1373,6 +1375,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const readOptions = {
       includeText: options.includeText,
       resolveToken: options.resolveToken,
+      includeInstanceInternals: options.includeInstanceInternals === true,
       shouldStop,
       stats: options.stats,
       yieldIfDue: options.yieldIfDue ?? createTimeSlicer()
@@ -3381,6 +3384,11 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       cancelRequested = false;
       const stats = newReadStats();
       const started = Date.now();
+      const prefix = [0];
+      for (const c of designSystem.components) {
+        const trees = message.includeVariantDiffs && c.isComponentSet ? Math.max(1, c.variants.length) : 1;
+        prefix.push(prefix[prefix.length - 1] + trees);
+      }
       await withCancellation(
         () => cancelRequested,
         () => extractStructures(
@@ -3388,13 +3396,14 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
           {
             includeText: message.includeText,
             includeVariantDiffs: message.includeVariantDiffs,
+            includeInstanceInternals: message.includeInstanceInternals,
             resolveToken: tokenResolver(designSystem),
             stats
           },
           (done, total) => post({
             type: "progress",
             stage: "structure",
-            percent: total > 0 ? Math.round(done / total * 100) : 100,
+            percent: prefix[total] > 0 ? Math.round(prefix[Math.min(done, total)] / prefix[total] * 100) : 100,
             done,
             total
           }),

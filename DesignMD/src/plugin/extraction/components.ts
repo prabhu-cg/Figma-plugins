@@ -97,6 +97,10 @@ async function scanNodeBindings(
     await yieldIfDue();
     boundVariablesOf(n).forEach((id) => variableIds.add(id));
     readStyleIds(n, styleIds);
+    // The insides of a nested instance are another component's layers, and that component is scanned
+    // itself. Reading them here is most of the cost on a file built from nested components, and
+    // counted them against this component's layer budget. The instance's own bindings are read above.
+    if ((n as { type?: string }).type === 'INSTANCE') return;
     if ('children' in n) {
       for (const child of (n as unknown as { children: SceneNode[] }).children) {
         await visit(child, depth + 1);

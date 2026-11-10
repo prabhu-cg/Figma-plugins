@@ -26,6 +26,15 @@
 
 ### Changed
 
+- The scan no longer reads the layers inside nested instances. They are another component's layers and
+  that component is scanned itself, so a component's token usage now lists what it binds directly.
+  This is much faster on files built from nested components, and stops those layers counting toward a
+  component's 500-layer budget.
+- `components.json` does not read the layers inside nested instances by default either. An instance
+  layer still has `instanceOf`, which points at the component whose file has its insides. New option
+  **Include layers inside nested instances** reads them (slower, larger); `metadata.options` records it.
+- Progress during layer reading is weighted by work (a set of 200 variants counts for more than a
+  standalone component), so the time-left estimate is not thrown off by the sets coming first.
 - Progress bars show an estimate of the time left ("about 3 min left") from the pace of the current
   stage.
 - Reading a layer makes fewer calls into Figma: the style id, weight and alignment of a stroke, the

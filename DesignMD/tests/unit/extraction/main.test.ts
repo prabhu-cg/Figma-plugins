@@ -146,6 +146,7 @@ describe('plugin controller (main.ts)', () => {
       excludedPages: ['Drafts'],
       includeText: true,
       includeVariantDiffs: true,
+      includeInstanceInternals: false,
     });
     const items = ofType(h, 'structures').flatMap(
       (m) => m.items as Array<[string, { tree?: { name: string }; error?: string }]>,
@@ -157,6 +158,33 @@ describe('plugin controller (main.ts)', () => {
     expect(messages(h).at(-1)).toEqual({ type: 'structures-complete', cancelled: false });
   });
 
+  it('read-structures: reports progress by work, so a big set weighs more than a small component', async () => {
+    // One set of 16 variants and seven standalone components: 23 trees in 8 items.
+    const small = Array.from({ length: 4 }, (_, i) => component(`Small ${i}`));
+    const big = componentSet(
+      'Big',
+      Array.from({ length: 16 }, (_, v) => ({ props: { V: String(v) } })),
+    );
+    const tail = Array.from({ length: 3 }, (_, i) => component(`Tail ${i}`));
+    const h = await bootPlugin({ root: document('Acme', [page('P', [...small, big, ...tail])]) });
+    await h.send({ type: 'extract' });
+    await h.send({
+      type: 'read-structures',
+      excludedPages: [],
+      includeText: true,
+      includeVariantDiffs: true,
+      includeInstanceInternals: false,
+    });
+    const percents = ofType(h, 'progress')
+      .filter((p) => p.stage === 'structure')
+      .map((p) => [p.done, p.percent]);
+    // Sets are read first. After 4 of 8 items the 16-variant set is done: that is 50% by count but
+    // 19 of 23 trees (83%) by work.
+    const afterFirstBatch = percents.find(([done]) => done === 4)!;
+    expect(afterFirstBatch[1]).toBe(83);
+    expect(percents.at(-1)).toEqual([8, 100]);
+  });
+
   it('read-structures: refuses to run before anything has been extracted', async () => {
     const h = await bootPlugin(richFile());
     await h.send({
@@ -164,6 +192,7 @@ describe('plugin controller (main.ts)', () => {
       excludedPages: [],
       includeText: true,
       includeVariantDiffs: true,
+      includeInstanceInternals: false,
     });
     expect(ofType(h, 'error')).toHaveLength(1);
     expect(ofType(h, 'structures')).toEqual([]);
@@ -224,6 +253,7 @@ describe('plugin controller (main.ts)', () => {
       excludedPages: [],
       includeText: true,
       includeVariantDiffs: true,
+      includeInstanceInternals: false,
     });
     await h.send({ type: 'cancel' });
     await run;

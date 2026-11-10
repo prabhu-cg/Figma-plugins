@@ -45,6 +45,7 @@ const GENERATION_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   ...OUTPUT_KEYS,
   'includeText',
   'includeVariantDiffs',
+  'includeInstanceInternals',
 ];
 
 function countSelectedOutputs(options: ExportOptions): number {
@@ -287,6 +288,7 @@ export default function App() {
         excludedPages: pages,
         includeText: options.includeText,
         includeVariantDiffs: options.includeVariantDiffs,
+        includeInstanceInternals: options.includeInstanceInternals,
       });
     }
   }, [options, excludedPages, contrastPairs, designSystem]);

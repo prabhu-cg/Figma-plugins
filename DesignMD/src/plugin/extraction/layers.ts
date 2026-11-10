@@ -37,6 +37,11 @@ export interface ReadLayerOptions {
   maxDepth?: number;
   /** Looks up the CSS name of a variable or style. Without it, no `token` is written. */
   resolveToken?: (kind: 'variable' | 'style', id: string) => string | undefined;
+  /**
+   * Read the layers inside nested instances (default true). Off, an instance is listed with the
+   * component it points at but its insides are not read: far fewer calls and a smaller file.
+   */
+  includeInstanceInternals?: boolean;
   /** Checked before each layer; when it returns true the tree is cut short and flagged truncated. */
   shouldStop?: () => boolean;
   /** Awaited before each layer; lets the caller hand control back to Figma now and then. */
@@ -535,7 +540,8 @@ export async function readLayerTree(
     const propertyRefs = insideInstance ? undefined : readPropertyRefs(n);
     if (propertyRefs) layer.propertyRefs = propertyRefs;
 
-    const kids = childrenOf(n);
+    const kids =
+      type === 'INSTANCE' && options.includeInstanceInternals === false ? [] : childrenOf(n);
     if (kids.length > 0) {
       if (depth >= maxDepth) {
         truncated = true;

@@ -279,6 +279,35 @@ describe('overall time budget', () => {
   });
 });
 
+describe('nested instance internals', () => {
+  const buildHost = () => {
+    const nested = node(
+      'INSTANCE',
+      'Badge',
+      { visible: true, componentPropertyReferences: { visible: 'has badge#own:1' } },
+      [text('Count')],
+    );
+    return componentSet('Host', [{ props: { S: 'a' }, children: [nested] }]);
+  };
+
+  it('are not read by default: the instance is listed, its insides are not', async () => {
+    const set = buildHost();
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const s = await extractComponentStructure(set as never);
+    const badge = s.tree.children[0];
+    expect(badge.type).toBe('INSTANCE');
+    expect(badge.propertyRefs).toEqual({ visible: 'has badge#own:1' });
+    expect(badge.children).toEqual([]);
+  });
+
+  it('are read when asked', async () => {
+    const set = buildHost();
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const s = await extractComponentStructure(set as never, { includeInstanceInternals: true });
+    expect(s.tree.children[0].children.map((l) => l.name)).toEqual(['Count']);
+  });
+});
+
 describe('references stay inside the file', () => {
   it('has no broken property references even when a nested instance has its own', async () => {
     const nested = node(
@@ -296,7 +325,10 @@ describe('references stay inside the file', () => {
     installFakeFigma({ root: document('F', [page('P', [set])]) });
     const docs = transformComponents(await extractComponents());
     const ds = { ...makeDesignSystem(), components: docs };
-    const file = buildComponentsFile(ds, await extractStructures(docs));
+    const file = buildComponentsFile(
+      ds,
+      await extractStructures(docs, { includeInstanceInternals: true }),
+    );
     expect(findBrokenRefs(file, { checkInstances: false })).toEqual([]);
   });
 });
@@ -445,6 +477,7 @@ describe('generateComponentsJson', () => {
     expect(parse(generateComponentsJson(ds, structures).content)).toEqual({
       includeText: true,
       includeVariantDiffs: true,
+      includeInstanceInternals: false,
     });
     const off = generateOutputs(
       ds,
@@ -458,7 +491,23 @@ describe('generateComponentsJson', () => {
       },
       { structures },
     );
-    expect(parse(off[0].content)).toEqual({ includeText: false, includeVariantDiffs: false });
+    expect(parse(off[0].content)).toEqual({
+      includeText: false,
+      includeVariantDiffs: false,
+      includeInstanceInternals: false,
+    });
+    const withInternals = generateOutputs(
+      ds,
+      {
+        ...DEFAULT_EXPORT_OPTIONS,
+        designMd: false,
+        componentDocs: false,
+        componentsJson: true,
+        includeInstanceInternals: true,
+      },
+      { structures },
+    );
+    expect(parse(withInternals[0].content).includeInstanceInternals).toBe(true);
   });
 
   it('is only produced when selected', async () => {

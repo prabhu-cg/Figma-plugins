@@ -226,6 +226,14 @@ async function handleReadStructures(
     cancelRequested = false;
     const stats = newReadStats();
     const started = Date.now();
+    // Progress by work, not by count: a set of 200 variants costs far more than a standalone
+    // component, and the sets come first, so counting components makes the estimate wildly pessimistic.
+    const prefix = [0];
+    for (const c of designSystem.components) {
+      const trees =
+        message.includeVariantDiffs && c.isComponentSet ? Math.max(1, c.variants.length) : 1;
+      prefix.push(prefix[prefix.length - 1] + trees);
+    }
     await withCancellation(
       () => cancelRequested,
       () =>
@@ -234,6 +242,7 @@ async function handleReadStructures(
           {
             includeText: message.includeText,
             includeVariantDiffs: message.includeVariantDiffs,
+            includeInstanceInternals: message.includeInstanceInternals,
             resolveToken: tokenResolver(designSystem),
             stats,
           },
@@ -241,7 +250,10 @@ async function handleReadStructures(
             post({
               type: 'progress',
               stage: 'structure',
-              percent: total > 0 ? Math.round((done / total) * 100) : 100,
+              percent:
+                prefix[total] > 0
+                  ? Math.round((prefix[Math.min(done, total)] / prefix[total]) * 100)
+                  : 100,
               done,
               total,
             }),

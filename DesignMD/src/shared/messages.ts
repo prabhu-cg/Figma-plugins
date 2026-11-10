@@ -14,6 +14,8 @@ export interface ExportOptions {
   includeText: boolean;
   /** components.json: include how each variant differs from the default variant. */
   includeVariantDiffs: boolean;
+  /** components.json: read the layers inside nested instances (slower, larger). */
+  includeInstanceInternals: boolean;
   zip: boolean;
 }
 
@@ -25,6 +27,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   componentsJson: false,
   includeText: true,
   includeVariantDiffs: true,
+  includeInstanceInternals: false,
   zip: true,
 };
 
@@ -108,6 +111,7 @@ export type UIToPluginMessage =
       excludedPages: string[];
       includeText: boolean;
       includeVariantDiffs: boolean;
+      includeInstanceInternals: boolean;
     }
   /** Stop the running scan or generation and return what is done so far. */
   | { type: 'cancel' };

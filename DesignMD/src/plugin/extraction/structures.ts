@@ -36,6 +36,8 @@ const BATCH_SIZE = 4;
 
 export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
   includeVariantDiffs?: boolean;
+  /** Read the layers inside nested instances. Default false. */
+  includeInstanceInternals?: boolean;
   timeBudgetMs?: number;
   /** Wall-clock budget for the whole run. Defaults to TOTAL_TIME_BUDGET_MS. */
   totalBudgetMs?: number;
@@ -122,6 +124,7 @@ export async function extractComponentStructure(
   const readOptions = {
     includeText: options.includeText,
     resolveToken: options.resolveToken,
+    includeInstanceInternals: options.includeInstanceInternals === true,
     shouldStop,
     stats: options.stats,
     yieldIfDue: options.yieldIfDue ?? createTimeSlicer(),

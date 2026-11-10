@@ -65,9 +65,16 @@ const OUTPUT_GROUPS: Array<{ title: string; items: OutputItem[] }> = [
   },
 ];
 
-const COMPONENT_SUBOPTIONS: Array<{ key: 'includeText' | 'includeVariantDiffs'; label: string }> = [
+const COMPONENT_SUBOPTIONS: Array<{
+  key: 'includeText' | 'includeVariantDiffs' | 'includeInstanceInternals';
+  label: string;
+}> = [
   { key: 'includeText', label: 'Include text content' },
   { key: 'includeVariantDiffs', label: 'Include variant differences' },
+  {
+    key: 'includeInstanceInternals',
+    label: 'Include layers inside nested instances (slower, larger)',
+  },
 ];
 
 interface OptionCardProps {

@@ -49,6 +49,13 @@ inside any component is visible without opening it. Each per-component file is a
 If a run is cancelled, components that were not read are still listed, with an empty `tree`,
 `treeTruncated: true` and a `SCAN_CANCELLED` warning.
 
+## Nested instances
+
+By default the layers inside a nested instance are not read: the instance layer is listed with
+`instanceOf`, and its insides are in the file of the component it points at. With
+**Include layers inside nested instances** on, they are read too, which is slower and makes a larger
+file. `metadata.options.includeInstanceInternals` records which.
+
 ## What was left out
 
 `metadata.options` says which options the file was made with. `includeVariantDiffs: false` means every

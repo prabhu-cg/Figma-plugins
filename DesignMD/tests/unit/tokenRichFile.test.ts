@@ -278,7 +278,7 @@ function buildFile() {
   };
 }
 
-async function scan() {
+async function scan(structureOptions: { includeInstanceInternals?: boolean } = {}) {
   const { primitives, spacing, semantic, hidden } = buildVariables();
   const { root } = buildFile();
   installFakeFigma({
@@ -314,6 +314,7 @@ async function scan() {
   const raw = await extractDesignSystem();
   const ds = transformToDesignSystem(raw, 'Design System', 'file');
   const structures = await extractStructures(ds.components, {
+    ...structureOptions,
     resolveToken: (kind, id) =>
       kind === 'variable'
         ? ds.variables.find((v) => v.id === id)?.cssName
@@ -459,7 +460,7 @@ describe('a token-rich design system, end to end', () => {
   });
 
   it('keeps references inside the file: no property keys from nested instances', async () => {
-    const { componentsJson } = await scan();
+    const { componentsJson } = await scan({ includeInstanceInternals: true });
     const card = componentsJson.components.find((c) => c.name === 'Card')!;
     const badge = card.tree.children.find((l) => l.name === 'Badge')!;
     expect(badge.propertyRefs).toEqual({ visible: 'has-badge#2:1' });

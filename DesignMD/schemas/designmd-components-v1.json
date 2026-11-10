@@ -116,11 +116,16 @@
         "includeVariantDiffs": {
           "type": "boolean",
           "description": "True when variant differences were read. When false, every `variantDiffs` is empty because nothing was compared, not because variants are identical."
+        },
+        "includeInstanceInternals": {
+          "type": "boolean",
+          "description": "True when the layers inside nested instances were read. When false, an instance layer has no children: its insides are in the component it points at (`instanceOf`)."
         }
       },
       "required": [
         "includeText",
-        "includeVariantDiffs"
+        "includeVariantDiffs",
+        "includeInstanceInternals"
       ],
       "additionalProperties": false,
       "description": "The export options the file was made with, so an empty list can be told from a switched-off option."

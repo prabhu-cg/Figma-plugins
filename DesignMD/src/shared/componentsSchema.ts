@@ -493,6 +493,8 @@ export interface ComponentsOptionsUsed {
   includeText: boolean;
   /** True when variant differences were read. When false, every `variantDiffs` is empty because nothing was compared, not because variants are identical. */
   includeVariantDiffs: boolean;
+  /** True when the layers inside nested instances were read. When false, an instance layer has no children: its insides are in the component it points at (`instanceOf`). */
+  includeInstanceInternals: boolean;
 }
 
 /** Details about the file the output was made from. */

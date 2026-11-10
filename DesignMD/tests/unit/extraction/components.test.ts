@@ -123,6 +123,31 @@ describe('extractComponents: discovery', () => {
     expect(list).toEqual([expect.stringContaining('Failed to scan page "Broken"')]);
   });
 
+  it('does not count the insides of a nested instance toward this component, but reads the instance itself', async () => {
+    const bound = (id: string) => ({ color: { type: 'VARIABLE_ALIAS', id } });
+    const innerLayer = node('RECTANGLE', 'Inner', { boundVariables: bound('VariableID:inner') });
+    const instance = node('INSTANCE', 'Button', { boundVariables: bound('VariableID:own') }, [
+      innerLayer,
+    ]);
+    const own = node('RECTANGLE', 'Own', { boundVariables: bound('VariableID:direct') });
+    installFakeFigma({
+      root: document('File', [page('P', [component('Card', {}, [own, instance])])]),
+    });
+    const [card] = await extractComponents();
+    expect(card.boundVariableIds.sort()).toEqual(['VariableID:direct', 'VariableID:own']);
+  });
+
+  it('does not report a component as over the layer budget because of what nested instances contain', async () => {
+    const hugeInner = Array.from({ length: 700 }, (_, i) => node('RECTANGLE', `R${i}`));
+    const instance = node('INSTANCE', 'Big', {}, hugeInner);
+    const { list, warn } = collect();
+    installFakeFigma({
+      root: document('File', [page('P', [component('Wrapper', {}, [instance])])]),
+    });
+    await extractComponents(undefined, warn);
+    expect(list.filter((m) => m.includes('larger than the scan budget'))).toEqual([]);
+  });
+
   it('returns an empty list with a warning when the document scan throws', async () => {
     installFakeFigma({ failures: { findAll: true } });
     const { list, warn } = collect();

@@ -33,12 +33,14 @@ export function formatRemaining(elapsedMs: number, progressed: number, left: num
 
 export function ProgressBar({ stage, percent, done, total, detail }: ProgressBarProps) {
   // When this stage began, and how far along it already was, so the estimate uses only its own pace.
-  const began = useRef({ stage, at: Date.now(), done: done ?? 0 });
-  if (began.current.stage !== stage) began.current = { stage, at: Date.now(), done: done ?? 0 };
-  const remaining =
-    done !== undefined && total !== undefined && total > 0
-      ? formatRemaining(Date.now() - began.current.at, done - began.current.done, total - done)
-      : '';
+  const began = useRef({ stage, at: Date.now(), percent });
+  if (began.current.stage !== stage) began.current = { stage, at: Date.now(), percent };
+  // From the percentage, which the plugin weights by the work each item takes, not from item counts.
+  const remaining = formatRemaining(
+    Date.now() - began.current.at,
+    percent - began.current.percent,
+    100 - percent,
+  );
 
   return (
     <div

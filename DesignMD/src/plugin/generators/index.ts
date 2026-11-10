@@ -55,6 +55,7 @@ export function generateOutputsDetailed(
         splitThresholdBytes: extras.splitThresholdBytes,
         includeText: options.includeText,
         includeVariantDiffs: options.includeVariantDiffs,
+        includeInstanceInternals: options.includeInstanceInternals,
       }),
     );
   }

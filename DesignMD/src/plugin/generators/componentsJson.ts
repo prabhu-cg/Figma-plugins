@@ -158,6 +158,8 @@ export interface ComponentsJsonOptions {
   includeText?: boolean;
   /** Whether variant differences were read. Recorded in the file's metadata. Default true. */
   includeVariantDiffs?: boolean;
+  /** Whether the layers inside nested instances were read. Recorded in the file's metadata. Default false. */
+  includeInstanceInternals?: boolean;
 }
 
 export function buildComponentsFile(
@@ -273,6 +275,7 @@ export function buildComponentsFile(
       options: {
         includeText: chosen.includeText !== false,
         includeVariantDiffs: chosen.includeVariantDiffs !== false,
+        includeInstanceInternals: chosen.includeInstanceInternals === true,
       },
       contentHash: '',
     },
