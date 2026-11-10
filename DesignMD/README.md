@@ -143,20 +143,20 @@ and none of them can take the plugin down:
 | File                                                                                                       | Components | Time                                                                                      | Heap growth  | `components.json`                                                     |
 | ---------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
 | Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                                          | 1,000      | ~5 s                                                                                      | ~130 MB      | 37.6 MB (unsplit)                                                     |
-| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on             | 2,581      | layers read in 16 s (2,174 trees, 34,790 layers); Figma stayed responsive                 | not measured | 23.8 MB, split into 501 files                                         |
+| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on             | 2,581      | layers read in 12 s (2,581 trees, 21,687 layers); Figma stayed responsive                 | not measured | 16.9 MB, one file (under the 20 MB split limit)                       |
 | Bootstrap 5 UI kit community file (2,370 components and sets, 6,527 with variants), variant differences on | 6,527      | scan 12-14.5 s; layers read in 34 s (6,527 trees, 32,521 layers); Figma stayed responsive | not measured | about 35 MB, split into 2,371 files; ZIP about 3.5 MB when compressed |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
-600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected, made before layer reading
-was time-sliced and before `components.json` was assembled in the UI: the scan took 8.5 s and
-generating took 3 min 36 s, and Figma froze while it ran. The plugin console reported 1,173 layer
-trees (28,819 layers) read in 17 s, with 5,722 instance lookups adding up to 35 s of overlapping
-waits, so reading was not where most of the time went. Profiling the synthetic file in Node showed
-hashing its 36 MB output alone takes about 2 s with a JIT; the plugin's interpreter is much
-slower, which is the likely cause of the freeze. That run needs repeating with this version.
-Heap growth and output size were not recorded, and the generated file has not been checked yet. After a generate, the plugin console (Plugins > Development > Open
-console) prints how many layers were read and how long instance lookups took. The README's earlier
-claim that 10,000+ variables and 5,000+ components stay responsive has not been measured.
+600 MB heap). The Rayna UI and Bootstrap rows are manual runs in Figma with `components.json`
+selected, on this version. In both, Figma stayed responsive, and the generated files were checked:
+the component counts in `design.md`, `components.json` and `components/` agree, and every custom
+property `components.json` refers to is declared in `tokens.css`. The Rayna UI file has one
+`TREE_TRUNCATED` warning, for a component with more than 500 layers. An earlier Rayna UI run, made
+before layer reading was time-sliced and before `components.json` was assembled in the UI, froze
+Figma for 3 min 36 s; that is fixed. Heap growth and total generate time were not recorded for the
+manual runs. After a generate, the plugin console (Plugins > Development > Open console) prints how
+many layers were read and how long instance lookups took. The README's earlier claim that 10,000+
+variables and 5,000+ components stay responsive has not been measured.
 
 ## Development
 
