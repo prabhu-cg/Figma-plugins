@@ -80,7 +80,8 @@ format stays consistent with the others.
 ### Built for real files
 
 Extraction is batched and yields to the event loop, so it stays responsive on large,
-production design systems — 10,000+ variables, 5,000+ components. A problem with one
+production design systems — tested on a community file with 2,370 components and sets (6,527 with
+variants). A problem with one
 style or component (missing reference, corrupted node) is recorded as a warning and
 skipped, rather than crashing the whole run.
 

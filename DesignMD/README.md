@@ -104,7 +104,8 @@ consistent and the transform/generator layers are unit-testable without a Figma 
 
 Extraction batches variables, styles and components (100–200 per batch), runs the lookups inside
 a batch concurrently, and yields to the event loop between batches, so the plugin stays
-responsive on design systems with 10,000+ variables or 5,000+ components. Every extractor is
+responsive on large design systems (tested on a file with 2,370 components and sets, 6,527 with
+variants; see Large-file checks below). Every extractor is
 independently wrapped in try/catch: a single corrupted style or missing reference is recorded as
 a warning (shown in the plugin UI) rather than aborting the whole run. Each component's layers
 are scanned up to a budget (500 layers, 10 levels deep) and a warning is shown when a component
@@ -155,8 +156,8 @@ property `components.json` refers to is declared in `tokens.css`. The Rayna UI f
 before layer reading was time-sliced and before `components.json` was assembled in the UI, froze
 Figma for 3 min 36 s; that is fixed. Heap growth and total generate time were not recorded for the
 manual runs. After a generate, the plugin console (Plugins > Development > Open console) prints how
-many layers were read and how long instance lookups took. The README's earlier claim that 10,000+
-variables and 5,000+ components stay responsive has not been measured.
+many layers were read and how long instance lookups took. Larger files than the ones above
+have not been measured.
 
 ## Development
 
