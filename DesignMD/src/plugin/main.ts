@@ -103,6 +103,7 @@ async function handleExtract(scope: ExtractionScope): Promise<void> {
               percent,
               done: progress.done,
               total: progress.total,
+              ...(progress.detail ? { message: progress.detail } : {}),
             });
           },
           { selection },

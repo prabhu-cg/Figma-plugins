@@ -10,12 +10,20 @@ import { extractVariableCollections } from './variables';
 import type { ExtractionResult } from './rawTypes';
 
 export type ExtractionProgressStage =
-  'variables' | 'text-styles' | 'color-styles' | 'effect-styles' | 'grid-styles' | 'components';
+  | 'variables'
+  | 'text-styles'
+  | 'color-styles'
+  | 'effect-styles'
+  | 'grid-styles'
+  | 'pages'
+  | 'components';
 
 export interface ExtractionProgress {
   stage: ExtractionProgressStage;
   done: number;
   total: number;
+  /** What is being worked on, for example the name of the page being searched. */
+  detail?: string;
 }
 
 /**
@@ -95,6 +103,7 @@ export async function extractDesignSystem(
         (done, total) => onProgress?.({ stage: 'components', done, total }),
         warn,
         options.selection,
+        (done, total, name) => onProgress?.({ stage: 'pages', done, total, detail: name }),
       ),
     (r) => r.length,
   );

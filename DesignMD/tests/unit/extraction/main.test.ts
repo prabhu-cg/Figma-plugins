@@ -169,6 +169,24 @@ describe('plugin controller (main.ts)', () => {
     expect(ofType(h, 'structures')).toEqual([]);
   });
 
+  it('extract: names each page while searching, so a stall can be pinned to a page', async () => {
+    const withLoad = (name: string) => {
+      const p = page(name, [component(`In ${name}`)]);
+      p.loadAsync = () => Promise.resolve();
+      return p;
+    };
+    const h = await bootPlugin({
+      root: document('Acme', [withLoad('Buttons'), withLoad('Forms')]),
+    });
+    await h.send({ type: 'extract' });
+    const pages = ofType(h, 'progress').filter((p) => p.stage === 'pages' && p.message);
+    expect(pages.map((p) => p.message)).toEqual(['Buttons', 'Forms']);
+    expect(pages.map((p) => [p.done, p.total])).toEqual([
+      [0, 2],
+      [1, 2],
+    ]);
+  });
+
   it('cancel during a scan: returns the partial result with a warning, not an error', async () => {
     const h = await bootPlugin(richFile());
     const scan = h.send({ type: 'extract' });

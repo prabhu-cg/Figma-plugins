@@ -314,6 +314,22 @@ describe('App: components.json option', () => {
 });
 
 describe('App: cancel, chunks and progress detail', () => {
+  it('shows which page is being searched', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+    fromPlugin({
+      type: 'progress',
+      stage: 'pages',
+      percent: 10,
+      done: 3,
+      total: 30,
+      message: 'Buttons',
+    });
+    expect(screen.getByRole('progressbar')).toHaveTextContent(
+      'Searching pages… 10% · 3 of 30 · Buttons',
+    );
+  });
+
   it('offers Cancel while scanning, tells the plugin, and shows it is cancelling', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: /Scan/ }));

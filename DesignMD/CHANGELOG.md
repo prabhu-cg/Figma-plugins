@@ -26,6 +26,7 @@
 
 ### Changed
 
+- Pages are loaded and searched one at a time instead of with `loadAllPagesAsync`, and the progress bar shows "Searching pages · N of M · page name". A page that fails to load is skipped with a warning.
 - The scan no longer holds Figma's main thread for long stretches: the document is searched one page
   at a time (one bad page no longer loses the rest), component bindings are read in time slices, and
   the plugin console reports per-stage timings.

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { withCancellation } from '../../../src/plugin/utils/async';
 import { extractComponents } from '../../../src/plugin/extraction/components';
 import {
   alias,
@@ -138,6 +139,68 @@ describe('extractComponents: discovery', () => {
     const result = await extractComponents(undefined, warn);
     expect(result).toHaveLength(1);
     expect(list[0]).toContain('Failed to load all pages');
+  });
+
+  it('loads pages one at a time, naming each before it starts, instead of loading all at once', async () => {
+    const order: string[] = [];
+    const withLoad = (name: string, children: ReturnType<typeof component>[]) => {
+      const p = page(name, children);
+      p.loadAsync = () => {
+        order.push(`load ${name}`);
+        return Promise.resolve();
+      };
+      return p;
+    };
+    const handle = installFakeFigma({
+      root: document('File', [
+        withLoad('One', [component('A')]),
+        withLoad('Two', [component('B')]),
+      ]),
+    });
+    const named: Array<[number, number, string]> = [];
+    const result = await extractComponents(undefined, undefined, undefined, (done, total, name) => {
+      named.push([done, total, name]);
+      order.push(`report ${name || 'end'}`);
+    });
+    expect(handle.calls.loadAllPages).toBe(0);
+    expect(result.map((c) => c.name)).toEqual(['A', 'B']);
+    // each page is reported before it is loaded
+    expect(order).toEqual(['report One', 'load One', 'report Two', 'load Two', 'report end']);
+    expect(named).toEqual([
+      [0, 2, 'One'],
+      [1, 2, 'Two'],
+      [2, 2, ''],
+    ]);
+  });
+
+  it('keeps going when one page fails to load, and says which', async () => {
+    const bad = page('Heavy', [component('Lost')]);
+    bad.loadAsync = () => Promise.reject(new Error('too big'));
+    const good = page('Light', [component('Kept')]);
+    good.loadAsync = () => Promise.resolve();
+    installFakeFigma({ root: document('File', [bad, good]) });
+    const { list, warn } = collect();
+    const result = await extractComponents(undefined, warn);
+    expect(result.map((c) => c.name)).toContain('Kept');
+    expect(list[0]).toContain('Failed to load page "Heavy"');
+  });
+
+  it('stops between pages when cancelled', async () => {
+    const pages = ['One', 'Two', 'Three'].map((n) => {
+      const p = page(n, [component(n)]);
+      p.loadAsync = () => Promise.resolve();
+      return p;
+    });
+    installFakeFigma({ root: document('File', pages) });
+    let cancelled = false;
+    const result = await withCancellation(
+      () => cancelled,
+      () =>
+        extractComponents(undefined, undefined, undefined, (done) => {
+          if (done === 1) cancelled = true;
+        }),
+    );
+    expect(result.length).toBeLessThan(3);
   });
 
   it('reports progress per stage (sets, then standalone components)', async () => {

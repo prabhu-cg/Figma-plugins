@@ -58,6 +58,7 @@ export default function App() {
     percent: number;
     done?: number;
     total?: number;
+    message?: string;
   } | null>(null);
   const [cancelling, setCancelling] = useState(false);
   // Pieces of a large result, put back together when generation-complete arrives.
@@ -143,6 +144,7 @@ export default function App() {
           percent: message.percent,
           done: message.done,
           total: message.total,
+          message: message.message,
         });
         break;
       case 'extraction-complete':
@@ -364,6 +366,7 @@ export default function App() {
             percent={progress.percent}
             done={progress.done}
             total={progress.total}
+            detail={progress.message}
           />
         )}
 

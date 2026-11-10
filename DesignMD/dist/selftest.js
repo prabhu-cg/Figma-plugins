@@ -210,9 +210,24 @@
   const findComponentLike = (root) => root.findAllWithCriteria({
     types: ["COMPONENT", "COMPONENT_SET"]
   });
-  async function findInDocument(warn) {
+  async function findInDocument(warn, onPage) {
     const found = [];
-    for (const page of figma.root.children) {
+    const pages = figma.root.children;
+    let loadedAll = false;
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      if (typeof page.loadAsync === "function") {
+        await safely(
+          () => page.loadAsync(),
+          (err) => warn(`Failed to load page "${page.name}": ${String(err)}`)
+        );
+      } else if (!loadedAll) {
+        loadedAll = true;
+        await safely(
+          () => figma.loadAllPagesAsync(),
+          (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
+        );
+      }
       const hits = await safely(
         () => Promise.resolve(findComponentLike(page)),
         (err) => warn(`Failed to scan page "${page.name}" for components: ${String(err)}`)
@@ -237,32 +252,30 @@
     }
     return Array.from(found.values());
   }
-  async function extractComponents(onProgress, onWarning, selection) {
+  async function extractComponents(onProgress, onWarning, selection, onPage) {
+    var _a;
     const warn = onWarning ?? (() => {
     });
-    if (!selection) {
-      await safely(
-        () => figma.loadAllPagesAsync(),
-        (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
-      );
-    }
     const nodes = selection ? await safely(
       () => Promise.resolve(findComponentsWithin(selection)),
       (err) => warn(`Failed to scan selection for components: ${String(err)}`)
     ) : await findInDocument(warn);
     const yieldIfDue = createTimeSlicer();
     const allNodes = nodes ?? [];
-    const componentSetsAll = allNodes.filter(
-      (n) => n.type === "COMPONENT_SET"
-    );
-    const standaloneComponentsAll = allNodes.filter(
-      (n) => {
-        var _a;
-        return n.type === "COMPONENT" && ((_a = n.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET";
+    const componentSetsAll = [];
+    const standaloneComponentsAll = [];
+    const componentSets = [];
+    const standaloneComponents = [];
+    for (const n of allNodes) {
+      await yieldIfDue();
+      if (n.type === "COMPONENT_SET") {
+        componentSetsAll.push(n);
+        if (!isHiddenFromPublishing(n)) componentSets.push(n);
+      } else if (n.type === "COMPONENT" && ((_a = n.parent) == null ? void 0 : _a.type) !== "COMPONENT_SET") {
+        standaloneComponentsAll.push(n);
+        if (!isHiddenFromPublishing(n)) standaloneComponents.push(n);
       }
-    );
-    const componentSets = componentSetsAll.filter((n) => !isHiddenFromPublishing(n));
-    const standaloneComponents = standaloneComponentsAll.filter((n) => !isHiddenFromPublishing(n));
+    }
     const hiddenCount = componentSetsAll.length - componentSets.length + (standaloneComponentsAll.length - standaloneComponents.length);
     if (hiddenCount > 0) {
       warn(

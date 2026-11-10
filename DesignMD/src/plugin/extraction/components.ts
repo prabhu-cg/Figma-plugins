@@ -230,10 +230,32 @@ const findComponentLike = (root: SceneNode | DocumentNode | PageNode): Component
  * stretch of work on Figma's main thread (it froze the editor on big files); per page it is bounded
  * by the page, with a yield between pages, and one page that fails does not lose the others.
  */
-async function findInDocument(warn: (message: string) => void): Promise<ComponentLike[]> {
+async function findInDocument(
+  warn: (message: string) => void,
+  onPage?: (done: number, total: number, name: string) => void,
+): Promise<ComponentLike[]> {
   const found: ComponentLike[] = [];
-  for (const page of figma.root.children) {
+  const pages = figma.root.children;
+  let loadedAll = false;
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
     if (isCancelled()) break;
+    // Named before the work starts: if Figma stalls on a page, the last message says which one.
+    onPage?.(i, pages.length, page.name);
+    // Load one page at a time, so Figma gets a breath between pages. loadAllPagesAsync is one call
+    // that cannot be interrupted, and locked the editor on a very large file.
+    if (typeof page.loadAsync === 'function') {
+      await safely(
+        () => page.loadAsync(),
+        (err) => warn(`Failed to load page "${page.name}": ${String(err)}`),
+      );
+    } else if (!loadedAll) {
+      loadedAll = true;
+      await safely(
+        () => figma.loadAllPagesAsync(),
+        (err) => warn(`Failed to load all pages for component scan: ${String(err)}`),
+      );
+    }
     const hits = await safely(
       () => Promise.resolve(findComponentLike(page)),
       (err) => warn(`Failed to scan page "${page.name}" for components: ${String(err)}`),
@@ -241,6 +263,7 @@ async function findInDocument(warn: (message: string) => void): Promise<Componen
     found.push(...(hits ?? []));
     await yieldToEventLoop();
   }
+  onPage?.(pages.length, pages.length, '');
   return found;
 }
 
@@ -273,35 +296,37 @@ export async function extractComponents(
   onProgress?: (done: number, total: number) => void,
   onWarning?: (message: string) => void,
   selection?: readonly SceneNode[],
+  /** Reports each page as it is loaded and searched (whole-file scans only). */
+  onPage?: (done: number, total: number, name: string) => void,
 ): Promise<RawComponent[]> {
   const warn = onWarning ?? (() => {});
   if (isCancelled()) return [];
-
-  if (!selection) {
-    await safely(
-      () => figma.loadAllPagesAsync(),
-      (err) => warn(`Failed to load all pages for component scan: ${String(err)}`),
-    );
-  }
 
   const nodes = selection
     ? await safely(
         () => Promise.resolve(findComponentsWithin(selection)),
         (err) => warn(`Failed to scan selection for components: ${String(err)}`),
       )
-    : await findInDocument(warn);
+    : await findInDocument(warn, onPage);
   const yieldIfDue = createTimeSlicer();
 
+  // Sorting thousands of nodes into sets and standalone components, and checking each one's
+  // ancestors for a hidden name, is a long stretch of calls into Figma; slice it.
   const allNodes = nodes ?? [];
-  const componentSetsAll = allNodes.filter(
-    (n): n is ComponentSetNode => n.type === 'COMPONENT_SET',
-  );
-  const standaloneComponentsAll = allNodes.filter(
-    (n): n is ComponentNode => n.type === 'COMPONENT' && n.parent?.type !== 'COMPONENT_SET',
-  );
-
-  const componentSets = componentSetsAll.filter((n) => !isHiddenFromPublishing(n));
-  const standaloneComponents = standaloneComponentsAll.filter((n) => !isHiddenFromPublishing(n));
+  const componentSetsAll: ComponentSetNode[] = [];
+  const standaloneComponentsAll: ComponentNode[] = [];
+  const componentSets: ComponentSetNode[] = [];
+  const standaloneComponents: ComponentNode[] = [];
+  for (const n of allNodes) {
+    await yieldIfDue();
+    if (n.type === 'COMPONENT_SET') {
+      componentSetsAll.push(n);
+      if (!isHiddenFromPublishing(n)) componentSets.push(n);
+    } else if (n.type === 'COMPONENT' && n.parent?.type !== 'COMPONENT_SET') {
+      standaloneComponentsAll.push(n);
+      if (!isHiddenFromPublishing(n)) standaloneComponents.push(n);
+    }
+  }
 
   const hiddenCount =
     componentSetsAll.length -

@@ -90,6 +90,7 @@ describe('extractDesignSystem', () => {
       'color-styles',
       'effect-styles',
       'grid-styles',
+      'pages',
       'components',
     ]);
   });
@@ -146,11 +147,7 @@ describe('extraction -> transform -> generators (full pipeline)', () => {
       ...DEFAULT_EXPORT_OPTIONS,
       tokensJson: true,
     });
-    expect(files.map((f) => f.path)).toEqual([
-      'design.md',
-      'components/Button.md',
-      'tokens.json',
-    ]);
+    expect(files.map((f) => f.path)).toEqual(['design.md', 'components/Button.md', 'tokens.json']);
 
     const tokens = JSON.parse(files.find((f) => f.path === 'tokens.json')!.content);
     expect(tokens.color.Primary['500'].$value).toBe('#ff0000');
