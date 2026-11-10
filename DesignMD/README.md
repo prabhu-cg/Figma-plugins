@@ -138,10 +138,11 @@ and none of them can take the plugin down:
 
 ### Large-file checks
 
-| File                                                                                           | Components | Time                                                                      | Heap growth  | `components.json`             |
-| ---------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------- | ------------ | ----------------------------- |
-| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                              | 1,000      | ~5 s                                                                      | ~130 MB      | 37.6 MB (unsplit)             |
-| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on | 2,581      | layers read in 16 s (2,174 trees, 34,790 layers); Figma stayed responsive | not measured | 23.8 MB, split into 501 files |
+| File                                                                                                       | Components | Time                                                                                      | Heap growth  | `components.json`                                                     |
+| ---------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
+| Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                                          | 1,000      | ~5 s                                                                                      | ~130 MB      | 37.6 MB (unsplit)                                                     |
+| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on             | 2,581      | layers read in 16 s (2,174 trees, 34,790 layers); Figma stayed responsive                 | not measured | 23.8 MB, split into 501 files                                         |
+| Bootstrap 5 UI kit community file (2,370 components and sets, 6,527 with variants), variant differences on | 6,527      | scan 12-14.5 s; layers read in 34 s (6,527 trees, 32,521 layers); Figma stayed responsive | not measured | about 35 MB, split into 2,371 files; ZIP about 3.5 MB when compressed |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
 600 MB heap). The Rayna UI row is a manual run in Figma with `components.json` selected, made before layer reading
