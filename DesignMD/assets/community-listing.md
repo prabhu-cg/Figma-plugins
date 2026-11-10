@@ -25,7 +25,7 @@ Suggested tags (Figma lets you pick a few from its own taxonomy plus free-text s
 
 ## Support / contact
 
-- Support email: (your email)
+- Support email: productsanddesigns@gmail.com
 - Repository: https://github.com/prabhu-cg/Figma-plugins/tree/main/DesignMD
 
 ---
