@@ -2292,6 +2292,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     }
     if (report.pairs.length > 0) {
       const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
+      const largeOnly = report.pairs.filter((p) => p.passesAALarge && !p.passesAANormal).slice(0, MAX_FAILING_ROWS);
+      const largeOnlyCount = report.totalPairs - report.passingNormalCount - report.failingLargeCount;
       if (report.pairing === "same-group") {
         notes.push(
           `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like color tokens, too many to pair every combination meaningfully. Pairs are only inferred between tokens in the same group (the same name up to the last "/", for example "Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"), and when names carry a state (Default, Hover, Pressed, Active, Disabled, Focus) only within the same state. Combinations across groups are not checked; add them in the plugin's Contrast tab.`
@@ -2308,7 +2310,14 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       return joinSections([
         mdList(notes),
         mdHeading(level, "Pairs Failing AA Large (below 3:1)"),
-        failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n"
+        failing.length > 0 ? contrastPairsTable(failing) : "_Every inferred foreground/background pair meets at least AA Large contrast (3:1)._\n",
+        mdHeading(level, "Pairs Passing AA Large Only (3:1 to below 4.5:1)"),
+        largeOnly.length > 0 ? joinSections([
+          "_Fine for large text (18pt, or 14pt bold) and UI components, but below AA for normal text._\n",
+          largeOnlyCount > largeOnly.length ? `Showing the ${largeOnly.length} lowest-contrast of ${largeOnlyCount} such pairs.
+` : "",
+          contrastPairsTable(largeOnly)
+        ]) : "_No inferred pair falls between AA Large and AA Normal contrast._\n"
       ]);
     }
     notes.unshift(

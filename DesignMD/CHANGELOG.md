@@ -51,6 +51,8 @@
   Selected, Focus, Disabled) are paired only with backgrounds in the same state, so white "Active Text"
   is checked on "Active Background" and not reported as 1.00:1 on "Default Background". When no
   background matches, every background in the group is used.
+- `design.md` lists pairs that pass AA Large (3:1) but not AA Normal (4.5:1) in a second table, so
+  near-misses are visible and not only pairs below 3:1.
 - Font sizes, line heights, letter spacing and paragraph spacing from text styles are rounded to 2
   decimals (Figma returns 13.600000381469727 for 13.6).
 - `design.md` marks library styles with "(library)" and trims padded page names.

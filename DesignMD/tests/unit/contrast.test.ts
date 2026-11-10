@@ -522,4 +522,16 @@ describe('pairing in a system with very many color tokens', () => {
     const report = computeContrastReport(ds);
     expect(report.pairs.filter((p) => p.foreground.name === 'G/Hovered Text')).toHaveLength(2);
   });
+
+  it('lists pairs that pass AA Large but not AA Normal in their own section', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = [
+      colorStyle('Card/Text', '#777777'), // about 4.48:1 on white
+      colorStyle('Card/Background', '#ffffff'),
+    ];
+    const md = generateDesignMd(ds).content;
+    expect(md).toContain('Pairs Passing AA Large Only (3:1 to below 4.5:1)');
+    expect(md).toMatch(/\| Card\/Text \| Card\/Background \| 4\.\d\d:1 \| Fail \| Pass \|/);
+  });
 });
