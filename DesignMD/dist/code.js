@@ -296,7 +296,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     );
   }
   async function extractLibraryStyles(ids) {
-    const found = { text: [], paint: [], effect: [], grid: [], unavailable: [] };
+    const found = {
+      text: [],
+      paint: [],
+      effect: [],
+      grid: [],
+      unavailable: [],
+      idMismatches: []
+    };
     const results = await processInBatches([...ids], 20, async (id) => {
       const style = await safely(
         () => figma.getStyleByIdAsync(id),
@@ -309,18 +316,19 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         found.unavailable.push(id);
         continue;
       }
+      if (style.id !== id) found.idMismatches.push({ requested: id, returned: style.id });
       switch (style.type) {
         case "TEXT":
-          found.text.push({ ...mapTextStyle(style), library: true });
+          found.text.push({ ...mapTextStyle(style), id, library: true });
           break;
         case "PAINT":
-          found.paint.push({ ...mapPaintStyle(style), library: true });
+          found.paint.push({ ...mapPaintStyle(style), id, library: true });
           break;
         case "EFFECT":
-          found.effect.push({ ...mapEffectStyle(style), library: true });
+          found.effect.push({ ...mapEffectStyle(style), id, library: true });
           break;
         case "GRID":
-          found.grid.push({ ...mapGridStyle(style), library: true });
+          found.grid.push({ ...mapGridStyle(style), id, library: true });
           break;
         default:
           found.unavailable.push(id);
@@ -762,6 +770,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         () => extractLibraryStyles(libraryIds),
         (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length
       );
+      if (library.idMismatches.length > 0) {
+        const sample = library.idMismatches[0];
+        console.log(
+          `[DesignMD] ${library.idMismatches.length} library style(s) report a different id than the one layers use, e.g. asked for ${sample.requested}, got ${sample.returned}; they are kept under the id layers use`
+        );
+      }
       textStyles.push(...library.text);
       paintStyles.push(...library.paint);
       effectStyles.push(...library.effect);

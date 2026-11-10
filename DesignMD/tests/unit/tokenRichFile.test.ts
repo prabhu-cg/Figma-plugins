@@ -314,7 +314,9 @@ async function scan(structureOptions: { includeInstanceInternals?: boolean } = {
     // a library paint style the Banner uses; the library text style it uses is not available
     libraryStyles: [
       {
-        ...fakePaintStyle({ id: 'S:remote,999:1', name: 'Library/Surface/Muted' }),
+        // Figma reports the style under its key alone; layers carry key plus node id.
+        ...fakePaintStyle({ id: 'S:remote,', name: 'Library/Surface/Muted' }),
+        requestedAs: 'S:remote,999:1',
         type: 'PAINT',
       },
     ],

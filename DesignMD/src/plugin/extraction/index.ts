@@ -123,6 +123,13 @@ export async function extractDesignSystem(
       () => extractLibraryStyles(libraryIds),
       (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length,
     );
+    if (library.idMismatches.length > 0) {
+      // Visible in the plugin console: how Figma names a library style on the object versus on layers.
+      const sample = library.idMismatches[0];
+      console.log(
+        `[DesignMD] ${library.idMismatches.length} library style(s) report a different id than the one layers use, e.g. asked for ${sample.requested}, got ${sample.returned}; they are kept under the id layers use`,
+      );
+    }
     textStyles.push(...library.text);
     paintStyles.push(...library.paint);
     effectStyles.push(...library.effect);

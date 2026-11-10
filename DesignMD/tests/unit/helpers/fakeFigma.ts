@@ -262,7 +262,10 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
         ...(options.gridStyles ?? []),
         ...(options.libraryStyles ?? []),
       ];
-      return Promise.resolve(all.find((s) => s.id === id) ?? null);
+      // A library style may be requested by the id a layer carries and report another on the object.
+      const exact = all.find((s) => s.id === id);
+      const aliased = all.find((s) => s.requestedAs === id);
+      return Promise.resolve(exact ?? aliased ?? null);
     },
     getLocalTextStylesAsync: () =>
       failures.textStyles

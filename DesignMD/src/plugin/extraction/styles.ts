@@ -195,6 +195,8 @@ export interface LibraryStyles {
   grid: RawGridStyle[];
   /** Ids Figma could not give a style for (a library that is not available, or a deleted style). */
   unavailable: string[];
+  /** Styles whose own id differs from the id they were looked up by (kept under the looked-up id). */
+  idMismatches: Array<{ requested: string; returned: string }>;
 }
 
 /**
@@ -202,7 +204,14 @@ export interface LibraryStyles {
  * has imported. Local styles are listed by getLocal*StylesAsync; these are only reachable by id.
  */
 export async function extractLibraryStyles(ids: readonly string[]): Promise<LibraryStyles> {
-  const found: LibraryStyles = { text: [], paint: [], effect: [], grid: [], unavailable: [] };
+  const found: LibraryStyles = {
+    text: [],
+    paint: [],
+    effect: [],
+    grid: [],
+    unavailable: [],
+    idMismatches: [],
+  };
   const results = await processInBatches([...ids], 20, async (id) => {
     const style = await safely(
       () => figma.getStyleByIdAsync(id),
@@ -215,18 +224,22 @@ export async function extractLibraryStyles(ids: readonly string[]): Promise<Libr
       found.unavailable.push(id);
       continue;
     }
+    // Layers and components refer to a library style by the id they carry, and Figma may report a
+    // different id on the style object itself. Key the style by the id that was asked for, so every
+    // reference finds it.
+    if (style.id !== id) found.idMismatches.push({ requested: id, returned: style.id });
     switch (style.type) {
       case 'TEXT':
-        found.text.push({ ...mapTextStyle(style as TextStyle), library: true });
+        found.text.push({ ...mapTextStyle(style as TextStyle), id, library: true });
         break;
       case 'PAINT':
-        found.paint.push({ ...mapPaintStyle(style as PaintStyle), library: true });
+        found.paint.push({ ...mapPaintStyle(style as PaintStyle), id, library: true });
         break;
       case 'EFFECT':
-        found.effect.push({ ...mapEffectStyle(style as EffectStyle), library: true });
+        found.effect.push({ ...mapEffectStyle(style as EffectStyle), id, library: true });
         break;
       case 'GRID':
-        found.grid.push({ ...mapGridStyle(style as GridStyle), library: true });
+        found.grid.push({ ...mapGridStyle(style as GridStyle), id, library: true });
         break;
       default:
         found.unavailable.push(id);
