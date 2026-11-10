@@ -6,7 +6,8 @@ function componentsByPageSection(ds: DesignSystem): string {
   const countsByPage = new Map<string, number>();
   for (const c of ds.components) {
     const count = c.isComponentSet ? c.variants.length : 1;
-    countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
+    const page = c.pageName.trim();
+    countsByPage.set(page, (countsByPage.get(page) ?? 0) + count);
   }
   const rows = Array.from(countsByPage.entries())
     .sort((a, b) => b[1] - a[1])
@@ -36,7 +37,7 @@ export function componentsSection(ds: DesignSystem): string {
   const rows = ds.components.map((c) => [
     c.name,
     c.isComponentSet ? 'Component Set' : 'Component',
-    c.pageName,
+    c.pageName.trim(),
     String(c.variants.length),
     c.states.join(', ') || '—',
     c.sizes.join(', ') || '—',

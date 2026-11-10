@@ -114,3 +114,23 @@ describe('generateDesignMd scope', () => {
     expect(generateDesignMd(ds).content).toContain('| Scope | Selected layers only');
   });
 });
+
+describe('design.md for a file with library styles and untidy page names', () => {
+  it('marks library styles in the style tables', () => {
+    const ds = makeDesignSystem();
+    ds.styles.text[0].library = true;
+    ds.styles.effect[0].library = true;
+    const md = generateDesignMd(ds).content;
+    expect(md).toContain(`${ds.styles.text[0].name} (library)`);
+    expect(md).toContain(`${ds.styles.effect[0].name} (library)`);
+    expect(md).not.toContain(`${ds.styles.color[0].name} (library)`);
+  });
+
+  it('trims page names, which designers often pad or prefix with spaces', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].pageName = '     Icons';
+    const md = generateDesignMd(ds).content;
+    expect(md).toContain('| Icons |');
+    expect(md).not.toContain('|      Icons');
+  });
+});

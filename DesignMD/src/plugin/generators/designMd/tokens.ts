@@ -2,6 +2,10 @@ import type { DesignSystem, VariableToken } from '@shared/types';
 import { joinSections, mdHeading, mdTable } from '../markdown';
 import { defaultModeValue, primitiveValue } from '../tokenValue';
 
+/** A style's name, marked when it comes from a library the file uses rather than being defined in it. */
+const styleLabel = (s: { name: string; library?: boolean }) =>
+  s.library ? `${s.name} (library)` : s.name;
+
 function defaultValueLabel(v: VariableToken): string {
   const first = defaultModeValue(v);
   if (!first) return '—';
@@ -45,7 +49,7 @@ export function colorTokensSection(ds: DesignSystem): string {
     ]);
   }
   const rows = styles.map((s) => [
-    s.name,
+    styleLabel(s),
     s.cssName,
     s.paint?.hex ?? (s.paintIsGradientOrImage ? 'gradient/image' : '—'),
     s.description || '—',
@@ -71,7 +75,7 @@ export function typographyTokensSection(ds: DesignSystem): string {
   const rows = styles.map((s) => {
     const p = s.textProperties;
     return [
-      s.name,
+      styleLabel(s),
       s.cssName,
       p?.fontFamily ?? '—',
       p ? String(p.fontSize) : '—',
@@ -107,7 +111,7 @@ export function effectTokensSection(ds: DesignSystem): string {
     ]);
   }
   const rows = styles.map((s) => [
-    s.name,
+    styleLabel(s),
     s.cssName,
     (s.effects ?? []).map((e) => e.type).join(', ') || '—',
     s.description || '—',
@@ -125,7 +129,7 @@ export function gridTokensSection(ds: DesignSystem): string {
     return joinSections([mdHeading(2, 'Grid Tokens'), '_No grid styles found._\n']);
   }
   const rows = styles.map((s) => [
-    s.name,
+    styleLabel(s),
     s.cssName,
     (s.grids ?? []).map((g) => g.pattern).join(', ') || '—',
     s.description || '—',

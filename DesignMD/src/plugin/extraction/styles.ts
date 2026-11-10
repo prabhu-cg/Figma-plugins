@@ -38,13 +38,16 @@ export function collectBoundVariableIds(boundVariables: unknown): string[] {
   return Array.from(new Set(ids));
 }
 
+/** Figma stores sizes as 32-bit floats, so 13.6 comes back as 13.600000381469727. */
+const tidy = (value: number) => Math.round(value * 100) / 100;
+
 function formatLineHeight(lineHeight: LineHeight): string {
   if (lineHeight.unit === 'AUTO') return 'AUTO';
-  return `${lineHeight.value}${lineHeight.unit === 'PERCENT' ? '%' : 'px'}`;
+  return `${tidy(lineHeight.value)}${lineHeight.unit === 'PERCENT' ? '%' : 'px'}`;
 }
 
 function formatLetterSpacing(letterSpacing: LetterSpacing): string {
-  return `${letterSpacing.value}${letterSpacing.unit === 'PERCENT' ? '%' : 'px'}`;
+  return `${tidy(letterSpacing.value)}${letterSpacing.unit === 'PERCENT' ? '%' : 'px'}`;
 }
 
 /**
@@ -75,12 +78,12 @@ function mapTextStyle(s: TextStyle): RawTextStyle {
     fontFamily: s.fontName?.family ?? 'Unknown',
     fontStyle: s.fontName?.style ?? 'Regular',
     fontWeight: fontWeightFromStyle(s.fontName?.style ?? 'Regular'),
-    fontSize: s.fontSize ?? 0,
+    fontSize: tidy(s.fontSize ?? 0),
     lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : 'AUTO',
     letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : '0px',
     textCase: s.textCase ?? 'ORIGINAL',
     textDecoration: s.textDecoration ?? 'NONE',
-    paragraphSpacing: s.paragraphSpacing ?? 0,
+    paragraphSpacing: tidy(s.paragraphSpacing ?? 0),
     boundVariableIds: boundVariablesOf(s),
   };
 }

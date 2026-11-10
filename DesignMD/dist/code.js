@@ -171,12 +171,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     visit(boundVariables);
     return Array.from(new Set(ids));
   }
+  const tidy = (value) => Math.round(value * 100) / 100;
   function formatLineHeight(lineHeight) {
     if (lineHeight.unit === "AUTO") return "AUTO";
-    return `${lineHeight.value}${lineHeight.unit === "PERCENT" ? "%" : "px"}`;
+    return `${tidy(lineHeight.value)}${lineHeight.unit === "PERCENT" ? "%" : "px"}`;
   }
   function formatLetterSpacing(letterSpacing) {
-    return `${letterSpacing.value}${letterSpacing.unit === "PERCENT" ? "%" : "px"}`;
+    return `${tidy(letterSpacing.value)}${letterSpacing.unit === "PERCENT" ? "%" : "px"}`;
   }
   async function extractStyles(label, load, map, onProgress, onWarning) {
     const styles = await safely(
@@ -195,12 +196,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? "Unknown",
       fontStyle: ((_b = s.fontName) == null ? void 0 : _b.style) ?? "Regular",
       fontWeight: fontWeightFromStyle(((_c = s.fontName) == null ? void 0 : _c.style) ?? "Regular"),
-      fontSize: s.fontSize ?? 0,
+      fontSize: tidy(s.fontSize ?? 0),
       lineHeight: s.lineHeight ? formatLineHeight(s.lineHeight) : "AUTO",
       letterSpacing: s.letterSpacing ? formatLetterSpacing(s.letterSpacing) : "0px",
       textCase: s.textCase ?? "ORIGINAL",
       textDecoration: s.textDecoration ?? "NONE",
-      paragraphSpacing: s.paragraphSpacing ?? 0,
+      paragraphSpacing: tidy(s.paragraphSpacing ?? 0),
       boundVariableIds: boundVariablesOf(s)
     };
   }
@@ -1943,6 +1944,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     }
     return { path: "tokens.css", content: sections.join("\n\n") + "\n" };
   }
+  const MAX_UNSCOPED_PAIRS = 400;
+  const groupOf = (name) => name.split("/").slice(0, -1).join("/");
   const MAX_REPORTED_PAIRS = 500;
   const AA_NORMAL_MIN_RATIO = 4.5;
   const AA_LARGE_MIN_RATIO = 3;
@@ -2056,14 +2059,23 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const { tokens, skippedTranslucentCount } = collectColorTokens(ds, modeName);
     const foregrounds = tokens.filter((t) => t.role === "foreground");
     const backgrounds = tokens.filter((t) => t.role === "background");
-    if (foregrounds.length > 0 && backgrounds.length > 0) {
+    const pairing = foregrounds.length * backgrounds.length > MAX_UNSCOPED_PAIRS ? "same-group" : "all";
+    const counts = {
+      pairing,
+      foregroundCount: foregrounds.length,
+      backgroundCount: backgrounds.length
+    };
+    const candidates = pairing === "same-group" ? foregrounds.flatMap(
+      (f) => backgrounds.filter((b) => groupOf(b.name) === groupOf(f.name)).map((b) => [f, b])
+    ) : foregrounds.flatMap((f) => backgrounds.map((b) => [f, b]));
+    if (candidates.length > 0) {
       let kept = [];
       let cutoff = Infinity;
       let totalPairs = 0;
       let passingNormalCount = 0;
       let failingLargeCount = 0;
-      for (const foreground of foregrounds) {
-        for (const background of backgrounds) {
+      {
+        for (const [foreground, background] of candidates) {
           if (foreground.name === background.name) continue;
           const ratio = contrastRatio(foreground.color, background.color);
           totalPairs += 1;
@@ -2086,6 +2098,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       }
       kept.sort((a, b) => a.ratio - b.ratio);
       return {
+        ...counts,
         pairs: kept.slice(0, MAX_REPORTED_PAIRS),
         totalPairs,
         passingNormalCount,
@@ -2109,6 +2122,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       (a, b) => Math.max(b.ratioOnWhite, b.ratioOnBlack) - Math.max(a.ratioOnWhite, a.ratioOnBlack)
     );
     return {
+      ...counts,
       pairs: [],
       totalPairs: 0,
       passingNormalCount: 0,
@@ -2182,6 +2196,11 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     }
     if (report.pairs.length > 0) {
       const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
+      if (report.pairing === "same-group") {
+        notes.push(
+          `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like color tokens, too many to pair every combination meaningfully. Pairs are only inferred between tokens in the same group (the same name up to the last "/", for example "Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"). Combinations across groups are not checked; add them in the plugin's Contrast tab.`
+        );
+      }
       notes.unshift(
         `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs FRAME_FILL/SHAPE_FILL scopes). ${report.passingNormalCount} of ${report.totalPairs} pair(s) meet WCAG AA for normal text (4.5:1).`
       );
@@ -2197,7 +2216,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       ]);
     }
     notes.unshift(
-      `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
+      report.pairing === "same-group" ? `No foreground-like token shares a group with a background-like one (${report.foregroundCount} and ${report.backgroundCount} tokens), so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.` : `No foreground/background roles could be inferred from token names or scopes, so every opaque color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`
     );
     return joinSections([
       mdList(notes),
@@ -2283,7 +2302,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const countsByPage = /* @__PURE__ */ new Map();
     for (const c of ds.components) {
       const count = c.isComponentSet ? c.variants.length : 1;
-      countsByPage.set(c.pageName, (countsByPage.get(c.pageName) ?? 0) + count);
+      const page = c.pageName.trim();
+      countsByPage.set(page, (countsByPage.get(page) ?? 0) + count);
     }
     const rows = Array.from(countsByPage.entries()).sort((a, b) => b[1] - a[1]).map(([page, count]) => [page, String(count)]);
     return joinSections([
@@ -2308,7 +2328,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       return [
         c.name,
         c.isComponentSet ? "Component Set" : "Component",
-        c.pageName,
+        c.pageName.trim(),
         String(c.variants.length),
         c.states.join(", ") || "—",
         c.sizes.join(", ") || "—",
@@ -2381,6 +2401,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       mdTable(["Collection", "Modes", "Variable Count"], rows)
     ]);
   }
+  const styleLabel = (s) => s.library ? `${s.name} (library)` : s.name;
   function defaultValueLabel(v) {
     const first = defaultModeValue(v);
     if (!first) return "—";
@@ -2419,7 +2440,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const rows = styles.map((s) => {
       var _a;
       return [
-        s.name,
+        styleLabel(s),
         s.cssName,
         ((_a = s.paint) == null ? void 0 : _a.hex) ?? (s.paintIsGradientOrImage ? "gradient/image" : "—"),
         s.description || "—"
@@ -2444,7 +2465,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const rows = styles.map((s) => {
       const p = s.textProperties;
       return [
-        s.name,
+        styleLabel(s),
         s.cssName,
         (p == null ? void 0 : p.fontFamily) ?? "—",
         p ? String(p.fontSize) : "—",
@@ -2477,7 +2498,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       ]);
     }
     const rows = styles.map((s) => [
-      s.name,
+      styleLabel(s),
       s.cssName,
       (s.effects ?? []).map((e) => e.type).join(", ") || "—",
       s.description || "—"
@@ -2494,7 +2515,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       return joinSections([mdHeading(2, "Grid Tokens"), "_No grid styles found._\n"]);
     }
     const rows = styles.map((s) => [
-      s.name,
+      styleLabel(s),
       s.cssName,
       (s.grids ?? []).map((g) => g.pattern).join(", ") || "—",
       s.description || "—"
@@ -3217,6 +3238,25 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       modesCount: modeIds.size
     };
   }
+  function makeCssNamesUnique(variables, styles) {
+    const taken = /* @__PURE__ */ new Set();
+    let renamed = 0;
+    const claim = (token) => {
+      if (!taken.has(token.cssName)) {
+        taken.add(token.cssName);
+        return;
+      }
+      const base = token.cssName;
+      let n = 2;
+      while (taken.has(`${base}-${n}`)) n++;
+      token.cssName = `${base}-${n}`;
+      taken.add(token.cssName);
+      renamed++;
+    };
+    variables.forEach(claim);
+    [...styles.text, ...styles.color, ...styles.effect, ...styles.grid].forEach(claim);
+    return { renamed };
+  }
   const PLUGIN_VERSION = "1.1.0";
   function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
@@ -3254,6 +3294,12 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       components
     );
     const styles = computeStyleUsage(rawStyles, components);
+    const { renamed } = makeCssNamesUnique(variables, styles);
+    if (renamed > 0) {
+      warnings.push(
+        `${renamed} token(s) had a CSS name another token already had (names differ only in characters that CSS names drop), so a numeric suffix was added to keep every CSS variable distinct.`
+      );
+    }
     const base = { collections, variables, styles, components };
     return {
       metadata: {

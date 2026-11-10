@@ -37,7 +37,22 @@ export interface FallbackContrastCheck {
   passesOnBlack: boolean;
 }
 
+/**
+ * Above this many foreground x background combinations, pairing every token with every other stops
+ * meaning anything (a text color of one component against the background of an unrelated one), so
+ * pairs are only inferred between tokens in the same group.
+ */
+export const MAX_UNSCOPED_PAIRS = 400;
+
+/** The group a token name sits in: everything before the last "/". */
+const groupOf = (name: string) => name.split('/').slice(0, -1).join('/');
+
 export interface ContrastReport {
+  /** How pairs were inferred: every foreground with every background, or only within the same group. */
+  pairing: 'all' | 'same-group';
+  /** How many foreground-like and background-like tokens there were to pair. */
+  foregroundCount: number;
+  backgroundCount: number;
   /**
    * Lowest-contrast foreground x background pairs (worst first), capped at MAX_REPORTED_PAIRS.
    * Only populated when both roles could be inferred; the totals below cover every pair.
@@ -212,15 +227,32 @@ export function computeContrastReport(ds: DesignSystem, modeName?: string): Cont
   const foregrounds = tokens.filter((t) => t.role === 'foreground');
   const backgrounds = tokens.filter((t) => t.role === 'background');
 
-  if (foregrounds.length > 0 && backgrounds.length > 0) {
+  const pairing: ContrastReport['pairing'] =
+    foregrounds.length * backgrounds.length > MAX_UNSCOPED_PAIRS ? 'same-group' : 'all';
+  const counts = {
+    pairing,
+    foregroundCount: foregrounds.length,
+    backgroundCount: backgrounds.length,
+  };
+
+  const candidates =
+    pairing === 'same-group'
+      ? foregrounds.flatMap((f) =>
+          backgrounds
+            .filter((b) => groupOf(b.name) === groupOf(f.name))
+            .map((b) => [f, b] as const),
+        )
+      : foregrounds.flatMap((f) => backgrounds.map((b) => [f, b] as const));
+
+  if (candidates.length > 0) {
     let kept: ContrastPair[] = [];
     let cutoff = Infinity;
     let totalPairs = 0;
     let passingNormalCount = 0;
     let failingLargeCount = 0;
 
-    for (const foreground of foregrounds) {
-      for (const background of backgrounds) {
+    {
+      for (const [foreground, background] of candidates) {
         if (foreground.name === background.name) continue;
         const ratio = contrastRatio(foreground.color, background.color);
         totalPairs += 1;
@@ -244,6 +276,7 @@ export function computeContrastReport(ds: DesignSystem, modeName?: string): Cont
 
     kept.sort((a, b) => a.ratio - b.ratio);
     return {
+      ...counts,
       pairs: kept.slice(0, MAX_REPORTED_PAIRS),
       totalPairs,
       passingNormalCount,
@@ -271,6 +304,7 @@ export function computeContrastReport(ds: DesignSystem, modeName?: string): Cont
     );
 
   return {
+    ...counts,
     pairs: [],
     totalPairs: 0,
     passingNormalCount: 0,

@@ -16,6 +16,7 @@ import {
 } from './variables';
 import { computeStyleUsage, computeVariableUsage, mergeStyleBoundVariables } from './usage';
 import { buildSummary } from './summary';
+import { makeCssNamesUnique } from './uniqueNames';
 
 const PLUGIN_VERSION = '1.1.0';
 
@@ -66,6 +67,12 @@ export function transformToDesignSystem(
   );
 
   const styles = computeStyleUsage(rawStyles, components);
+  const { renamed } = makeCssNamesUnique(variables, styles);
+  if (renamed > 0) {
+    warnings.push(
+      `${renamed} token(s) had a CSS name another token already had (names differ only in characters that CSS names drop), so a numeric suffix was added to keep every CSS variable distinct.`,
+    );
+  }
   const base = { collections, variables, styles, components };
 
   return {

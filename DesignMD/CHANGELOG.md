@@ -26,6 +26,16 @@
 
 ### Changed
 
+- CSS names that collapse to the same name (names that differ only in characters CSS names drop, such
+  as `divider ↓` and `divider ↑`) now get a numeric suffix, so every CSS variable is distinct. Before,
+  `tokens.css` kept only the last of them and a `cssName` in `components.json` could mean several tokens.
+- Contrast: in a file with very many foreground-like and background-like colour tokens (more than 400
+  combinations), pairs are only inferred between tokens in the same group, so an unrelated component's
+  text colour is no longer reported as failing against another's background. `design.md` says which
+  mode was used.
+- Font sizes, line heights, letter spacing and paragraph spacing from text styles are rounded to 2
+  decimals (Figma returns 13.600000381469727 for 13.6).
+- `design.md` marks library styles with "(library)" and trims padded page names.
 - Styles that components use from a library the file has imported are now read (by id) and become tokens
   in `components.json`, flagged `library: true`, and in `tokens.json` (`$extensions.figma.library`).
   Before, their token link was dropped with a warning. A style from a library that is not available is

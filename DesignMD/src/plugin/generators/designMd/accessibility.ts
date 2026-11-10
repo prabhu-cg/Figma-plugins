@@ -54,6 +54,15 @@ function contrastBody(report: ContrastReport, level: number): string {
 
   if (report.pairs.length > 0) {
     const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
+    if (report.pairing === 'same-group') {
+      notes.push(
+        `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like ` +
+          'color tokens, too many to pair every combination meaningfully. Pairs are only inferred between ' +
+          'tokens in the same group (the same name up to the last "/", for example ' +
+          '"Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"). ' +
+          "Combinations across groups are not checked; add them in the plugin's Contrast tab.",
+      );
+    }
     notes.unshift(
       `Checked ${report.totalPairs} foreground/background token pair(s), inferred from naming ` +
         'conventions and variable scopes (e.g. "Text/*" vs "Surface/*" names, or TEXT_FILL vs ' +
@@ -75,8 +84,12 @@ function contrastBody(report: ContrastReport, level: number): string {
   }
 
   notes.unshift(
-    'No foreground/background roles could be inferred from token names or scopes, so every opaque ' +
-      `color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`,
+    report.pairing === 'same-group'
+      ? `No foreground-like token shares a group with a background-like one (${report.foregroundCount} and ` +
+          `${report.backgroundCount} tokens), so every opaque color token (${report.totalColorTokensChecked}) was ` +
+          'checked against pure white and pure black instead.'
+      : 'No foreground/background roles could be inferred from token names or scopes, so every opaque ' +
+          `color token (${report.totalColorTokensChecked}) was checked against pure white and pure black instead.`,
   );
   return joinSections([
     mdList(notes),

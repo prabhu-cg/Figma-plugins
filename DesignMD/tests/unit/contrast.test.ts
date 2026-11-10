@@ -424,3 +424,69 @@ describe('defined contrast pairs', () => {
     expect(generateDesignMd(makeDesignSystem()).content).not.toContain('Defined Pairs');
   });
 });
+
+describe('pairing in a system with very many color tokens', () => {
+  const color = (hex: string) => ({
+    hex,
+    r: parseInt(hex.slice(1, 3), 16) / 255,
+    g: parseInt(hex.slice(3, 5), 16) / 255,
+    b: parseInt(hex.slice(5, 7), 16) / 255,
+    a: 1,
+  });
+  const colorStyle = (name: string, hex: string) => ({
+    id: `S:${name}`,
+    name,
+    path: name.split('/'),
+    type: 'PAINT' as const,
+    description: '',
+    cssName: `--${name.replace(/\W+/g, '-').toLowerCase()}`,
+    paint: color(hex),
+  });
+  const build = (groups: number) => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = Array.from({ length: groups }, (_, g) => [
+      colorStyle(`Components/G${g}/Text`, '#111111'),
+      colorStyle(`Components/G${g}/Background`, '#fafafa'),
+    ]).flat();
+    return ds;
+  };
+
+  it('pairs every foreground with every background while the combinations are few', () => {
+    const report = computeContrastReport(build(5)); // 5 x 5 = 25
+    expect(report.pairing).toBe('all');
+    expect(report.totalPairs).toBe(25);
+  });
+
+  it('only pairs tokens in the same group once there are too many combinations', () => {
+    const report = computeContrastReport(build(30)); // 30 x 30 = 900 > 400
+    expect(report.pairing).toBe('same-group');
+    expect(report.foregroundCount).toBe(30);
+    expect(report.backgroundCount).toBe(30);
+    expect(report.totalPairs).toBe(30); // one Text/Background pair per group
+    for (const p of report.pairs) {
+      expect(p.foreground.name.split('/')[1]).toBe(p.background.name.split('/')[1]);
+    }
+  });
+
+  it('says so in design.md, instead of reporting unrelated pairs as failures', () => {
+    const md = generateDesignMd(build(30)).content;
+    expect(md).toContain('too many to pair every combination meaningfully');
+    expect(md).toContain('Combinations across groups are not checked');
+    expect(md).toContain('Checked 30 foreground/background token pair');
+  });
+
+  it('falls back to white and black when no foreground shares a group with a background', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = [
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Text/T${i}`, '#111111')),
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Surface/S${i}`, '#fafafa')),
+    ];
+    const report = computeContrastReport(ds); // 625 combinations, no shared group
+    expect(report.pairing).toBe('same-group');
+    expect(report.totalPairs).toBe(0);
+    expect(report.fallbackChecks.length).toBe(50);
+    expect(generateDesignMd(ds).content).toContain('No foreground-like token shares a group');
+  });
+});

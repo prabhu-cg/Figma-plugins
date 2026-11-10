@@ -53,6 +53,26 @@ describe('extractTextStyles', () => {
     });
   });
 
+  it('tidies the 32-bit float noise Figma returns for sizes', async () => {
+    installFakeFigma({
+      textStyles: [
+        fakeTextStyle({
+          fontSize: 13.600000381469727,
+          lineHeight: { unit: 'PERCENT', value: 120.00000476837158 },
+          letterSpacing: { unit: 'PIXELS', value: 0.30000001192092896 },
+          paragraphSpacing: 7.099999904632568,
+        }),
+      ],
+    });
+    const [style] = await extractTextStyles();
+    expect(style).toMatchObject({
+      fontSize: 13.6,
+      lineHeight: '120%',
+      letterSpacing: '0.3px',
+      paragraphSpacing: 7.1,
+    });
+  });
+
   it('formats AUTO, pixel, and percent line heights and letter spacing', async () => {
     installFakeFigma({
       textStyles: [
