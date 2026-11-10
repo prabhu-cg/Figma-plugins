@@ -26,6 +26,20 @@
 
 ### Changed
 
+- A library text style whose font Figma does not report now takes it from a text layer that uses the
+  style (works for any file with library text styles). If no layer can say, the family stays unknown and
+  is left out of `tokens.css` and `tokens.json` and shown as "—" in `design.md`, instead of being written
+  as the value "Unknown".
+- `tokens.css` now also declares a style a component uses (or a library style) when the file has
+  variables for that kind of token. Before, a file with a few colour variables and hundreds of colour
+  styles got no CSS for the styles, although `components.json` named them. A test now checks that every
+  custom property `components.json` refers to is declared.
+- Library styles go under a `library` branch in `tokens.json`, so one cannot overwrite a local style of
+  the same name (four local styles were missing from `tokens.json` for that reason).
+- Component docs: the Variants table shows at most 40 rows (a set can have hundreds; the Properties table
+  already lists every option), and Token References lists the styles a component uses, not only
+  variables, with library styles marked.
+- Generate and Scan scroll the panel to the top so the progress bar is in view.
 - CSS names that collapse to the same name (names that differ only in characters CSS names drop, such
   as `divider ↓` and `divider ↑`) now get a numeric suffix, so every CSS variable is distinct. Before,
   `tokens.css` kept only the last of them and a `cssName` in `components.json` could mean several tokens.

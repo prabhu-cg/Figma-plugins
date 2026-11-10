@@ -396,6 +396,17 @@ describe('a token-rich design system, end to end', () => {
     );
   });
 
+  it('defines, in tokens.css, every custom property components.json refers to', async () => {
+    const { componentsJson, get } = await scan();
+    const css = get('tokens.css');
+    const tokens = Object.values(componentsJson.tokens);
+    expect(tokens.length).toBeGreaterThan(3);
+    for (const t of tokens) {
+      const declared = t.type === 'typography' ? `${t.cssName}-font-size:` : `${t.cssName}:`; // text styles are split into parts
+      expect(css, `${t.cssName} (${t.type}) is declared in tokens.css`).toContain(declared);
+    }
+  });
+
   it('writes colour channels as 0 to 255, matching the hex', async () => {
     const { componentsJson } = await scan();
     const colours = Object.values(componentsJson.tokens).filter(

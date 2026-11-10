@@ -325,6 +325,27 @@ describe('App: components.json option', () => {
   });
 });
 
+describe('App: generate scrolls to the progress', () => {
+  it('brings the top of the panel into view when Generate or Scan is pressed', () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      value: scrollTo,
+      configurable: true,
+    });
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+      fromPlugin({ type: 'extraction-complete', designSystem: makeDesignSystem() });
+      scrollTo.mockClear();
+      fireEvent.click(screen.getByRole('button', { name: 'Generate' }));
+      expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
+    } finally {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollTo;
+    }
+  });
+});
+
 describe('App: tabs', () => {
   it("starts each tab at the top instead of keeping the previous tab's scroll position", () => {
     const scrollTo = vi.fn();

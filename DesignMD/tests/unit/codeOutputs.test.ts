@@ -107,6 +107,59 @@ describe('generateCssFile', () => {
   });
 });
 
+describe('tokens.css for a file with some variables and many styles', () => {
+  it('writes a color style a component uses even though color variables exist', () => {
+    const ds = makeDesignSystem();
+    const style = ds.styles.color[0];
+    style.usedByComponents = ['Button'];
+    const css = generateCssFile(ds).content;
+    expect(css).toContain(`${style.cssName}: ${style.paint!.hex};`);
+  });
+
+  it('leaves out a color style no component uses when color variables exist', () => {
+    const ds = makeDesignSystem();
+    const style = ds.styles.color[0];
+    style.usedByComponents = [];
+    expect(generateCssFile(ds).content).not.toContain(`${style.cssName}:`);
+  });
+
+  it('writes a library style, and keeps it apart from a local style with the same name', () => {
+    const ds = makeDesignSystem();
+    const local = ds.styles.color[0];
+    local.usedByComponents = ['Button'];
+    ds.styles.color.push({
+      ...local,
+      id: 'S:library,1:2',
+      library: true,
+      cssName: `${local.cssName}-2`,
+      paint: { hex: '#ff0000', r: 1, g: 0, b: 0, a: 1 },
+    });
+    const css = generateCssFile(ds).content;
+    expect(css).toContain(`${local.cssName}: ${local.paint!.hex};`);
+    expect(css).toContain(`${local.cssName}-2: #ff0000;`);
+  });
+
+  it('writes a text style a component uses even though typography variables exist', () => {
+    const ds = makeDesignSystem();
+    ds.variables.push(
+      variable({
+        id: 'ty',
+        name: 'Typography/Size',
+        path: ['Typography', 'Size'],
+        resolvedType: 'FLOAT',
+        category: 'typography',
+        cssName: '--typography-size',
+        valuesByMode: [mode('Light', { kind: 'float', value: 16 })],
+      }),
+    );
+    const style = ds.styles.text[0];
+    style.usedByComponents = ['Button'];
+    expect(generateCssFile(ds).content).toContain(`${style.cssName}-font-size:`);
+    style.usedByComponents = [];
+    expect(generateCssFile(ds).content).not.toContain(`${style.cssName}-font-size:`);
+  });
+});
+
 describe('generateOutputs with code outputs', () => {
   it('is opt-in: none of the new files are in the default selection', () => {
     expect(DEFAULT_EXPORT_OPTIONS.cssFile).toBe(false);

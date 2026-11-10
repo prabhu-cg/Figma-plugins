@@ -3,6 +3,11 @@ import type { ComponentDoc, DesignSystem } from '@shared/types';
 import type { GeneratedFile } from '@shared/messages';
 import { joinSections, mdHeading, mdList, mdTable } from './markdown';
 
+/** A set can have hundreds of variants; past this many rows the table is noise, since every option is in Properties. */
+const MAX_VARIANT_ROWS = 40;
+/** Same idea for the tokens a component uses. */
+const MAX_TOKEN_ROWS = 60;
+
 function variantsSection(c: ComponentDoc): string {
   if (
     c.variants.length === 0 ||
@@ -16,11 +21,20 @@ function variantsSection(c: ComponentDoc): string {
   const propertyNames = Array.from(
     new Set(c.variants.flatMap((v) => Object.keys(v.variantProperties))),
   );
-  const rows = c.variants.map((v) => [
+  const shown = c.variants.slice(0, MAX_VARIANT_ROWS);
+  const rows = shown.map((v) => [
     v.name,
     ...propertyNames.map((p) => v.variantProperties[p] ?? '—'),
   ]);
-  return joinSections([mdHeading(2, 'Variants'), mdTable(['Variant', ...propertyNames], rows)]);
+  const note =
+    c.variants.length > shown.length
+      ? `_Showing the first ${shown.length} of ${c.variants.length} variants. The Properties table below lists every option of each variant property; components.json lists all variants when it is exported._\n`
+      : '';
+  return joinSections([
+    mdHeading(2, 'Variants'),
+    mdTable(['Variant', ...propertyNames], rows),
+    note,
+  ]);
 }
 
 function layoutSection(c: ComponentDoc): string {
@@ -103,20 +117,38 @@ function usageGuidelinesSection(c: ComponentDoc): string {
 }
 
 function tokenReferencesSection(c: ComponentDoc, ds: DesignSystem): string {
-  if (c.boundVariableIds.length === 0) {
-    return joinSections([
-      mdHeading(2, 'Token References'),
-      '_No bound variables were detected on this component._\n',
-    ]);
-  }
   const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
-  const rows = c.boundVariableIds.map((id) => {
+  const stylesById = new Map(
+    [...ds.styles.text, ...ds.styles.color, ...ds.styles.effect, ...ds.styles.grid].map((s) => [
+      s.id,
+      s,
+    ]),
+  );
+  const variableRows = c.boundVariableIds.map((id) => {
     const v = variablesById.get(id);
     return v ? [v.name, v.cssName, v.category] : [id, '—', 'unresolved'];
   });
+  // Styles count as tokens too: in a file built on styles they are most of what a component uses.
+  const styleRows = (c.styleIds ?? []).flatMap((id) => {
+    const s = stylesById.get(id);
+    return s
+      ? [[s.library ? `${s.name} (library)` : s.name, s.cssName, `${s.type.toLowerCase()} style`]]
+      : [];
+  });
+  const all = [...variableRows, ...styleRows];
+  if (all.length === 0) {
+    return joinSections([
+      mdHeading(2, 'Token References'),
+      '_No bound variables or styles were detected on this component._\n',
+    ]);
+  }
+  const shown = all.slice(0, MAX_TOKEN_ROWS);
   return joinSections([
     mdHeading(2, 'Token References'),
-    mdTable(['Token', 'CSS Variable', 'Category'], rows),
+    mdTable(['Token', 'CSS Variable', 'Category'], shown),
+    all.length > shown.length
+      ? `_Showing ${shown.length} of ${all.length} tokens this component uses._\n`
+      : '',
   ]);
 }
 

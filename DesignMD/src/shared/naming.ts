@@ -106,3 +106,10 @@ export function rgbaToHex(r: number, g: number, b: number, a: number): string {
 export function cleanPropertyName(key: string): string {
   return key.replace(/#\d+:\d+$/, '');
 }
+
+/** What a text style's font family is recorded as when Figma does not give it (some library styles). */
+export const UNKNOWN_FONT = 'Unknown';
+
+/** True for a real font family; false for the placeholder, which must not be written as a value. */
+export const isKnownFont = (family: string | undefined): family is string =>
+  !!family && family !== UNKNOWN_FONT;

@@ -1,4 +1,5 @@
 import type { DesignSystem, VariableToken } from '@shared/types';
+import { isKnownFont } from '@shared/naming';
 import { joinSections, mdHeading, mdTable } from '../markdown';
 import { defaultModeValue, primitiveValue } from '../tokenValue';
 
@@ -77,7 +78,7 @@ export function typographyTokensSection(ds: DesignSystem): string {
     return [
       styleLabel(s),
       s.cssName,
-      p?.fontFamily ?? '—',
+      isKnownFont(p?.fontFamily) ? p.fontFamily : '—',
       p ? String(p.fontSize) : '—',
       p?.fontWeight !== undefined ? String(p.fontWeight) : '—',
       p?.lineHeight ?? '—',

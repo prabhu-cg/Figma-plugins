@@ -1,4 +1,4 @@
-import { fontWeightFromStyle } from '@shared/naming';
+import { UNKNOWN_FONT, fontWeightFromStyle } from '@shared/naming';
 import { processInBatches, safely } from '../utils/async';
 import type {
   RawEffect,
@@ -75,7 +75,7 @@ function mapTextStyle(s: TextStyle): RawTextStyle {
     id: s.id,
     name: s.name,
     description: s.description ?? '',
-    fontFamily: s.fontName?.family ?? 'Unknown',
+    fontFamily: s.fontName?.family ?? UNKNOWN_FONT,
     fontStyle: s.fontName?.style ?? 'Regular',
     fontWeight: fontWeightFromStyle(s.fontName?.style ?? 'Regular'),
     fontSize: tidy(s.fontSize ?? 0),
@@ -191,6 +191,25 @@ export function extractGridStyles(onProgress?: ProgressFn, onWarning?: WarnFn) {
   );
 }
 
+/** The font a text layer uses, for filling in a library text style that did not report one. */
+async function fontOfTextLayer(
+  nodeId: string,
+): Promise<Partial<Pick<RawTextStyle, 'fontFamily' | 'fontStyle' | 'fontWeight'>>> {
+  try {
+    const node = (await figma.getNodeByIdAsync(nodeId)) as TextNode | null;
+    if (!node || node.type !== 'TEXT') return {};
+    // fontName is figma.mixed (a symbol) when the layer mixes fonts; the first character's will do.
+    let font: unknown = node.fontName;
+    if (typeof font !== 'object' || font === null) font = node.getRangeFontName(0, 1);
+    const { family, style } = font as { family?: unknown; style?: unknown };
+    if (typeof family !== 'string' || family === '') return {};
+    const fontStyle = typeof style === 'string' ? style : 'Regular';
+    return { fontFamily: family, fontStyle, fontWeight: fontWeightFromStyle(fontStyle) };
+  } catch {
+    return {};
+  }
+}
+
 export interface LibraryStyles {
   text: RawTextStyle[];
   paint: RawPaintStyle[];
@@ -206,7 +225,11 @@ export interface LibraryStyles {
  * Reads the styles components use that are not defined in this file: styles from a library the file
  * has imported. Local styles are listed by getLocal*StylesAsync; these are only reachable by id.
  */
-export async function extractLibraryStyles(ids: readonly string[]): Promise<LibraryStyles> {
+export async function extractLibraryStyles(
+  ids: readonly string[],
+  /** For text styles: the id of one text layer that uses each style, to read the font from. */
+  textSamples: Readonly<Record<string, string>> = {},
+): Promise<LibraryStyles> {
   const found: LibraryStyles = {
     text: [],
     paint: [],
@@ -232,9 +255,15 @@ export async function extractLibraryStyles(ids: readonly string[]): Promise<Libr
     // reference finds it.
     if (style.id !== id) found.idMismatches.push({ requested: id, returned: style.id });
     switch (style.type) {
-      case 'TEXT':
-        found.text.push({ ...mapTextStyle(style as TextStyle), id, library: true });
+      case 'TEXT': {
+        const mapped = { ...mapTextStyle(style as TextStyle), id, library: true };
+        // Figma does not always give a library text style's font. A text layer that uses it does.
+        if (mapped.fontFamily === UNKNOWN_FONT && textSamples[id]) {
+          Object.assign(mapped, await fontOfTextLayer(textSamples[id]));
+        }
+        found.text.push(mapped);
         break;
+      }
       case 'PAINT':
         found.paint.push({ ...mapPaintStyle(style as PaintStyle), id, library: true });
         break;

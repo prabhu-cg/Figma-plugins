@@ -1,3 +1,4 @@
+import { isKnownFont } from '@shared/naming';
 import type {
   DesignSystem,
   EffectValue,
@@ -44,7 +45,10 @@ function textStyleToCssVars(style: StyleToken): Record<string, string> {
   const props = style.textProperties;
   if (!props) return {};
   return {
-    [`${style.cssName}-font-family`]: cssFontFamily(props.fontFamily),
+    // An unknown family is left out: "Unknown" is not a font, and would break the cascade.
+    ...(isKnownFont(props.fontFamily)
+      ? { [`${style.cssName}-font-family`]: cssFontFamily(props.fontFamily) }
+      : {}),
     [`${style.cssName}-font-weight`]: String(props.fontWeight),
     [`${style.cssName}-font-size`]: `${props.fontSize}px`,
     [`${style.cssName}-line-height`]: props.lineHeight === 'AUTO' ? 'normal' : props.lineHeight,
@@ -103,14 +107,18 @@ export function buildCssVariableMaps(ds: DesignSystem): CssVariableMaps {
   addVariableVars(root, ds.variables);
   addVariableModeVars(modes, ds.variables);
 
-  // Styles only fill in where there's no variable of that kind (variables are the source of truth).
-  if (!ds.variables.some((v) => v.category === 'color')) {
-    for (const s of ds.styles.color) {
-      if (s.paint) root[s.cssName] = s.paint.hex;
-    }
+  // Variables are the source of truth for a kind of token. Styles fill in where there are none, and
+  // are also written when a component uses them (or they come from a library): components.json names
+  // such a style by its CSS name, so that custom property has to exist.
+  const wanted = (hasVariables: boolean, s: StyleToken) =>
+    !hasVariables || (s.usedByComponents?.length ?? 0) > 0 || !!s.library;
+  const hasColorVariables = ds.variables.some((v) => v.category === 'color');
+  for (const s of ds.styles.color) {
+    if (s.paint && wanted(hasColorVariables, s)) root[s.cssName] = s.paint.hex;
   }
-  if (!ds.variables.some((v) => v.category === 'typography')) {
-    for (const s of ds.styles.text) Object.assign(root, textStyleToCssVars(s));
+  const hasTypographyVariables = ds.variables.some((v) => v.category === 'typography');
+  for (const s of ds.styles.text) {
+    if (wanted(hasTypographyVariables, s)) Object.assign(root, textStyleToCssVars(s));
   }
   for (const s of ds.styles.effect) {
     const shadowSegments = (s.effects ?? [])

@@ -120,7 +120,11 @@ export async function extractDesignSystem(
   if (libraryIds.length > 0) {
     const library = await timed(
       'library styles',
-      () => extractLibraryStyles(libraryIds),
+      () =>
+        extractLibraryStyles(
+          libraryIds,
+          Object.assign({}, ...components.map((c) => c.textStyleSamples ?? {})),
+        ),
       (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length,
     );
     if (library.idMismatches.length > 0) {

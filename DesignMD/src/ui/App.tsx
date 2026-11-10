@@ -66,6 +66,8 @@ export default function App() {
   const assembler = useRef(new ChunkAssembler());
   // The Generate press in progress: waits for the plugin's files and the component layers.
   const run = useRef<GenerationRun | null>(null);
+  // The scrolling panel, so a new tab or a new run can start at the top.
+  const contentRef = useRef<HTMLDivElement>(null);
   const [designSystem, setDesignSystem] = useState<DesignSystem | null>(null);
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
   const [failures, setFailures] = useState<OutputFailure[]>([]);
@@ -202,6 +204,7 @@ export default function App() {
   });
 
   const handleScan = useCallback(() => {
+    contentRef.current?.scrollTo?.({ top: 0 });
     setError(null);
     setStatus('extracting');
     setOutdated(false);
@@ -271,6 +274,8 @@ export default function App() {
   }, []);
 
   const handleGenerate = useCallback(() => {
+    // The progress bar sits at the top of the panel; bring it into view if the list was scrolled.
+    contentRef.current?.scrollTo?.({ top: 0 });
     setError(null);
     assembler.current.reset();
     setStatus('generating');
@@ -316,7 +321,6 @@ export default function App() {
   const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'summary';
 
   // A new tab starts at the top; the panel would otherwise keep the previous tab's scroll position.
-  const contentRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     contentRef.current?.scrollTo?.({ top: 0 });
   }, [currentTab]);

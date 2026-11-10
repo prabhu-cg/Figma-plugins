@@ -1,3 +1,4 @@
+import { isKnownFont } from '@shared/naming';
 import { toPathSegments } from '@shared/naming';
 import type {
   DesignSystem,
@@ -188,7 +189,7 @@ function styleToLeaf(style: StyleToken, category: TokenCategory): TokenTreeEntry
     if (!p) return null;
     type = 'typography';
     const typography: { [key: string]: JsonValue } = {
-      fontFamily: p.fontFamily,
+      ...(isKnownFont(p.fontFamily) ? { fontFamily: p.fontFamily } : {}),
       fontSize: `${p.fontSize}px`,
       fontWeight: p.fontWeight,
       letterSpacing: letterSpacingToPx(p.letterSpacing, p.fontSize),
@@ -260,6 +261,13 @@ function buildCategorySection(
       .map((s) => styleToLeaf(s, category))
       .filter((e): e is TokenTreeEntry<JsonLeaf> => e !== null);
 
+  // A library style can share its name with a style the file defines (a copy of the library's
+  // "Body/Regular" next to the file's own); in the same tree one would overwrite the other.
+  const local = styles.filter((s) => !s.library);
+  const library = styles.filter((s) => s.library);
+  const underLibrary = (list: typeof styles) =>
+    toLeaves(list).map((e) => ({ ...e, path: ['library', ...e.path] }));
+
   let entries: TokenTreeEntry<JsonLeaf>[];
   if (variables.length > 0) {
     entries = variables.map((v) => variableToLeaf(v, ctx));
@@ -267,12 +275,14 @@ function buildCategorySection(
     // component refers to (components.json lists it by id), so it must be findable. They go under
     // "styles" so a style named like a variable cannot collide with it.
     entries.push(
-      ...toLeaves(styles.filter((s) => (s.usedByComponents?.length ?? 0) > 0 || s.library)).map(
-        (e) => ({ ...e, path: ['styles', ...e.path] }),
-      ),
+      ...toLeaves(local.filter((s) => (s.usedByComponents?.length ?? 0) > 0)).map((e) => ({
+        ...e,
+        path: ['styles', ...e.path],
+      })),
+      ...underLibrary(library).map((e) => ({ ...e, path: ['styles', ...e.path] })),
     );
   } else {
-    entries = toLeaves(styles);
+    entries = [...toLeaves(local), ...underLibrary(library)];
   }
 
   return buildTokenTree(entries, isJsonLeaf);

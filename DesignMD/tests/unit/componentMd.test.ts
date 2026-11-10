@@ -57,6 +57,47 @@ describe('generateComponentDocs', () => {
     expect(file.content).toContain('| trailing | INSTANCE_SWAP | — |');
   });
 
+  it('caps the Variants table for a big set and points to the Properties table', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].variants = Array.from({ length: 420 }, (_, i) => ({
+      id: `v${i}`,
+      name: `Size=${i}`,
+      description: '',
+      variantProperties: { Size: String(i) },
+    }));
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).toContain('Showing the first 40 of 420 variants');
+    expect(file.content).toContain('Size=39 |');
+    expect(file.content).not.toContain('Size=40 |');
+    expect(file.content.length).toBeLessThan(20_000);
+  });
+
+  it('does not add a note when every variant is shown', () => {
+    const ds = makeDesignSystem();
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).not.toContain('Showing the first');
+  });
+
+  it('lists the styles a component uses in Token References, library styles marked', () => {
+    const ds = makeDesignSystem();
+    const text = ds.styles.text[0];
+    const color = ds.styles.color[0];
+    text.library = true;
+    ds.components[0].styleIds = [text.id, color.id, 'S:missing'];
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).toContain(`| ${text.name} (library) | ${text.cssName} | text style |`);
+    expect(file.content).toContain(`| ${color.name} | ${color.cssName} | paint style |`);
+    expect(file.content).not.toContain('S:missing');
+  });
+
+  it('says so when a component uses neither variables nor styles', () => {
+    const ds = makeDesignSystem();
+    ds.components[0].boundVariableIds = [];
+    ds.components[0].styleIds = [];
+    const [file] = generateComponentDocs(ds);
+    expect(file.content).toContain('No bound variables or styles were detected on this component.');
+  });
+
   it('disambiguates two components that sanitize to the same file name', () => {
     const ds = makeDesignSystem();
     ds.components = [...ds.components, { ...ds.components[0], id: 'dup', name: 'Button' }];

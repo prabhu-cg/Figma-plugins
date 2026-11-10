@@ -147,6 +147,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   function cleanPropertyName(key) {
     return key.replace(/#\d+:\d+$/, "");
   }
+  const UNKNOWN_FONT = "Unknown";
+  const isKnownFont = (family) => !!family && family !== UNKNOWN_FONT;
   const STYLE_BATCH_SIZE = 200;
   function boundVariablesOf(node) {
     return collectBoundVariableIds(node.boundVariables);
@@ -193,7 +195,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       id: s.id,
       name: s.name,
       description: s.description ?? "",
-      fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? "Unknown",
+      fontFamily: ((_a = s.fontName) == null ? void 0 : _a.family) ?? UNKNOWN_FONT,
       fontStyle: ((_b = s.fontName) == null ? void 0 : _b.style) ?? "Regular",
       fontWeight: fontWeightFromStyle(((_c = s.fontName) == null ? void 0 : _c.style) ?? "Regular"),
       fontSize: tidy(s.fontSize ?? 0),
@@ -296,7 +298,21 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       onWarning
     );
   }
-  async function extractLibraryStyles(ids) {
+  async function fontOfTextLayer(nodeId) {
+    try {
+      const node = await figma.getNodeByIdAsync(nodeId);
+      if (!node || node.type !== "TEXT") return {};
+      let font = node.fontName;
+      if (typeof font !== "object" || font === null) font = node.getRangeFontName(0, 1);
+      const { family, style } = font;
+      if (typeof family !== "string" || family === "") return {};
+      const fontStyle = typeof style === "string" ? style : "Regular";
+      return { fontFamily: family, fontStyle, fontWeight: fontWeightFromStyle(fontStyle) };
+    } catch {
+      return {};
+    }
+  }
+  async function extractLibraryStyles(ids, textSamples = {}) {
     const found = {
       text: [],
       paint: [],
@@ -319,9 +335,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
       if (style.id !== id) found.idMismatches.push({ requested: id, returned: style.id });
       switch (style.type) {
-        case "TEXT":
-          found.text.push({ ...mapTextStyle(style), id, library: true });
+        case "TEXT": {
+          const mapped = { ...mapTextStyle(style), id, library: true };
+          if (mapped.fontFamily === UNKNOWN_FONT && textSamples[id]) {
+            Object.assign(mapped, await fontOfTextLayer(textSamples[id]));
+          }
+          found.text.push(mapped);
           break;
+        }
         case "PAINT":
           found.paint.push({ ...mapPaintStyle(style), id, library: true });
           break;
@@ -364,11 +385,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return false;
   }
-  function readStyleIds(n, into) {
+  function readStyleIds(n, into, textSamples) {
     for (const key of STYLE_ID_KEYS) {
       try {
         const value = n[key];
-        if (typeof value === "string" && value !== "") into.add(value);
+        if (typeof value === "string" && value !== "") {
+          into.add(value);
+          if (key === "textStyleId" && textSamples && !(value in textSamples)) {
+            textSamples[value] = n.id;
+          }
+        }
       } catch {
       }
     }
@@ -376,6 +402,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   async function scanNodeBindings(node, yieldIfDue, counters) {
     const variableIds = /* @__PURE__ */ new Set();
     const styleIds = /* @__PURE__ */ new Set();
+    const textStyleSamples = {};
     let scanned = 0;
     let truncated = false;
     const visit = async (n, depth) => {
@@ -387,7 +414,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (counters) counters.nodes++;
       await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
-      readStyleIds(n, styleIds);
+      readStyleIds(n, styleIds, textStyleSamples);
       if (n.type === "INSTANCE") return;
       if ("children" in n) {
         for (const child of n.children) {
@@ -396,7 +423,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
     };
     await visit(node, 0);
-    return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
+    return {
+      variableIds: Array.from(variableIds),
+      styleIds: Array.from(styleIds),
+      textStyleSamples,
+      truncated
+    };
   }
   function numberProp(n, key) {
     try {
@@ -593,7 +625,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           variants: mapped.map((m) => m.variant),
           layout: variantMembers.length > 0 ? readLayout$1(defaultVariantOf(set, variantMembers)) : void 0,
           boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
-          styleIds: unionOf(mapped.map((m) => m.bindings.styleIds))
+          styleIds: unionOf(mapped.map((m) => m.bindings.styleIds)),
+          textStyleSamples: Object.assign({}, ...mapped.map((m) => m.bindings.textStyleSamples))
         };
       },
       onProgress
@@ -615,7 +648,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           variants: [variant],
           layout: readLayout$1(node),
           boundVariableIds: bindings.variableIds,
-          styleIds: bindings.styleIds
+          styleIds: bindings.styleIds,
+          textStyleSamples: bindings.textStyleSamples
         };
       },
       onProgress
@@ -768,7 +802,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (libraryIds.length > 0) {
       const library = await timed(
         "library styles",
-        () => extractLibraryStyles(libraryIds),
+        () => extractLibraryStyles(
+          libraryIds,
+          Object.assign({}, ...components.map((c) => c.textStyleSamples ?? {}))
+        ),
         (r) => r.text.length + r.paint.length + r.effect.length + r.grid.length
       );
       if (library.idMismatches.length > 0) {
@@ -1647,6 +1684,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   function joinSections(sections) {
     return sections.filter(Boolean).join("\n");
   }
+  const MAX_VARIANT_ROWS = 40;
+  const MAX_TOKEN_ROWS = 60;
   function variantsSection(c) {
     if (c.variants.length === 0 || c.variants.length === 1 && Object.keys(c.variants[0].variantProperties).length === 0) {
       return joinSections([
@@ -1657,11 +1696,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const propertyNames = Array.from(
       new Set(c.variants.flatMap((v) => Object.keys(v.variantProperties)))
     );
-    const rows = c.variants.map((v) => [
+    const shown = c.variants.slice(0, MAX_VARIANT_ROWS);
+    const rows = shown.map((v) => [
       v.name,
       ...propertyNames.map((p) => v.variantProperties[p] ?? "—")
     ]);
-    return joinSections([mdHeading(2, "Variants"), mdTable(["Variant", ...propertyNames], rows)]);
+    const note = c.variants.length > shown.length ? `_Showing the first ${shown.length} of ${c.variants.length} variants. The Properties table below lists every option of each variant property; components.json lists all variants when it is exported._
+` : "";
+    return joinSections([
+      mdHeading(2, "Variants"),
+      mdTable(["Variant", ...propertyNames], rows),
+      note
+    ]);
   }
   function layoutSection(c) {
     const layout = c.layout;
@@ -1739,20 +1785,34 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     ]);
   }
   function tokenReferencesSection(c, ds) {
-    if (c.boundVariableIds.length === 0) {
-      return joinSections([
-        mdHeading(2, "Token References"),
-        "_No bound variables were detected on this component._\n"
-      ]);
-    }
     const variablesById = new Map(ds.variables.map((v) => [v.id, v]));
-    const rows = c.boundVariableIds.map((id) => {
+    const stylesById = new Map(
+      [...ds.styles.text, ...ds.styles.color, ...ds.styles.effect, ...ds.styles.grid].map((s) => [
+        s.id,
+        s
+      ])
+    );
+    const variableRows = c.boundVariableIds.map((id) => {
       const v = variablesById.get(id);
       return v ? [v.name, v.cssName, v.category] : [id, "—", "unresolved"];
     });
+    const styleRows = (c.styleIds ?? []).flatMap((id) => {
+      const s = stylesById.get(id);
+      return s ? [[s.library ? `${s.name} (library)` : s.name, s.cssName, `${s.type.toLowerCase()} style`]] : [];
+    });
+    const all = [...variableRows, ...styleRows];
+    if (all.length === 0) {
+      return joinSections([
+        mdHeading(2, "Token References"),
+        "_No bound variables or styles were detected on this component._\n"
+      ]);
+    }
+    const shown = all.slice(0, MAX_TOKEN_ROWS);
     return joinSections([
       mdHeading(2, "Token References"),
-      mdTable(["Token", "CSS Variable", "Category"], rows)
+      mdTable(["Token", "CSS Variable", "Category"], shown),
+      all.length > shown.length ? `_Showing ${shown.length} of ${all.length} tokens this component uses._
+` : ""
     ]);
   }
   function relatedComponentsSection(c) {
@@ -1846,7 +1906,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const props = style.textProperties;
     if (!props) return {};
     return {
-      [`${style.cssName}-font-family`]: cssFontFamily(props.fontFamily),
+      // An unknown family is left out: "Unknown" is not a font, and would break the cascade.
+      ...isKnownFont(props.fontFamily) ? { [`${style.cssName}-font-family`]: cssFontFamily(props.fontFamily) } : {},
       [`${style.cssName}-font-weight`]: String(props.fontWeight),
       [`${style.cssName}-font-size`]: `${props.fontSize}px`,
       [`${style.cssName}-line-height`]: props.lineHeight === "AUTO" ? "normal" : props.lineHeight,
@@ -1888,13 +1949,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const modes = {};
     addVariableVars(root, ds.variables);
     addVariableModeVars(modes, ds.variables);
-    if (!ds.variables.some((v) => v.category === "color")) {
-      for (const s of ds.styles.color) {
-        if (s.paint) root[s.cssName] = s.paint.hex;
-      }
+    const wanted = (hasVariables, s) => {
+      var _a;
+      return !hasVariables || (((_a = s.usedByComponents) == null ? void 0 : _a.length) ?? 0) > 0 || !!s.library;
+    };
+    const hasColorVariables = ds.variables.some((v) => v.category === "color");
+    for (const s of ds.styles.color) {
+      if (s.paint && wanted(hasColorVariables, s)) root[s.cssName] = s.paint.hex;
     }
-    if (!ds.variables.some((v) => v.category === "typography")) {
-      for (const s of ds.styles.text) Object.assign(root, textStyleToCssVars(s));
+    const hasTypographyVariables = ds.variables.some((v) => v.category === "typography");
+    for (const s of ds.styles.text) {
+      if (wanted(hasTypographyVariables, s)) Object.assign(root, textStyleToCssVars(s));
     }
     for (const s of ds.styles.effect) {
       const shadowSegments = (s.effects ?? []).map(effectToBoxShadowSegment).filter((v) => !!v);
@@ -2467,7 +2532,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       return [
         styleLabel(s),
         s.cssName,
-        (p == null ? void 0 : p.fontFamily) ?? "—",
+        isKnownFont(p == null ? void 0 : p.fontFamily) ? p.fontFamily : "—",
         p ? String(p.fontSize) : "—",
         (p == null ? void 0 : p.fontWeight) !== void 0 ? String(p.fontWeight) : "—",
         (p == null ? void 0 : p.lineHeight) ?? "—"
@@ -2787,7 +2852,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       if (!p) return null;
       type = "typography";
       const typography = {
-        fontFamily: p.fontFamily,
+        ...isKnownFont(p.fontFamily) ? { fontFamily: p.fontFamily } : {},
         fontSize: `${p.fontSize}px`,
         fontWeight: p.fontWeight,
         letterSpacing: letterSpacingToPx(p.letterSpacing, p.fontSize)
@@ -2846,19 +2911,24 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     const fallbackKey = CATEGORY_STYLE_FALLBACK[category];
     const styles = fallbackKey ? ds.styles[fallbackKey] : [];
     const toLeaves = (list) => list.map((s) => styleToLeaf(s, category)).filter((e) => e !== null);
+    const local = styles.filter((s) => !s.library);
+    const library = styles.filter((s) => s.library);
+    const underLibrary = (list) => toLeaves(list).map((e) => ({ ...e, path: ["library", ...e.path] }));
     let entries;
     if (variables.length > 0) {
       entries = variables.map((v) => variableToLeaf(v, ctx));
       entries.push(
-        ...toLeaves(styles.filter((s) => {
+        ...toLeaves(local.filter((s) => {
           var _a;
-          return (((_a = s.usedByComponents) == null ? void 0 : _a.length) ?? 0) > 0 || s.library;
-        })).map(
-          (e) => ({ ...e, path: ["styles", ...e.path] })
-        )
+          return (((_a = s.usedByComponents) == null ? void 0 : _a.length) ?? 0) > 0;
+        })).map((e) => ({
+          ...e,
+          path: ["styles", ...e.path]
+        })),
+        ...underLibrary(library).map((e) => ({ ...e, path: ["styles", ...e.path] }))
       );
     } else {
-      entries = toLeaves(styles);
+      entries = [...toLeaves(local), ...underLibrary(library)];
     }
     return buildTokenTree(entries, isJsonLeaf);
   }

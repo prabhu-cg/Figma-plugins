@@ -128,6 +128,8 @@ export interface RawComponent {
   layout?: ComponentLayout;
   /** Ids of local/library styles applied anywhere in the component; resolved to bound variables in transform. */
   styleIds?: string[];
+  /** For each text style used: the id of one text layer that uses it (to read a library style's font). */
+  textStyleSamples?: Record<string, string>;
   id: string;
   key: string;
   name: string;

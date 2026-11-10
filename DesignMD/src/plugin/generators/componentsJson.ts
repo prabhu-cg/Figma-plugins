@@ -15,7 +15,7 @@ import {
   type TokenEntry,
 } from '@shared/componentsSchema';
 import type { GeneratedFile } from '@shared/messages';
-import { cleanPropertyName } from '@shared/naming';
+import { cleanPropertyName, isKnownFont } from '@shared/naming';
 import { sha256 } from '@shared/sha256';
 import type {
   ColorValue,
@@ -96,7 +96,7 @@ function styleEntry(style: StyleToken): TokenEntry | undefined {
       cssName: style.cssName,
       type: 'typography',
       value: {
-        fontFamily: p.fontFamily,
+        ...(isKnownFont(p.fontFamily) ? { fontFamily: p.fontFamily } : {}),
         fontStyle: p.fontStyle,
         fontWeight: p.fontWeight,
         fontSize: p.fontSize,

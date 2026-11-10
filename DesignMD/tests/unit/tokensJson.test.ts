@@ -74,7 +74,42 @@ describe('generateTokensJson', () => {
     ds.styles.color[0].library = true;
     ds.styles.color[0].usedByComponents = [];
     const parsed = JSON.parse(generateTokensJson(ds).content);
-    expect(parsed.color.styles.Surface.Background.$extensions.figma.library).toBe(true);
+    expect(parsed.color.styles.library.Surface.Background.$extensions.figma.library).toBe(true);
+  });
+
+  it('keeps a library style and a local style of the same name apart', () => {
+    const ds = makeDesignSystem();
+    const local = ds.styles.color[0];
+    local.usedByComponents = ['Button'];
+    ds.styles.color.push({
+      ...local,
+      id: 'S:library,1:2',
+      library: true,
+      paint: { hex: '#ff0000', r: 1, g: 0, b: 0, a: 1 },
+    });
+    const parsed = JSON.parse(generateTokensJson(ds).content);
+    const ids: string[] = [];
+    const walk = (o: Record<string, unknown>) => {
+      for (const v of Object.values(o)) {
+        if (v && typeof v === 'object' && '$value' in v) {
+          ids.push((v as { $extensions: { figma: { id: string } } }).$extensions.figma.id);
+        } else if (v && typeof v === 'object') walk(v as Record<string, unknown>);
+      }
+    };
+    walk(parsed.color);
+    expect(ids).toEqual(expect.arrayContaining([local.id, 'S:library,1:2']));
+    expect(parsed.color.styles.Surface.Background.$value).toBe('#ffffff');
+    expect(parsed.color.styles.library.Surface.Background.$value).toBe('#ff0000');
+  });
+
+  it('keeps both when the file has no color variables either', () => {
+    const ds = makeDesignSystem();
+    ds.variables = ds.variables.filter((v) => v.category !== 'color' && v.category !== 'semantic');
+    const local = ds.styles.color[0];
+    ds.styles.color.push({ ...local, id: 'S:library,1:2', library: true });
+    const parsed = JSON.parse(generateTokensJson(ds).content);
+    expect(parsed.color.Surface.Background.$extensions.figma.id).toBe(local.id);
+    expect(parsed.color.library.Surface.Background.$extensions.figma.id).toBe('S:library,1:2');
   });
 
   it('handles an empty design system without throwing', () => {

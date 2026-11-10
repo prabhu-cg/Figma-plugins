@@ -83,11 +83,16 @@
     }
     return false;
   }
-  function readStyleIds(n, into) {
+  function readStyleIds(n, into, textSamples) {
     for (const key of STYLE_ID_KEYS) {
       try {
         const value = n[key];
-        if (typeof value === "string" && value !== "") into.add(value);
+        if (typeof value === "string" && value !== "") {
+          into.add(value);
+          if (key === "textStyleId" && textSamples && !(value in textSamples)) {
+            textSamples[value] = n.id;
+          }
+        }
       } catch {
       }
     }
@@ -95,6 +100,7 @@
   async function scanNodeBindings(node, yieldIfDue, counters) {
     const variableIds = /* @__PURE__ */ new Set();
     const styleIds = /* @__PURE__ */ new Set();
+    const textStyleSamples = {};
     let scanned = 0;
     let truncated = false;
     const visit = async (n, depth) => {
@@ -106,7 +112,7 @@
       if (counters) counters.nodes++;
       await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
-      readStyleIds(n, styleIds);
+      readStyleIds(n, styleIds, textStyleSamples);
       if (n.type === "INSTANCE") return;
       if ("children" in n) {
         for (const child of n.children) {
@@ -115,7 +121,12 @@
       }
     };
     await visit(node, 0);
-    return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
+    return {
+      variableIds: Array.from(variableIds),
+      styleIds: Array.from(styleIds),
+      textStyleSamples,
+      truncated
+    };
   }
   function numberProp(n, key) {
     try {
@@ -308,7 +319,8 @@
           variants: mapped.map((m) => m.variant),
           layout: variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : void 0,
           boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
-          styleIds: unionOf(mapped.map((m) => m.bindings.styleIds))
+          styleIds: unionOf(mapped.map((m) => m.bindings.styleIds)),
+          textStyleSamples: Object.assign({}, ...mapped.map((m) => m.bindings.textStyleSamples))
         };
       }
     );
@@ -329,7 +341,8 @@
           variants: [variant],
           layout: readLayout(node),
           boundVariableIds: bindings.variableIds,
-          styleIds: bindings.styleIds
+          styleIds: bindings.styleIds,
+          textStyleSamples: bindings.textStyleSamples
         };
       }
     );

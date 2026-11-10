@@ -59,16 +59,23 @@ export function isHiddenFromPublishing(node: NamedAncestor): boolean {
 interface NodeBindings {
   variableIds: string[];
   styleIds: string[];
+  /** For each text style used: the id of one text layer that uses it. */
+  textStyleSamples: Record<string, string>;
   /** True when the subtree was larger than the scan budget, so usage may be under-reported. */
   truncated: boolean;
 }
 
-function readStyleIds(n: SceneNode, into: Set<string>): void {
+function readStyleIds(n: SceneNode, into: Set<string>, textSamples?: Record<string, string>): void {
   for (const key of STYLE_ID_KEYS) {
     try {
       const value = (n as unknown as Record<string, unknown>)[key];
       // figma.mixed is a symbol; an unstyled node is ''.
-      if (typeof value === 'string' && value !== '') into.add(value);
+      if (typeof value === 'string' && value !== '') {
+        into.add(value);
+        if (key === 'textStyleId' && textSamples && !(value in textSamples)) {
+          textSamples[value] = (n as { id: string }).id;
+        }
+      }
     } catch {
       // Some node types throw on style-id access — nothing to record.
     }
@@ -83,6 +90,7 @@ async function scanNodeBindings(
 ): Promise<NodeBindings> {
   const variableIds = new Set<string>();
   const styleIds = new Set<string>();
+  const textStyleSamples: Record<string, string> = {};
   let scanned = 0;
   let truncated = false;
 
@@ -96,7 +104,7 @@ async function scanNodeBindings(
     // Each node costs several calls into Figma; hand control back often so the editor stays usable.
     await yieldIfDue();
     boundVariablesOf(n).forEach((id) => variableIds.add(id));
-    readStyleIds(n, styleIds);
+    readStyleIds(n, styleIds, textStyleSamples);
     // The insides of a nested instance are another component's layers, and that component is scanned
     // itself. Reading them here is most of the cost on a file built from nested components, and
     // counted them against this component's layer budget. The instance's own bindings are read above.
@@ -109,7 +117,12 @@ async function scanNodeBindings(
   };
 
   await visit(node, 0);
-  return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
+  return {
+    variableIds: Array.from(variableIds),
+    styleIds: Array.from(styleIds),
+    textStyleSamples,
+    truncated,
+  };
 }
 
 function numberProp(n: SceneNode, key: string): number | undefined {
@@ -373,6 +386,7 @@ export async function extractComponents(
           variantMembers.length > 0 ? readLayout(defaultVariantOf(set, variantMembers)) : undefined,
         boundVariableIds: unionOf(mapped.map((m) => m.bindings.variableIds)),
         styleIds: unionOf(mapped.map((m) => m.bindings.styleIds)),
+        textStyleSamples: Object.assign({}, ...mapped.map((m) => m.bindings.textStyleSamples)),
       };
     },
     onProgress,
@@ -396,6 +410,7 @@ export async function extractComponents(
         layout: readLayout(node),
         boundVariableIds: bindings.variableIds,
         styleIds: bindings.styleIds,
+        textStyleSamples: bindings.textStyleSamples,
       };
     },
     onProgress,
