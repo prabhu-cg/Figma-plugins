@@ -82,12 +82,21 @@ function fromType(layer: Layer): RoleResult | undefined {
   return undefined;
 }
 
-function fromName(layer: Layer): RoleResult | undefined {
-  const name = words(layer.name);
+function matchName(raw: string): LayerRole | undefined {
+  const name = words(raw);
   for (const [role, pattern] of NAME_RULES) {
-    if (pattern.test(name)) return { role, roleSource: 'name' };
+    if (pattern.test(name)) return role;
   }
   return undefined;
+}
+
+function fromName(layer: Layer): RoleResult | undefined {
+  // An instance layer is often named for where it sits ("Left"), not what it is; the component it
+  // points at says more ("button", "icon / arrow"). That matters most when its insides are not read.
+  const role =
+    matchName(layer.name) ??
+    (layer.instanceOf ? matchName(layer.instanceOf.componentName) : undefined);
+  return role ? { role, roleSource: 'name' } : undefined;
 }
 
 /** The role of one layer. `isRoot` marks the top of a component's tree. */

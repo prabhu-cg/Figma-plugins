@@ -31,12 +31,15 @@ import { defaultModeValue } from './tokenValue';
 const OUTPUT_PATH = 'components.json';
 const MAX_ALIAS_DEPTH = 20;
 
+/** Figma channels are fractions (0 to 1); components.json colours are 0 to 255. */
+const channel = (fraction: number) => Math.max(0, Math.min(255, Math.round(fraction * 255)));
+
 const colorOf = (c: ColorValue): ColorRgba => ({
   hex: c.hex.slice(0, 7).toLowerCase(),
   alpha: Math.round(c.a * 1000) / 1000,
-  r: c.r,
-  g: c.g,
-  b: c.b,
+  r: channel(c.r),
+  g: channel(c.g),
+  b: channel(c.b),
 });
 
 /** The default-mode value of a variable, following aliases to a primitive. */

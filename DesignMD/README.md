@@ -115,7 +115,7 @@ and none of them can take the plugin down:
   10 levels), plus a 20 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
   10-minute budget for the whole run. A component
   that goes over is written with `treeTruncated: true` and a warning, never skipped silently. Sets
-  with more than 256 variants get no diffs (a warning says so).
+  with more than 512 variants get no diffs (a warning says so).
 - **Scanning.** The scan is also sliced: pages are loaded and searched one at a time (the progress bar names the page, so a stall can be pinned to it; `loadAllPagesAsync` was one call that cannot be interrupted and locked Figma on a very large file), a component's
   bindings are read in short stretches, and components go in batches of 20. The plugin console prints
   how long each stage took (`[DesignMD] scan: variables … components …`).

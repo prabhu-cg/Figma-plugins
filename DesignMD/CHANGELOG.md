@@ -26,6 +26,12 @@
 
 ### Changed
 
+- Fixed: the `r`, `g` and `b` of colour tokens in `components.json` were Figma's 0 to 1 fractions; they
+  are now 0 to 255 as the schema says (the hex was always right).
+- Variant diffs now cover sets of up to 512 variants (was 256). With the insides of nested instances no
+  longer read, trees are small, and Bootstrap's `button` has 420 variants.
+- Role inference also reads the name of the component an instance points at, so an instance of
+  "button" or "icon / arrow" gets a role even when its own name is generic.
 - The scan no longer reads the layers inside nested instances. They are another component's layers and
   that component is scanned itself, so a component's token usage now lists what it binds directly.
   This is much faster on files built from nested components, and stops those layers counting toward a

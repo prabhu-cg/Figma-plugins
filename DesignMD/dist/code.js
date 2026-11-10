@@ -1210,12 +1210,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (VECTOR_TYPES.has(layer.type) && isSmall(layer)) return { role: "icon", roleSource: "type" };
     return void 0;
   }
-  function fromName(layer) {
-    const name = words(layer.name);
+  function matchName(raw) {
+    const name = words(raw);
     for (const [role, pattern] of NAME_RULES) {
-      if (pattern.test(name)) return { role, roleSource: "name" };
+      if (pattern.test(name)) return role;
     }
     return void 0;
+  }
+  function fromName(layer) {
+    const role = matchName(layer.name) ?? (layer.instanceOf ? matchName(layer.instanceOf.componentName) : void 0);
+    return role ? { role, roleSource: "name" } : void 0;
   }
   function inferRole(layer, isRoot = false) {
     if (isRoot) return { role: "root", roleSource: "type" };
@@ -1325,7 +1329,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
-  const MAX_VARIANTS_FOR_DIFFS = 256;
+  const MAX_VARIANTS_FOR_DIFFS = 512;
   const COMPONENT_TIME_BUDGET_MS = 2e4;
   const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1e3;
   const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;

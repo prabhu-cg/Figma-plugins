@@ -386,6 +386,21 @@ describe('a token-rich design system, end to end', () => {
     );
   });
 
+  it('writes colour channels as 0 to 255, matching the hex', async () => {
+    const { componentsJson } = await scan();
+    const colours = Object.values(componentsJson.tokens).filter(
+      (t) => t.type === 'color',
+    ) as Array<{
+      value: { hex: string; r: number; g: number; b: number };
+    }>;
+    expect(colours.length).toBeGreaterThan(0);
+    for (const { value } of colours) {
+      const h = (n: number) => n.toString(16).padStart(2, '0');
+      expect(Number.isInteger(value.r) && value.r >= 0 && value.r <= 255).toBe(true);
+      expect(`#${h(value.r)}${h(value.g)}${h(value.b)}`).toBe(value.hex);
+    }
+  });
+
   it('agrees with tokens.json on the id, CSS name and default value of every token it lists', async () => {
     const { componentsJson, tokensJson } = await scan();
     const leaves = new Map<

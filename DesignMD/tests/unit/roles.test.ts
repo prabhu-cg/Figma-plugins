@@ -99,6 +99,21 @@ describe('inferRole', () => {
     expect(inferRole(layer({ name: 'Left slot', children: [child] })).role).toBe('slot');
   });
 
+  it('uses the name of the component an instance points at when its own name says nothing', () => {
+    const inst = (name: string, componentName: string) =>
+      layer({ name, type: 'INSTANCE', instanceOf: { componentId: 'c', componentName } });
+    expect(inferRole(inst('Left', 'components/button'))).toEqual({
+      role: 'button',
+      roleSource: 'name',
+    });
+    expect(inferRole(inst('Slot A', 'icon / arrow-right')).role).toBe('slot'); // own name wins
+    expect(inferRole(inst('Start', 'icon / arrow-right')).role).toBe('icon');
+    expect(inferRole(inst('Start', 'date-picker'))).toEqual({
+      role: 'unknown',
+      roleSource: 'none',
+    });
+  });
+
   it('matches whole words only', () => {
     expect(inferRole(layer({ name: 'Iconography', children: [child] })).roleSource).toBe('type');
     expect(inferRole(layer({ name: 'Linkedin', type: 'TEXT' })).role).toBe('text');

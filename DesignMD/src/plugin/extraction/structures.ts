@@ -20,7 +20,7 @@ import { defaultVariantOf } from './components';
 import { readLayerTree, type ReadLayerOptions, type ReadStats } from './layers';
 
 /** A set with more variants than this gets no diffs. */
-export const MAX_VARIANTS_FOR_DIFFS = 256;
+export const MAX_VARIANTS_FOR_DIFFS = 512;
 /** Wall-clock budget for the layers and diffs of one component. */
 export const COMPONENT_TIME_BUDGET_MS = 20_000;
 /**

@@ -148,7 +148,7 @@ describe('extractComponentStructure', () => {
 
     const many = componentSet(
       'Big',
-      Array.from({ length: 260 }, (_, i) => ({ props: { N: String(i) } })),
+      Array.from({ length: 600 }, (_, i) => ({ props: { N: String(i) } })),
     );
     installFakeFigma({ root: document('F', [page('P', [many])]) });
     const skipped = await extractComponentStructure(many as never);
