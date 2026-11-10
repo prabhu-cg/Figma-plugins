@@ -320,7 +320,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
     }
   }
-  async function scanNodeBindings(node, yieldIfDue) {
+  async function scanNodeBindings(node, yieldIfDue, counters) {
     const variableIds = /* @__PURE__ */ new Set();
     const styleIds = /* @__PURE__ */ new Set();
     let scanned = 0;
@@ -331,6 +331,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         return;
       }
       scanned++;
+      if (counters) counters.nodes++;
       await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
@@ -415,8 +416,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       })
     );
   }
-  async function mapVariant(node, yieldIfDue) {
-    const bindings = await scanNodeBindings(node, yieldIfDue);
+  async function mapVariant(node, yieldIfDue, counters) {
+    const bindings = await scanNodeBindings(node, yieldIfDue, counters);
     return {
       variant: {
         id: node.id,
@@ -488,11 +489,14 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const warn = onWarning ?? (() => {
     });
     if (isCancelled()) return [];
+    const scanStarted = Date.now();
     const nodes = selection ? await safely(
       () => Promise.resolve(findComponentsWithin(selection)),
       (err) => warn(`Failed to scan selection for components: ${String(err)}`)
     ) : await findInDocument(warn, onPage);
     const yieldIfDue = createTimeSlicer();
+    const counters = { nodes: 0 };
+    const searchedIn = Date.now() - scanStarted;
     const allNodes = nodes ?? [];
     const componentSetsAll = [];
     const standaloneComponentsAll = [];
@@ -520,7 +524,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       COMPONENT_BATCH_SIZE,
       async (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
-        const mapped = await Promise.all(variantMembers.map((m) => mapVariant(m, yieldIfDue)));
+        const mapped = await Promise.all(
+          variantMembers.map((m) => mapVariant(m, yieldIfDue, counters))
+        );
         if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
         return {
           id: set.id,
@@ -542,7 +548,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
       async (node) => {
-        const { variant, bindings } = await mapVariant(node, yieldIfDue);
+        const { variant, bindings } = await mapVariant(node, yieldIfDue, counters);
         if (bindings.truncated) truncatedCount++;
         return {
           id: node.id,
@@ -565,6 +571,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         `${truncatedCount} component(s) are larger than the scan budget (${MAX_DESCENDANTS_SCANNED} layers, ${MAX_DESCENDANT_DEPTH} levels deep), so their token usage may be under-reported.`
       );
     }
+    const total = Date.now() - scanStarted;
+    console.log(
+      `[DesignMD] components: finding them took ${(searchedIn / 1e3).toFixed(1)}s (${allNodes.length} found), reading their bindings took ${((total - searchedIn) / 1e3).toFixed(1)}s (${counters.nodes} layers over ${fromSets.length + fromStandalone.length} components and sets)`
+    );
     return [...fromSets, ...fromStandalone];
   }
   const VARIABLE_BATCH_SIZE = 200;

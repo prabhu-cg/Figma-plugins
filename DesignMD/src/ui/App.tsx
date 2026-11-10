@@ -313,6 +313,12 @@ export default function App() {
   // A tab can disappear (no files yet, too few colors); fall back to one that exists.
   const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'summary';
 
+  // A new tab starts at the top; the panel would otherwise keep the previous tab's scroll position.
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    contentRef.current?.scrollTo?.({ top: 0 });
+  }, [currentTab]);
+
   const scopeToggle = (
     <ScopeToggle
       scope={scope}
@@ -343,6 +349,7 @@ export default function App() {
 
       <div
         className="dmd-content"
+        ref={contentRef}
         role={showTabs ? 'tabpanel' : undefined}
         id={showTabs ? panelId(TAB_PREFIX, currentTab) : undefined}
         aria-labelledby={showTabs ? tabId(TAB_PREFIX, currentTab) : undefined}

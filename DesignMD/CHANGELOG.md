@@ -26,6 +26,10 @@
 
 ### Changed
 
+- Contrast tab: the two colour dropdowns no longer overflow the panel when token names are long, and
+  each tab opens scrolled to the top.
+- The plugin console now splits the components stage into finding components and reading their
+  bindings, with the number of layers read.
 - Pages are loaded and searched one at a time instead of with `loadAllPagesAsync`, and the progress bar shows "Searching pages · N of M · page name". A page that fails to load is skipped with a warning.
 - The scan no longer holds Figma's main thread for long stretches: the document is searched one page
   at a time (one bad page no longer loses the rest), component bindings are read in time slices, and

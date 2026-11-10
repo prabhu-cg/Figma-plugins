@@ -714,7 +714,8 @@ body {
 
 .dmd-pair-form {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr): a plain 1fr grows to the longest option and pushes the form off the panel. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   align-items: end;
 }
@@ -724,8 +725,14 @@ body {
   justify-self: start;
 }
 
-.dmd-field select {
+.dmd-pair-form .dmd-field {
   min-width: 0;
+}
+
+.dmd-field select {
+  width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
   padding: 9px 10px;
   border-radius: 10px;
   border: 1px solid var(--dmd-border);

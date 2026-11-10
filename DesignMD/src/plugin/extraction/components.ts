@@ -79,6 +79,7 @@ function readStyleIds(n: SceneNode, into: Set<string>): void {
 async function scanNodeBindings(
   node: SceneNode,
   yieldIfDue: () => Promise<void>,
+  counters?: { nodes: number },
 ): Promise<NodeBindings> {
   const variableIds = new Set<string>();
   const styleIds = new Set<string>();
@@ -91,6 +92,7 @@ async function scanNodeBindings(
       return;
     }
     scanned++;
+    if (counters) counters.nodes++;
     // Each node costs several calls into Figma; hand control back often so the editor stays usable.
     await yieldIfDue();
     boundVariablesOf(n).forEach((id) => variableIds.add(id));
@@ -194,8 +196,9 @@ async function mapPropertyDefinitions(
 async function mapVariant(
   node: ComponentNode,
   yieldIfDue: () => Promise<void>,
+  counters?: { nodes: number },
 ): Promise<{ variant: RawComponentVariant; bindings: NodeBindings }> {
-  const bindings = await scanNodeBindings(node, yieldIfDue);
+  const bindings = await scanNodeBindings(node, yieldIfDue, counters);
   return {
     variant: {
       id: node.id,
@@ -301,6 +304,7 @@ export async function extractComponents(
 ): Promise<RawComponent[]> {
   const warn = onWarning ?? (() => {});
   if (isCancelled()) return [];
+  const scanStarted = Date.now();
 
   const nodes = selection
     ? await safely(
@@ -309,6 +313,8 @@ export async function extractComponents(
       )
     : await findInDocument(warn, onPage);
   const yieldIfDue = createTimeSlicer();
+  const counters = { nodes: 0 };
+  const searchedIn = Date.now() - scanStarted;
 
   // Sorting thousands of nodes into sets and standalone components, and checking each one's
   // ancestors for a hidden name, is a long stretch of calls into Figma; slice it.
@@ -346,7 +352,9 @@ export async function extractComponents(
     COMPONENT_BATCH_SIZE,
     async (set): Promise<RawComponent> => {
       const variantMembers = set.children.filter((c): c is ComponentNode => c.type === 'COMPONENT');
-      const mapped = await Promise.all(variantMembers.map((m) => mapVariant(m, yieldIfDue)));
+      const mapped = await Promise.all(
+        variantMembers.map((m) => mapVariant(m, yieldIfDue, counters)),
+      );
       if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
       return {
         id: set.id,
@@ -370,7 +378,7 @@ export async function extractComponents(
     standaloneComponents,
     COMPONENT_BATCH_SIZE,
     async (node): Promise<RawComponent> => {
-      const { variant, bindings } = await mapVariant(node, yieldIfDue);
+      const { variant, bindings } = await mapVariant(node, yieldIfDue, counters);
       if (bindings.truncated) truncatedCount++;
       return {
         id: node.id,
@@ -396,5 +404,11 @@ export async function extractComponents(
     );
   }
 
+  const total = Date.now() - scanStarted;
+  console.log(
+    `[DesignMD] components: finding them took ${(searchedIn / 1000).toFixed(1)}s (${allNodes.length} found), ` +
+      `reading their bindings took ${((total - searchedIn) / 1000).toFixed(1)}s ` +
+      `(${counters.nodes} layers over ${fromSets.length + fromStandalone.length} components and sets)`,
+  );
   return [...fromSets, ...fromStandalone];
 }
