@@ -47,6 +47,10 @@
   combinations), pairs are only inferred between tokens in the same group, so an unrelated component's
   text colour is no longer reported as failing against another's background. `design.md` says which
   mode was used.
+- Contrast: within a group, tokens that name an interaction state (Default, Hover, Pressed, Active,
+  Selected, Focus, Disabled) are paired only with backgrounds in the same state, so white "Active Text"
+  is checked on "Active Background" and not reported as 1.00:1 on "Default Background". When no
+  background matches, every background in the group is used.
 - Font sizes, line heights, letter spacing and paragraph spacing from text styles are rounded to 2
   decimals (Figma returns 13.600000381469727 for 13.6).
 - `design.md` marks library styles with "(library)" and trims padded page names.

@@ -44,8 +44,10 @@ Nothing leaves the plugin.
 
 - **Contrast per mode.** WCAG 2.1 contrast is checked separately for every color mode (Light,
   Dark, …), because a pair that passes in Light can fail in Dark. Foreground/background roles are
-  inferred from token names and scopes, and you can add your own pairs (see below). Large systems
-  report the worst 500 pairs with exact totals.
+  inferred from token names and scopes, and you can add your own pairs (see below). In large
+  systems, pairs are inferred only within a group, and tokens that name a state (Default, Hover,
+  Pressed, Active, Disabled, Focus) are paired only with backgrounds in the same state. The worst
+  500 pairs are reported with exact totals.
 - **Usage.** Which components use each variable, including variables bound inside the text, color
   and effect styles a component applies, and which styles are not applied in any component.
 - **Layout.** Each component doc has a Layout section (size, auto layout, gap, padding, corner
