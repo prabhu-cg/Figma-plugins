@@ -2,7 +2,11 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { GeneratedFile } from '@shared/messages';
 
-export async function downloadAsZip(files: GeneratedFile[], zipFileName: string): Promise<void> {
+/**
+ * The files as a ZIP. Compressed with DEFLATE: JSZip stores files as they are unless told otherwise,
+ * and a 35 MB components.json export came out as a 37 MB zip. Text like this shrinks about tenfold.
+ */
+export async function buildZip(files: GeneratedFile[]): Promise<ArrayBuffer> {
   const zip = new JSZip();
   let sinceYield = 0;
   for (const file of files) {
@@ -13,8 +17,16 @@ export async function downloadAsZip(files: GeneratedFile[], zipFileName: string)
       await new Promise<void>((resolve) => setTimeout(resolve, 0));
     }
   }
-  const blob = await zip.generateAsync({ type: 'blob' });
-  saveAs(blob, zipFileName);
+  return zip.generateAsync({
+    type: 'arraybuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+}
+
+export async function downloadAsZip(files: GeneratedFile[], zipFileName: string): Promise<void> {
+  const buffer = await buildZip(files);
+  saveAs(new Blob([buffer], { type: 'application/zip' }), zipFileName);
 }
 
 function mimeTypeFor(path: string): string {

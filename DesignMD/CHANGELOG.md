@@ -26,6 +26,8 @@
 
 ### Changed
 
+- Fixed: the ZIP was not compressed (files were stored as they are), so a 35 MB export made a 37 MB
+  zip. It is now compressed with DEFLATE; text like this typically shrinks about tenfold.
 - Fixed: the `r`, `g` and `b` of colour tokens in `components.json` were Figma's 0 to 1 fractions; they
   are now 0 to 255 as the schema says (the hex was always right).
 - Variant diffs now cover sets of up to 512 variants (was 256). With the insides of nested instances no
