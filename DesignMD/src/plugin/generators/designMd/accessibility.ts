@@ -59,7 +59,8 @@ function contrastBody(report: ContrastReport, level: number): string {
         `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like ` +
           'color tokens, too many to pair every combination meaningfully. Pairs are only inferred between ' +
           'tokens in the same group (the same name up to the last "/", for example ' +
-          '"Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"). ' +
+          '"Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"), and when ' +
+          'names carry a state (Default, Hover, Pressed, Active, Disabled, Focus) only within the same state. ' +
           "Combinations across groups are not checked; add them in the plugin's Contrast tab.",
       );
     }

@@ -2011,6 +2011,34 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   }
   const MAX_UNSCOPED_PAIRS = 400;
   const groupOf = (name) => name.split("/").slice(0, -1).join("/");
+  const STATE_WORDS = {
+    default: "default",
+    normal: "default",
+    rest: "default",
+    hover: "hover",
+    hovered: "hover",
+    press: "press",
+    pressed: "press",
+    active: "active",
+    selected: "selected",
+    checked: "checked",
+    focus: "focus",
+    focused: "focus",
+    disabled: "disabled"
+  };
+  function stateOf(name) {
+    const last = name.split("/").pop() ?? "";
+    for (const word of last.toLowerCase().split(/[^a-z]+/)) {
+      if (STATE_WORDS[word]) return STATE_WORDS[word];
+    }
+    return void 0;
+  }
+  function sameGroupBackgrounds(f, groupBackgrounds) {
+    const state = stateOf(f.name);
+    if (!state) return groupBackgrounds;
+    const matching = groupBackgrounds.filter((b) => stateOf(b.name) === state);
+    return matching.length > 0 ? matching : groupBackgrounds;
+  }
   const MAX_REPORTED_PAIRS = 500;
   const AA_NORMAL_MIN_RATIO = 4.5;
   const AA_LARGE_MIN_RATIO = 3;
@@ -2131,7 +2159,10 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       backgroundCount: backgrounds.length
     };
     const candidates = pairing === "same-group" ? foregrounds.flatMap(
-      (f) => backgrounds.filter((b) => groupOf(b.name) === groupOf(f.name)).map((b) => [f, b])
+      (f) => sameGroupBackgrounds(
+        f,
+        backgrounds.filter((b) => groupOf(b.name) === groupOf(f.name))
+      ).map((b) => [f, b])
     ) : foregrounds.flatMap((f) => backgrounds.map((b) => [f, b]));
     if (candidates.length > 0) {
       let kept = [];
@@ -2263,7 +2294,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
       const failing = report.pairs.filter((p) => !p.passesAALarge).slice(0, MAX_FAILING_ROWS);
       if (report.pairing === "same-group") {
         notes.push(
-          `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like color tokens, too many to pair every combination meaningfully. Pairs are only inferred between tokens in the same group (the same name up to the last "/", for example "Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"). Combinations across groups are not checked; add them in the plugin's Contrast tab.`
+          `This file has ${report.foregroundCount} foreground-like and ${report.backgroundCount} background-like color tokens, too many to pair every combination meaningfully. Pairs are only inferred between tokens in the same group (the same name up to the last "/", for example "Components/Alert/Primary/Text" and "Components/Alert/Primary/Background"), and when names carry a state (Default, Hover, Pressed, Active, Disabled, Focus) only within the same state. Combinations across groups are not checked; add them in the plugin's Contrast tab.`
         );
       }
       notes.unshift(

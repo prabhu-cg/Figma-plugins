@@ -47,6 +47,44 @@ export const MAX_UNSCOPED_PAIRS = 400;
 /** The group a token name sits in: everything before the last "/". */
 const groupOf = (name: string) => name.split('/').slice(0, -1).join('/');
 
+/** Interaction-state words, normalised so "Hovered" and "Hover" count as the same state. */
+const STATE_WORDS: Record<string, string> = {
+  default: 'default',
+  normal: 'default',
+  rest: 'default',
+  hover: 'hover',
+  hovered: 'hover',
+  press: 'press',
+  pressed: 'press',
+  active: 'active',
+  selected: 'selected',
+  checked: 'checked',
+  focus: 'focus',
+  focused: 'focus',
+  disabled: 'disabled',
+};
+
+/** The interaction state named in a token's last path segment ("Active Text" -> "active"), if any. */
+export function stateOf(name: string): string | undefined {
+  const last = name.split('/').pop() ?? '';
+  for (const word of last.toLowerCase().split(/[^a-z]+/)) {
+    if (STATE_WORDS[word]) return STATE_WORDS[word];
+  }
+  return undefined;
+}
+
+/**
+ * Backgrounds a foreground can sit on within its group. Text in one state is only checked
+ * against backgrounds in the same state (white "Active Text" belongs on "Active Background", not
+ * "Default Background"); when none match, or no states are named, every background in the group is used.
+ */
+function sameGroupBackgrounds<T extends { name: string }>(f: T, groupBackgrounds: T[]): T[] {
+  const state = stateOf(f.name);
+  if (!state) return groupBackgrounds;
+  const matching = groupBackgrounds.filter((b) => stateOf(b.name) === state);
+  return matching.length > 0 ? matching : groupBackgrounds;
+}
+
 export interface ContrastReport {
   /** How pairs were inferred: every foreground with every background, or only within the same group. */
   pairing: 'all' | 'same-group';
@@ -238,9 +276,10 @@ export function computeContrastReport(ds: DesignSystem, modeName?: string): Cont
   const candidates =
     pairing === 'same-group'
       ? foregrounds.flatMap((f) =>
-          backgrounds
-            .filter((b) => groupOf(b.name) === groupOf(f.name))
-            .map((b) => [f, b] as const),
+          sameGroupBackgrounds(
+            f,
+            backgrounds.filter((b) => groupOf(b.name) === groupOf(f.name)),
+          ).map((b) => [f, b] as const),
         )
       : foregrounds.flatMap((f) => backgrounds.map((b) => [f, b] as const));
 

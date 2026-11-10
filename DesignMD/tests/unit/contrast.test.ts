@@ -489,4 +489,37 @@ describe('pairing in a system with very many color tokens', () => {
     expect(report.fallbackChecks.length).toBe(50);
     expect(generateDesignMd(ds).content).toContain('No foreground-like token shares a group');
   });
+
+  it('pairs state-named tokens only with backgrounds in the same state', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = [
+      colorStyle('List group/Default/Active Text', '#ffffff'),
+      colorStyle('List group/Default/Default Background', '#ffffff'),
+      colorStyle('List group/Default/Disabled Background', '#ffffff'),
+      colorStyle('List group/Default/Active Background', '#0d6efd'),
+      // push past MAX_UNSCOPED_PAIRS so same-group pairing applies
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Text/T${i}`, '#111111')),
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Surface/S${i}`, '#fafafa')),
+    ];
+    const report = computeContrastReport(ds);
+    expect(report.pairing).toBe('same-group');
+    const active = report.pairs.filter((p) => p.foreground.name.endsWith('Active Text'));
+    expect(active.map((p) => p.background.name)).toEqual(['List group/Default/Active Background']);
+    expect(active[0].ratio).toBeGreaterThan(4.5);
+  });
+
+  it('falls back to every group background when no state matches', () => {
+    const ds = makeDesignSystem();
+    ds.variables = [];
+    ds.styles.color = [
+      colorStyle('G/Hovered Text', '#111111'),
+      colorStyle('G/Default Background', '#fafafa'),
+      colorStyle('G/Active Background', '#eeeeee'),
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Text/T${i}`, '#111111')),
+      ...Array.from({ length: 25 }, (_, i) => colorStyle(`Surface/S${i}`, '#fafafa')),
+    ];
+    const report = computeContrastReport(ds);
+    expect(report.pairs.filter((p) => p.foreground.name === 'G/Hovered Text')).toHaveLength(2);
+  });
 });
