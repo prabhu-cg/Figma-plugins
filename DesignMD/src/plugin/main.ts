@@ -109,8 +109,12 @@ async function handleExtract(scope: ExtractionScope): Promise<void> {
         ),
     );
 
+    const transformStarted = Date.now();
     const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
     cachedDesignSystem = designSystem;
+    console.log(
+      `[DesignMD] transform: ${designSystem.summary.variablesCount} variables, ${designSystem.summary.componentSetsCount} sets in ${((Date.now() - transformStarted) / 1000).toFixed(1)}s; sending the result to the UI`,
+    );
 
     post({ type: 'extraction-complete', designSystem });
   } catch (err) {

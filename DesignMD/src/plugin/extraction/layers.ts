@@ -126,6 +126,11 @@ class Tracker {
   private unresolved = new Set<string>();
   constructor(private resolve: ReadLayerOptions['resolveToken']) {}
 
+  /** Whether token references are being looked up at all. */
+  get resolves(): boolean {
+    return !!this.resolve;
+  }
+
   token(kind: 'variable' | 'style', id: string | undefined, layerId: string): TokenRef | undefined {
     if (!id || !this.resolve) return undefined;
     const cssName = this.resolve(kind, id);
@@ -335,9 +340,16 @@ function textFields(
   };
   const styleId = str(src, styleIdKey);
   if (styleId) {
-    fields.styleId = styleId;
     const token = t.token('style', styleId, layerId);
-    if (token) fields.token = token;
+    if (token) {
+      fields.styleId = styleId;
+      fields.token = token;
+    } else if (!t.resolves) {
+      // Nothing to look styles up with (a caller that wants no tokens): keep the raw id.
+      fields.styleId = styleId;
+    }
+    // Otherwise the style is not in this file's tokens (a library style, say): the id would point
+    // outside the file, so it is left out and t.token has already warned. The values stay.
   }
   return fields;
 }

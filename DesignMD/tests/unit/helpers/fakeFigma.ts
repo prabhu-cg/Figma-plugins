@@ -271,9 +271,11 @@ export function installFakeFigma(options: FakeFigmaOptions = {}): FakeFigmaHandl
   };
 
   if (failures.findAll) {
-    root.findAllWithCriteria = () => {
+    const failing = () => {
       throw new Error('findAllWithCriteria failed');
     };
+    root.findAllWithCriteria = failing;
+    for (const child of root.children ?? []) child.findAllWithCriteria = failing;
   }
 
   vi.stubGlobal('figma', figma);

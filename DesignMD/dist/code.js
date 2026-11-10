@@ -284,7 +284,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       onWarning
     );
   }
-  const COMPONENT_BATCH_SIZE = 100;
+  const COMPONENT_BATCH_SIZE = 20;
   const MAX_DESCENDANTS_SCANNED = 500;
   const MAX_DESCENDANT_DEPTH = 10;
   const STYLE_ID_KEYS = [
@@ -320,26 +320,27 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
     }
   }
-  function scanNodeBindings(node) {
+  async function scanNodeBindings(node, yieldIfDue) {
     const variableIds = /* @__PURE__ */ new Set();
     const styleIds = /* @__PURE__ */ new Set();
     let scanned = 0;
     let truncated = false;
-    const visit = (n, depth) => {
+    const visit = async (n, depth) => {
       if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) {
         truncated = true;
         return;
       }
       scanned++;
+      await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
       if ("children" in n) {
         for (const child of n.children) {
-          visit(child, depth + 1);
+          await visit(child, depth + 1);
         }
       }
     };
-    visit(node, 0);
+    await visit(node, 0);
     return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
   }
   function numberProp(n, key) {
@@ -414,8 +415,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       })
     );
   }
-  function mapVariant(node) {
-    const bindings = scanNodeBindings(node);
+  async function mapVariant(node, yieldIfDue) {
+    const bindings = await scanNodeBindings(node, yieldIfDue);
     return {
       variant: {
         id: node.id,
@@ -437,6 +438,19 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const findComponentLike = (root) => root.findAllWithCriteria({
     types: ["COMPONENT", "COMPONENT_SET"]
   });
+  async function findInDocument(warn) {
+    const found = [];
+    for (const page of figma.root.children) {
+      if (isCancelled()) break;
+      const hits = await safely(
+        () => Promise.resolve(findComponentLike(page)),
+        (err) => warn(`Failed to scan page "${page.name}" for components: ${String(err)}`)
+      );
+      found.push(...hits ?? []);
+      await yieldToEventLoop();
+    }
+    return found;
+  }
   function findComponentsWithin(roots) {
     const found = /* @__PURE__ */ new Map();
     const add = (n) => {
@@ -462,10 +476,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
       );
     }
-    const nodes = await safely(
-      () => Promise.resolve(selection ? findComponentsWithin(selection) : findComponentLike(figma.root)),
-      (err) => warn(`Failed to scan ${selection ? "selection" : "document"} for components: ${String(err)}`)
-    );
+    const nodes = selection ? await safely(
+      () => Promise.resolve(findComponentsWithin(selection)),
+      (err) => warn(`Failed to scan selection for components: ${String(err)}`)
+    ) : await findInDocument(warn);
+    const yieldIfDue = createTimeSlicer();
     const allNodes = nodes ?? [];
     const componentSetsAll = allNodes.filter(
       (n) => n.type === "COMPONENT_SET"
@@ -490,7 +505,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       COMPONENT_BATCH_SIZE,
       async (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
-        const mapped = variantMembers.map(mapVariant);
+        const mapped = await Promise.all(variantMembers.map((m) => mapVariant(m, yieldIfDue)));
         if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
         return {
           id: set.id,
@@ -512,7 +527,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
       async (node) => {
-        const { variant, bindings } = mapVariant(node);
+        const { variant, bindings } = await mapVariant(node, yieldIfDue);
         if (bindings.truncated) truncatedCount++;
         return {
           id: node.id,
@@ -614,31 +629,57 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   async function extractDesignSystem(onProgress, options = {}) {
     const warnings = [];
     const warn = (message) => warnings.push(message);
-    const { collections, variables } = await extractVariableCollections(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "variables", done, total }),
-      warn
+    const timings = [];
+    const timed = async (label, run, count) => {
+      const started = Date.now();
+      const result = await run();
+      timings.push(`${label} ${count(result)} in ${((Date.now() - started) / 1e3).toFixed(1)}s`);
+      return result;
+    };
+    const { collections, variables } = await timed(
+      "variables",
+      () => extractVariableCollections(
+        (done, total) => onProgress == null ? void 0 : onProgress({ stage: "variables", done, total }),
+        warn
+      ),
+      (r) => r.variables.length
     );
-    const textStyles = await extractTextStyles(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "text-styles", done, total }),
-      warn
+    const textStyles = await timed(
+      "text styles",
+      () => extractTextStyles((done, total) => onProgress == null ? void 0 : onProgress({ stage: "text-styles", done, total }), warn),
+      (r) => r.length
     );
-    const paintStyles = await extractPaintStyles(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "color-styles", done, total }),
-      warn
+    const paintStyles = await timed(
+      "color styles",
+      () => extractPaintStyles(
+        (done, total) => onProgress == null ? void 0 : onProgress({ stage: "color-styles", done, total }),
+        warn
+      ),
+      (r) => r.length
     );
-    const effectStyles = await extractEffectStyles(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "effect-styles", done, total }),
-      warn
+    const effectStyles = await timed(
+      "effect styles",
+      () => extractEffectStyles(
+        (done, total) => onProgress == null ? void 0 : onProgress({ stage: "effect-styles", done, total }),
+        warn
+      ),
+      (r) => r.length
     );
-    const gridStyles = await extractGridStyles(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "grid-styles", done, total }),
-      warn
+    const gridStyles = await timed(
+      "grid styles",
+      () => extractGridStyles((done, total) => onProgress == null ? void 0 : onProgress({ stage: "grid-styles", done, total }), warn),
+      (r) => r.length
     );
-    const components = await extractComponents(
-      (done, total) => onProgress == null ? void 0 : onProgress({ stage: "components", done, total }),
-      warn,
-      options.selection
+    const components = await timed(
+      "components",
+      () => extractComponents(
+        (done, total) => onProgress == null ? void 0 : onProgress({ stage: "components", done, total }),
+        warn,
+        options.selection
+      ),
+      (r) => r.length
     );
+    console.log(`[DesignMD] scan: ${timings.join(", ")}`);
     if (isCancelled()) {
       warn("The scan was cancelled before it finished, so these results are partial.");
     } else if (collections.length === 0 && variables.length === 0) {
@@ -714,6 +755,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       __publicField(this, "warnings", []);
       __publicField(this, "unresolved", /* @__PURE__ */ new Set());
       this.resolve = resolve;
+    }
+    /** Whether token references are being looked up at all. */
+    get resolves() {
+      return !!this.resolve;
     }
     token(kind, id, layerId) {
       if (!id || !this.resolve) return void 0;
@@ -891,9 +936,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
     const styleId = str(src, styleIdKey);
     if (styleId) {
-      fields.styleId = styleId;
       const token = t.token("style", styleId, layerId);
-      if (token) fields.token = token;
+      if (token) {
+        fields.styleId = styleId;
+        fields.token = token;
+      } else if (!t.resolves) {
+        fields.styleId = styleId;
+      }
     }
     return fields;
   }
@@ -3194,8 +3243,12 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
           { selection }
         )
       );
+      const transformStarted = Date.now();
       const designSystem = transformToDesignSystem(raw, figma.root.name, scope);
       cachedDesignSystem = designSystem;
+      console.log(
+        `[DesignMD] transform: ${designSystem.summary.variablesCount} variables, ${designSystem.summary.componentSetsCount} sets in ${((Date.now() - transformStarted) / 1e3).toFixed(1)}s; sending the result to the UI`
+      );
       post({ type: "extraction-complete", designSystem });
     } catch (err) {
       post({

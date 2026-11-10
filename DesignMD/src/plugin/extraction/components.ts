@@ -1,9 +1,16 @@
-import { isCancelled, processInBatches, safely } from '../utils/async';
+import {
+  createTimeSlicer,
+  isCancelled,
+  processInBatches,
+  safely,
+  yieldToEventLoop,
+} from '../utils/async';
 import { boundVariablesOf } from './styles';
 import type { ComponentLayout } from '@shared/types';
 import type { RawComponent, RawComponentProperty, RawComponentVariant } from './rawTypes';
 
-const COMPONENT_BATCH_SIZE = 100;
+/** Components per batch. Kept small: a batch's components are scanned side by side. */
+const COMPONENT_BATCH_SIZE = 20;
 /** Bound to avoid pathological cost scanning huge component subtrees for bound variables. */
 const MAX_DESCENDANTS_SCANNED = 500;
 const MAX_DESCENDANT_DEPTH = 10;
@@ -69,28 +76,33 @@ function readStyleIds(n: SceneNode, into: Set<string>): void {
 }
 
 /** Collects variable ids bound directly on a subtree, plus the styles it applies (resolved later). */
-function scanNodeBindings(node: SceneNode): NodeBindings {
+async function scanNodeBindings(
+  node: SceneNode,
+  yieldIfDue: () => Promise<void>,
+): Promise<NodeBindings> {
   const variableIds = new Set<string>();
   const styleIds = new Set<string>();
   let scanned = 0;
   let truncated = false;
 
-  const visit = (n: SceneNode, depth: number) => {
+  const visit = async (n: SceneNode, depth: number) => {
     if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) {
       truncated = true;
       return;
     }
     scanned++;
+    // Each node costs several calls into Figma; hand control back often so the editor stays usable.
+    await yieldIfDue();
     boundVariablesOf(n).forEach((id) => variableIds.add(id));
     readStyleIds(n, styleIds);
     if ('children' in n) {
       for (const child of (n as unknown as { children: SceneNode[] }).children) {
-        visit(child, depth + 1);
+        await visit(child, depth + 1);
       }
     }
   };
 
-  visit(node, 0);
+  await visit(node, 0);
   return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
 }
 
@@ -179,8 +191,11 @@ async function mapPropertyDefinitions(
   );
 }
 
-function mapVariant(node: ComponentNode): { variant: RawComponentVariant; bindings: NodeBindings } {
-  const bindings = scanNodeBindings(node);
+async function mapVariant(
+  node: ComponentNode,
+  yieldIfDue: () => Promise<void>,
+): Promise<{ variant: RawComponentVariant; bindings: NodeBindings }> {
+  const bindings = await scanNodeBindings(node, yieldIfDue);
   return {
     variant: {
       id: node.id,
@@ -209,6 +224,25 @@ const findComponentLike = (root: SceneNode | DocumentNode | PageNode): Component
   (root as ChildrenMixin).findAllWithCriteria({
     types: ['COMPONENT', 'COMPONENT_SET'],
   }) as ComponentLike[];
+
+/**
+ * Searches the document one page at a time. One search over the whole document is a single long
+ * stretch of work on Figma's main thread (it froze the editor on big files); per page it is bounded
+ * by the page, with a yield between pages, and one page that fails does not lose the others.
+ */
+async function findInDocument(warn: (message: string) => void): Promise<ComponentLike[]> {
+  const found: ComponentLike[] = [];
+  for (const page of figma.root.children) {
+    if (isCancelled()) break;
+    const hits = await safely(
+      () => Promise.resolve(findComponentLike(page)),
+      (err) => warn(`Failed to scan page "${page.name}" for components: ${String(err)}`),
+    );
+    found.push(...(hits ?? []));
+    await yieldToEventLoop();
+  }
+  return found;
+}
 
 /**
  * Components and component sets within the given layers: the layers themselves when they are
@@ -250,12 +284,13 @@ export async function extractComponents(
     );
   }
 
-  const nodes = await safely(
-    () =>
-      Promise.resolve(selection ? findComponentsWithin(selection) : findComponentLike(figma.root)),
-    (err) =>
-      warn(`Failed to scan ${selection ? 'selection' : 'document'} for components: ${String(err)}`),
-  );
+  const nodes = selection
+    ? await safely(
+        () => Promise.resolve(findComponentsWithin(selection)),
+        (err) => warn(`Failed to scan selection for components: ${String(err)}`),
+      )
+    : await findInDocument(warn);
+  const yieldIfDue = createTimeSlicer();
 
   const allNodes = nodes ?? [];
   const componentSetsAll = allNodes.filter(
@@ -286,7 +321,7 @@ export async function extractComponents(
     COMPONENT_BATCH_SIZE,
     async (set): Promise<RawComponent> => {
       const variantMembers = set.children.filter((c): c is ComponentNode => c.type === 'COMPONENT');
-      const mapped = variantMembers.map(mapVariant);
+      const mapped = await Promise.all(variantMembers.map((m) => mapVariant(m, yieldIfDue)));
       if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
       return {
         id: set.id,
@@ -310,7 +345,7 @@ export async function extractComponents(
     standaloneComponents,
     COMPONENT_BATCH_SIZE,
     async (node): Promise<RawComponent> => {
-      const { variant, bindings } = mapVariant(node);
+      const { variant, bindings } = await mapVariant(node, yieldIfDue);
       if (bindings.truncated) truncatedCount++;
       return {
         id: node.id,

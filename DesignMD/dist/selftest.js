@@ -3,6 +3,14 @@
   function yieldToEventLoop() {
     return new Promise((resolve) => setTimeout(resolve, 0));
   }
+  function createTimeSlicer(intervalMs = 12, now = Date.now) {
+    let last = now();
+    return async () => {
+      if (now() - last < intervalMs) return;
+      await yieldToEventLoop();
+      last = now();
+    };
+  }
   async function processInBatches(items, batchSize, fn, onBatch) {
     const results = new Array(items.length);
     for (let start = 0; start < items.length; start += batchSize) {
@@ -48,7 +56,7 @@
     visit(boundVariables);
     return Array.from(new Set(ids));
   }
-  const COMPONENT_BATCH_SIZE = 100;
+  const COMPONENT_BATCH_SIZE = 20;
   const MAX_DESCENDANTS_SCANNED = 500;
   const MAX_DESCENDANT_DEPTH = 10;
   const STYLE_ID_KEYS = [
@@ -84,26 +92,27 @@
       }
     }
   }
-  function scanNodeBindings(node) {
+  async function scanNodeBindings(node, yieldIfDue) {
     const variableIds = /* @__PURE__ */ new Set();
     const styleIds = /* @__PURE__ */ new Set();
     let scanned = 0;
     let truncated = false;
-    const visit = (n, depth) => {
+    const visit = async (n, depth) => {
       if (scanned >= MAX_DESCENDANTS_SCANNED || depth > MAX_DESCENDANT_DEPTH) {
         truncated = true;
         return;
       }
       scanned++;
+      await yieldIfDue();
       boundVariablesOf(n).forEach((id) => variableIds.add(id));
       readStyleIds(n, styleIds);
       if ("children" in n) {
         for (const child of n.children) {
-          visit(child, depth + 1);
+          await visit(child, depth + 1);
         }
       }
     };
-    visit(node, 0);
+    await visit(node, 0);
     return { variableIds: Array.from(variableIds), styleIds: Array.from(styleIds), truncated };
   }
   function numberProp(n, key) {
@@ -178,8 +187,8 @@
       })
     );
   }
-  function mapVariant(node) {
-    const bindings = scanNodeBindings(node);
+  async function mapVariant(node, yieldIfDue) {
+    const bindings = await scanNodeBindings(node, yieldIfDue);
     return {
       variant: {
         id: node.id,
@@ -201,6 +210,18 @@
   const findComponentLike = (root) => root.findAllWithCriteria({
     types: ["COMPONENT", "COMPONENT_SET"]
   });
+  async function findInDocument(warn) {
+    const found = [];
+    for (const page of figma.root.children) {
+      const hits = await safely(
+        () => Promise.resolve(findComponentLike(page)),
+        (err) => warn(`Failed to scan page "${page.name}" for components: ${String(err)}`)
+      );
+      found.push(...hits ?? []);
+      await yieldToEventLoop();
+    }
+    return found;
+  }
   function findComponentsWithin(roots) {
     const found = /* @__PURE__ */ new Map();
     const add = (n) => {
@@ -225,10 +246,11 @@
         (err) => warn(`Failed to load all pages for component scan: ${String(err)}`)
       );
     }
-    const nodes = await safely(
-      () => Promise.resolve(selection ? findComponentsWithin(selection) : findComponentLike(figma.root)),
-      (err) => warn(`Failed to scan ${selection ? "selection" : "document"} for components: ${String(err)}`)
-    );
+    const nodes = selection ? await safely(
+      () => Promise.resolve(findComponentsWithin(selection)),
+      (err) => warn(`Failed to scan selection for components: ${String(err)}`)
+    ) : await findInDocument(warn);
+    const yieldIfDue = createTimeSlicer();
     const allNodes = nodes ?? [];
     const componentSetsAll = allNodes.filter(
       (n) => n.type === "COMPONENT_SET"
@@ -253,7 +275,7 @@
       COMPONENT_BATCH_SIZE,
       async (set) => {
         const variantMembers = set.children.filter((c) => c.type === "COMPONENT");
-        const mapped = variantMembers.map(mapVariant);
+        const mapped = await Promise.all(variantMembers.map((m) => mapVariant(m, yieldIfDue)));
         if (mapped.some((m) => m.bindings.truncated)) truncatedCount++;
         return {
           id: set.id,
@@ -274,7 +296,7 @@
       standaloneComponents,
       COMPONENT_BATCH_SIZE,
       async (node) => {
-        const { variant, bindings } = mapVariant(node);
+        const { variant, bindings } = await mapVariant(node, yieldIfDue);
         if (bindings.truncated) truncatedCount++;
         return {
           id: node.id,

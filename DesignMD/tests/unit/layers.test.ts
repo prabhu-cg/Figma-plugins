@@ -305,6 +305,20 @@ describe('readLayerTree', () => {
       expect(r.usedVariableIds).toEqual([]);
     });
 
+    it('leaves out a text style id it cannot resolve, so no id points outside the file', async () => {
+      const r = await readLayerTree(textNode({ textStyleId: 'S:library,1:2' }), {
+        resolveToken: resolve,
+      });
+      expect(r.tree.text?.styleId).toBeUndefined();
+      expect(r.tree.text?.token).toBeUndefined();
+      expect(r.warnings.filter((w) => w.code === 'UNRESOLVED_REFERENCE')).toHaveLength(1);
+    });
+
+    it('keeps the raw text style id when no resolver is given', async () => {
+      const r = await readLayerTree(textNode({ textStyleId: 'S:library,1:2' }));
+      expect(r.tree.text?.styleId).toBe('S:library,1:2');
+    });
+
     it('writes no tokens without a resolver', async () => {
       const node = frame([], {
         fills: [solid(0, 0, 1, { boundVariables: { color: { id: 'V1' } } })],

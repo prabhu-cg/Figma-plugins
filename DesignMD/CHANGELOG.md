@@ -26,6 +26,11 @@
 
 ### Changed
 
+- The scan no longer holds Figma's main thread for long stretches: the document is searched one page
+  at a time (one bad page no longer loses the rest), component bindings are read in time slices, and
+  the plugin console reports per-stage timings.
+- A text layer whose text style is not in the file (a library style) no longer keeps its style id; the
+  id would point outside the file. The values stay, with a warning.
 - Variant diffs now cover sets of up to 256 variants (was 128), and a component may use 20 s (was 5 s)
   to read its layers, inside the same 10-minute budget for the whole run.
 - `propertyRefs` are written only for layers driven by the component itself: layers inside a nested

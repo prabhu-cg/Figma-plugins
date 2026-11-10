@@ -104,11 +104,29 @@ describe('extractComponents: discovery', () => {
     expect(props.map((p) => p.defaultResolvedName)).toEqual(['icon/arrow', 'icon/plus', undefined]);
   });
 
+  it('keeps the components of other pages when one page cannot be searched', async () => {
+    const bad = page('Broken', [component('Lost')]);
+    bad.findAllWithCriteria = () => {
+      throw new Error('page search failed');
+    };
+    installFakeFigma({
+      root: document('File', [
+        page('Good', [component('Kept')]),
+        bad,
+        page('Also good', [component('AlsoKept')]),
+      ]),
+    });
+    const { list, warn } = collect();
+    const result = await extractComponents(undefined, warn);
+    expect(result.map((c) => c.name)).toEqual(['Kept', 'AlsoKept']);
+    expect(list).toEqual([expect.stringContaining('Failed to scan page "Broken"')]);
+  });
+
   it('returns an empty list with a warning when the document scan throws', async () => {
     installFakeFigma({ failures: { findAll: true } });
     const { list, warn } = collect();
     expect(await extractComponents(undefined, warn)).toEqual([]);
-    expect(list.some((m) => m.includes('Failed to scan document'))).toBe(true);
+    expect(list.some((m) => m.includes('Failed to scan page "Page 1"'))).toBe(true);
   });
 
   it('still scans (and warns) when loading all pages fails', async () => {

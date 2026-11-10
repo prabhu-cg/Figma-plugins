@@ -35,37 +35,70 @@ export async function extractDesignSystem(
 ): Promise<ExtractionResult> {
   const warnings: string[] = [];
   const warn = (message: string) => warnings.push(message);
+  // Per-stage timings, printed once at the end (Plugins > Development > Open console).
+  const timings: string[] = [];
+  const timed = async <T>(label: string, run: () => Promise<T>, count: (r: T) => number) => {
+    const started = Date.now();
+    const result = await run();
+    timings.push(`${label} ${count(result)} in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+    return result;
+  };
 
-  const { collections, variables } = await extractVariableCollections(
-    (done, total) => onProgress?.({ stage: 'variables', done, total }),
-    warn,
+  const { collections, variables } = await timed(
+    'variables',
+    () =>
+      extractVariableCollections(
+        (done, total) => onProgress?.({ stage: 'variables', done, total }),
+        warn,
+      ),
+    (r) => r.variables.length,
   );
 
-  const textStyles = await extractTextStyles(
-    (done, total) => onProgress?.({ stage: 'text-styles', done, total }),
-    warn,
+  const textStyles = await timed(
+    'text styles',
+    () =>
+      extractTextStyles((done, total) => onProgress?.({ stage: 'text-styles', done, total }), warn),
+    (r) => r.length,
   );
 
-  const paintStyles = await extractPaintStyles(
-    (done, total) => onProgress?.({ stage: 'color-styles', done, total }),
-    warn,
+  const paintStyles = await timed(
+    'color styles',
+    () =>
+      extractPaintStyles(
+        (done, total) => onProgress?.({ stage: 'color-styles', done, total }),
+        warn,
+      ),
+    (r) => r.length,
   );
 
-  const effectStyles = await extractEffectStyles(
-    (done, total) => onProgress?.({ stage: 'effect-styles', done, total }),
-    warn,
+  const effectStyles = await timed(
+    'effect styles',
+    () =>
+      extractEffectStyles(
+        (done, total) => onProgress?.({ stage: 'effect-styles', done, total }),
+        warn,
+      ),
+    (r) => r.length,
   );
 
-  const gridStyles = await extractGridStyles(
-    (done, total) => onProgress?.({ stage: 'grid-styles', done, total }),
-    warn,
+  const gridStyles = await timed(
+    'grid styles',
+    () =>
+      extractGridStyles((done, total) => onProgress?.({ stage: 'grid-styles', done, total }), warn),
+    (r) => r.length,
   );
 
-  const components = await extractComponents(
-    (done, total) => onProgress?.({ stage: 'components', done, total }),
-    warn,
-    options.selection,
+  const components = await timed(
+    'components',
+    () =>
+      extractComponents(
+        (done, total) => onProgress?.({ stage: 'components', done, total }),
+        warn,
+        options.selection,
+      ),
+    (r) => r.length,
   );
+  console.log(`[DesignMD] scan: ${timings.join(', ')}`);
 
   if (isCancelled()) {
     warn('The scan was cancelled before it finished, so these results are partial.');
