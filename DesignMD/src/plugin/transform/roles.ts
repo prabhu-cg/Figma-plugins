@@ -33,11 +33,11 @@ const NAME_RULES: Array<[LayerRole, RegExp]> = [
   ['heading', /\b(heading|headline|title|h[1-6])\b/i],
   ['button', /\b(button|btn|cta)\b/i],
   ['link', /\b(link|anchor)\b/i],
-  ['input', /\b(input|field|textfield|textarea|select|dropdown)\b/i],
+  ['input', /\b(input|field|textfield|textarea)\b/i],
   ['divider', /\b(divider|separator|hr|rule)\b/i],
   ['icon', /\b(icon|glyph|chevron|caret|arrow)\b/i],
   ['image', /\b(image|img|photo|picture|avatar|thumbnail|illustration)\b/i],
-  ['slot', /\b(slot|placeholder|content)\b/i],
+  ['slot', /\b(slot|placeholder)\b/i],
   ['label', /\b(label|caption)\b/i],
 ];
 

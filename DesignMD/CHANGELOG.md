@@ -26,6 +26,12 @@
 
 ### Changed
 
+- Variant diffs now cover sets of up to 256 variants (was 128), and a component may use 20 s (was 5 s)
+  to read its layers, inside the same 10-minute budget for the whole run.
+- `propertyRefs` are written only for layers driven by the component itself: layers inside a nested
+  instance no longer carry that instance's own property keys, which the file did not contain.
+- Role inference no longer reads "dropdown" or "select" as an input, or "content" as a slot.
+
 - Component docs show property names without Figma's `#id:id` suffix, and the default of an
   instance-swap property as a component name instead of a node id.
 

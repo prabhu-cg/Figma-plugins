@@ -20,12 +20,12 @@ import { defaultVariantOf } from './components';
 import { readLayerTree, type ReadLayerOptions, type ReadStats } from './layers';
 
 /** A set with more variants than this gets no diffs. */
-export const MAX_VARIANTS_FOR_DIFFS = 128;
+export const MAX_VARIANTS_FOR_DIFFS = 256;
 /** Wall-clock budget for the layers and diffs of one component. */
-export const COMPONENT_TIME_BUDGET_MS = 5000;
+export const COMPONENT_TIME_BUDGET_MS = 20_000;
 /**
  * Wall-clock budget for reading every component in one generate. The per-component budget alone
- * would allow (components x 5 s) in the worst case. A real 2,581-component file took 3 min 36 s,
+ * would allow (components x 20 s) in the worst case. A real 2,581-component file took 3 min 36 s,
  * so this is a safety net with roughly 3x headroom, not something a normal file reaches.
  */
 export const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1000;

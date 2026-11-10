@@ -456,7 +456,7 @@ export async function readLayerTree(
   let count = 0;
   let truncated = false;
 
-  const visit = async (n: unknown, depth: number): Promise<Layer> => {
+  const visit = async (n: unknown, depth: number, insideInstance: boolean): Promise<Layer> => {
     count++;
     if (options.yieldIfDue) await options.yieldIfDue();
     if (options.stats) options.stats.layers++;
@@ -498,7 +498,10 @@ export async function readLayerTree(
       stats.instanceMs += Date.now() - lookupStart;
     }
     if (instanceOf) layer.instanceOf = instanceOf;
-    const propertyRefs = readPropertyRefs(n);
+    // A layer inside a nested instance is driven by the nested component's properties, not by this
+    // component's, so its references would point at keys this file does not have. The instance
+    // layer itself is driven by this component, and keeps its references.
+    const propertyRefs = insideInstance ? undefined : readPropertyRefs(n);
     if (propertyRefs) layer.propertyRefs = propertyRefs;
 
     const kids = childrenOf(n);
@@ -511,14 +514,14 @@ export async function readLayerTree(
             truncated = true;
             break;
           }
-          layer.children.push(await visit(child, depth + 1));
+          layer.children.push(await visit(child, depth + 1, insideInstance || type === 'INSTANCE'));
         }
       }
     }
     return layer;
   };
 
-  const tree = await visit(root, 0);
+  const tree = await visit(root, 0, false);
   if (options.stats) options.stats.trees++;
   const warnings = t.warnings;
   if (truncated) {

@@ -148,7 +148,7 @@ describe('extractComponentStructure', () => {
 
     const many = componentSet(
       'Big',
-      Array.from({ length: 130 }, (_, i) => ({ props: { N: String(i) } })),
+      Array.from({ length: 260 }, (_, i) => ({ props: { N: String(i) } })),
     );
     installFakeFigma({ root: document('F', [page('P', [many])]) });
     const skipped = await extractComponentStructure(many as never);
@@ -276,6 +276,28 @@ describe('overall time budget', () => {
     const docs = transformComponents(await extractComponents());
     const out = await extractStructures(docs);
     expect([...out.values()].every((r) => !('error' in r))).toBe(true);
+  });
+});
+
+describe('references stay inside the file', () => {
+  it('has no broken property references even when a nested instance has its own', async () => {
+    const nested = node(
+      'INSTANCE',
+      'Badge',
+      { visible: true, componentPropertyReferences: { visible: 'has badge#own:1' } },
+      [text('Count', { componentPropertyReferences: { characters: 'count#nested:1' } })],
+    );
+    const set = componentSet('Host', [{ props: { S: 'a' }, children: [nested] }], {
+      componentPropertyDefinitions: {
+        S: { type: 'VARIANT', defaultValue: 'a', variantOptions: ['a'] },
+        'has badge#own:1': { type: 'BOOLEAN', defaultValue: true },
+      },
+    });
+    installFakeFigma({ root: document('F', [page('P', [set])]) });
+    const docs = transformComponents(await extractComponents());
+    const ds = { ...makeDesignSystem(), components: docs };
+    const file = buildComponentsFile(ds, await extractStructures(docs));
+    expect(findBrokenRefs(file, { checkInstances: false })).toEqual([]);
   });
 });
 

@@ -85,6 +85,20 @@ describe('inferRole', () => {
     expect(inferRole(layer({ name: 'Avatar' })).role).toBe('image');
   });
 
+  it('does not guess from ambiguous words: a menu item in a dropdown is not an input, "Content" is not a slot', () => {
+    expect(
+      inferRole(layer({ name: 'Dropdown / menu item', type: 'INSTANCE', children: [child] })),
+    ).toEqual({
+      role: 'container',
+      roleSource: 'type',
+    });
+    expect(inferRole(layer({ name: 'Select', children: [child] })).role).toBe('container');
+    expect(inferRole(layer({ name: 'Left Content', children: [child] })).role).toBe('container');
+    // real inputs and slots are still found
+    expect(inferRole(layer({ name: 'Text input', children: [child] })).role).toBe('input');
+    expect(inferRole(layer({ name: 'Left slot', children: [child] })).role).toBe('slot');
+  });
+
   it('matches whole words only', () => {
     expect(inferRole(layer({ name: 'Iconography', children: [child] })).roleSource).toBe('type');
     expect(inferRole(layer({ name: 'Linkedin', type: 'TEXT' })).role).toBe('text');

@@ -254,6 +254,28 @@ describe('readLayerTree', () => {
     expect(tree.propertyRefs).toEqual({ visible: 'show-icon#12:1', mainComponent: 'icon#3287:0' });
   });
 
+  it('drops property references on layers inside a nested instance, keeps them on the instance itself', async () => {
+    const inner = {
+      id: 'n1',
+      type: 'TEXT',
+      name: 'Inner text',
+      visible: true,
+      componentPropertyReferences: { characters: 'label#nested:1' },
+    };
+    const instance = {
+      id: 'i1',
+      type: 'INSTANCE',
+      name: 'Badge',
+      visible: true,
+      componentPropertyReferences: { visible: 'has badge#own:1' },
+      children: [inner],
+    };
+    const { tree } = await readLayerTree(frame([instance]));
+    const badge = tree.children[0];
+    expect(badge.propertyRefs).toEqual({ visible: 'has badge#own:1' });
+    expect(badge.children[0].propertyRefs).toBeUndefined();
+  });
+
   describe('tokens', () => {
     const resolve = (kind: 'variable' | 'style', id: string) =>
       ({ 'variable:V1': '--color-primary-500', 'style:S1': '--text-body' })[`${kind}:${id}`];

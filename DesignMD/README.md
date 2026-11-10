@@ -112,10 +112,10 @@ exceeds it, since its token usage may then be under-reported.
 and none of them can take the plugin down:
 
 - **Budgets.** `components.json` reads each component's layers inside the same budget (500 layers,
-  10 levels), plus a 5 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
+  10 levels), plus a 20 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
   10-minute budget for the whole run. A component
   that goes over is written with `treeTruncated: true` and a warning, never skipped silently. Sets
-  with more than 128 variants get no diffs (a warning says so).
+  with more than 256 variants get no diffs (a warning says so).
 - **Isolation.** Each component is read on its own. One that cannot be found, throws, or has
   unreadable properties becomes a warning (`COMPONENT_FAILED`, `PROPERTIES_UNREADABLE`) and the scan
   continues.

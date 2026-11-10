@@ -991,7 +991,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const t = new Tracker(options.resolveToken);
     let count = 0;
     let truncated = false;
-    const visit = async (n, depth) => {
+    const visit = async (n, depth, insideInstance) => {
       var _a;
       count++;
       if (options.yieldIfDue) await options.yieldIfDue();
@@ -1031,7 +1031,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         stats.instanceMs += Date.now() - lookupStart;
       }
       if (instanceOf) layer.instanceOf = instanceOf;
-      const propertyRefs = readPropertyRefs(n);
+      const propertyRefs = insideInstance ? void 0 : readPropertyRefs(n);
       if (propertyRefs) layer.propertyRefs = propertyRefs;
       const kids = childrenOf(n);
       if (kids.length > 0) {
@@ -1043,13 +1043,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
               truncated = true;
               break;
             }
-            layer.children.push(await visit(child, depth + 1));
+            layer.children.push(await visit(child, depth + 1, insideInstance || type === "INSTANCE"));
           }
         }
       }
       return layer;
     };
-    const tree = await visit(root, 0);
+    const tree = await visit(root, 0, false);
     if (options.stats) options.stats.trees++;
     const warnings = t.warnings;
     if (truncated) {
@@ -1082,11 +1082,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     ["heading", /\b(heading|headline|title|h[1-6])\b/i],
     ["button", /\b(button|btn|cta)\b/i],
     ["link", /\b(link|anchor)\b/i],
-    ["input", /\b(input|field|textfield|textarea|select|dropdown)\b/i],
+    ["input", /\b(input|field|textfield|textarea)\b/i],
     ["divider", /\b(divider|separator|hr|rule)\b/i],
     ["icon", /\b(icon|glyph|chevron|caret|arrow)\b/i],
     ["image", /\b(image|img|photo|picture|avatar|thumbnail|illustration)\b/i],
-    ["slot", /\b(slot|placeholder|content)\b/i],
+    ["slot", /\b(slot|placeholder)\b/i],
     ["label", /\b(label|caption)\b/i]
   ];
   const words = (name) => name.replace(/[_\-/.]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -1233,8 +1233,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
-  const MAX_VARIANTS_FOR_DIFFS = 128;
-  const COMPONENT_TIME_BUDGET_MS = 5e3;
+  const MAX_VARIANTS_FOR_DIFFS = 256;
+  const COMPONENT_TIME_BUDGET_MS = 2e4;
   const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1e3;
   const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
   const BATCH_SIZE = 4;
