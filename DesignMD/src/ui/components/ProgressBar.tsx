@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 interface ProgressBarProps {
   stage: string;
   percent: number;
@@ -20,7 +22,24 @@ const STAGE_LABELS: Record<string, string> = {
   assemble: 'Building components.json',
 };
 
+/** "about 3 min left" from how fast this stage has gone so far; empty until the rate is trustworthy. */
+export function formatRemaining(elapsedMs: number, progressed: number, left: number): string {
+  if (elapsedMs < 5000 || progressed <= 0 || left <= 0) return '';
+  const seconds = (elapsedMs / 1000) * (left / progressed);
+  if (seconds < 10) return '';
+  if (seconds < 90) return `about ${Math.round(seconds / 5) * 5} s left`;
+  return `about ${Math.round(seconds / 60)} min left`;
+}
+
 export function ProgressBar({ stage, percent, done, total, detail }: ProgressBarProps) {
+  // When this stage began, and how far along it already was, so the estimate uses only its own pace.
+  const began = useRef({ stage, at: Date.now(), done: done ?? 0 });
+  if (began.current.stage !== stage) began.current = { stage, at: Date.now(), done: done ?? 0 };
+  const remaining =
+    done !== undefined && total !== undefined && total > 0
+      ? formatRemaining(Date.now() - began.current.at, done - began.current.done, total - done)
+      : '';
+
   return (
     <div
       className="dmd-progress"
@@ -34,6 +53,7 @@ export function ProgressBar({ stage, percent, done, total, detail }: ProgressBar
         {STAGE_LABELS[stage] ?? stage}… {percent}%
         {done !== undefined && total !== undefined && total > 0 ? ` · ${done} of ${total}` : ''}
         {detail ? ` · ${detail}` : ''}
+        {remaining ? ` · ${remaining}` : ''}
       </div>
       <div className="dmd-progress-track">
         <div className="dmd-progress-fill" style={{ transform: `scaleX(${percent / 100})` }} />

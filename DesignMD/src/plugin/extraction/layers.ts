@@ -232,8 +232,15 @@ function readEffects(
   });
 }
 
+/** True for a non-empty list. Layers with nothing in a list do not need the calls that describe it. */
+const hasItems = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+
 function readStrokes(n: unknown, layerId: string, t: Tracker): LayerStrokes | undefined {
-  const paints = readPaints(read(n, 'strokes'), str(n, 'strokeStyleId'), layerId, t);
+  const raw = read(n, 'strokes');
+  // Most layers have no stroke: skip the three calls (style id, weight, alignment) that only matter
+  // when there is one. Each call into Figma costs, and a large file has hundreds of thousands of layers.
+  if (Array.isArray(raw) && raw.length === 0) return { paints: [], weight: 0, align: 'INSIDE' };
+  const paints = readPaints(raw, str(n, 'strokeStyleId'), layerId, t);
   if (!paints) return undefined;
   return {
     paints,
@@ -494,11 +501,23 @@ export async function readLayerTree(
     const opacity = num(n, 'opacity');
     if (opacity !== undefined) layer.opacity = round3(opacity);
 
-    const fills = readPaints(read(n, 'fills'), str(n, 'fillStyleId'), id, t);
+    const rawFills = read(n, 'fills');
+    const fills = readPaints(
+      rawFills,
+      hasItems(rawFills) ? str(n, 'fillStyleId') : undefined,
+      id,
+      t,
+    );
     if (fills) layer.fills = fills;
     const strokes = readStrokes(n, id, t);
     if (strokes) layer.strokes = strokes;
-    const effects = readEffects(read(n, 'effects'), str(n, 'effectStyleId'), id, t);
+    const rawEffects = read(n, 'effects');
+    const effects = readEffects(
+      rawEffects,
+      hasItems(rawEffects) ? str(n, 'effectStyleId') : undefined,
+      id,
+      t,
+    );
     if (effects) layer.effects = effects;
 
     if (type === 'TEXT') layer.text = readText(n, id, includeText, t);

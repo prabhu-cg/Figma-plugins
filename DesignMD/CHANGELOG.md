@@ -26,6 +26,10 @@
 
 ### Changed
 
+- Progress bars show an estimate of the time left ("about 3 min left") from the pace of the current
+  stage.
+- Reading a layer makes fewer calls into Figma: the style id, weight and alignment of a stroke, the
+  effect style id and the fill style id are only read when the layer has strokes, effects or fills.
 - Contrast tab: the two colour dropdowns no longer overflow the panel when token names are long, and
   each tab opens scrolled to the top.
 - The plugin console now splits the components stage into finding components and reading their

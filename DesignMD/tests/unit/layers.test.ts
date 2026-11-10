@@ -60,6 +60,66 @@ const frame = (children: unknown[] = [], over: object = {}) => ({
 });
 
 describe('readLayerTree', () => {
+  it('does not make the calls that only matter for a stroke, an effect or a fill when the layer has none', async () => {
+    const touched = new Set<string>();
+    const node = new Proxy(
+      { id: 'a', type: 'RECTANGLE', name: 'R', visible: true, fills: [], strokes: [], effects: [] },
+      {
+        get(target, key) {
+          touched.add(String(key));
+          return (target as Record<string, unknown>)[key as string];
+        },
+      },
+    );
+    const { tree } = await readLayerTree(node);
+    expect(tree.strokes).toEqual({ paints: [], weight: 0, align: 'INSIDE' });
+    expect(tree.fills).toEqual([]);
+    expect(tree.effects).toEqual([]);
+    for (const skipped of [
+      'strokeStyleId',
+      'strokeWeight',
+      'strokeAlign',
+      'fillStyleId',
+      'effectStyleId',
+    ]) {
+      expect(touched.has(skipped), skipped).toBe(false);
+    }
+  });
+
+  it('still reads the style id, weight and alignment when there is something to describe', async () => {
+    const touched = new Set<string>();
+    const node = new Proxy(
+      {
+        id: 'a',
+        type: 'RECTANGLE',
+        name: 'R',
+        visible: true,
+        fills: [solid(1, 0, 0)],
+        strokes: [solid(0, 0, 0)],
+        effects: [{ type: 'LAYER_BLUR', visible: true, radius: 4 }],
+        strokeWeight: 2,
+        strokeAlign: 'CENTER',
+      },
+      {
+        get(target, key) {
+          touched.add(String(key));
+          return (target as Record<string, unknown>)[key as string];
+        },
+      },
+    );
+    const { tree } = await readLayerTree(node);
+    expect(tree.strokes).toMatchObject({ weight: 2, align: 'CENTER' });
+    for (const needed of [
+      'strokeStyleId',
+      'strokeWeight',
+      'strokeAlign',
+      'fillStyleId',
+      'effectStyleId',
+    ]) {
+      expect(touched.has(needed), needed).toBe(true);
+    }
+  });
+
   it('reads geometry, auto layout, radius, fills, strokes and effects as plain values', async () => {
     const { tree } = await readLayerTree(frame([textNode()]));
     expect(tree).toMatchObject({

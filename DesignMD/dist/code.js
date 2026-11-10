@@ -870,8 +870,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       return effect;
     });
   }
+  const hasItems = (v) => Array.isArray(v) && v.length > 0;
   function readStrokes(n, layerId, t) {
-    const paints = readPaints(read(n, "strokes"), str(n, "strokeStyleId"), layerId, t);
+    const raw = read(n, "strokes");
+    if (Array.isArray(raw) && raw.length === 0) return { paints: [], weight: 0, align: "INSIDE" };
+    const paints = readPaints(raw, str(n, "strokeStyleId"), layerId, t);
     if (!paints) return void 0;
     return {
       paints,
@@ -1091,11 +1094,23 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (radius !== void 0) layer.radius = radius;
       const opacity = num(n, "opacity");
       if (opacity !== void 0) layer.opacity = round3(opacity);
-      const fills = readPaints(read(n, "fills"), str(n, "fillStyleId"), id, t);
+      const rawFills = read(n, "fills");
+      const fills = readPaints(
+        rawFills,
+        hasItems(rawFills) ? str(n, "fillStyleId") : void 0,
+        id,
+        t
+      );
       if (fills) layer.fills = fills;
       const strokes = readStrokes(n, id, t);
       if (strokes) layer.strokes = strokes;
-      const effects = readEffects(read(n, "effects"), str(n, "effectStyleId"), id, t);
+      const rawEffects = read(n, "effects");
+      const effects = readEffects(
+        rawEffects,
+        hasItems(rawEffects) ? str(n, "effectStyleId") : void 0,
+        id,
+        t
+      );
       if (effects) layer.effects = effects;
       if (type === "TEXT") layer.text = readText(n, id, includeText, t);
       const stats = options.stats;

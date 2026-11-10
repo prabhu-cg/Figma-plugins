@@ -818,3 +818,23 @@ describe('App: tabs', () => {
     expect(screen.getByRole('tab', { name: 'Summary' })).toHaveAttribute('aria-selected', 'true');
   });
 });
+
+describe('App: time left', () => {
+  it('shows an estimate from the pace of the current stage once there is enough to go on', () => {
+    vi.useFakeTimers();
+    try {
+      render(<App />);
+      fireEvent.click(screen.getByRole('button', { name: /Scan/ }));
+      fromPlugin({ type: 'progress', stage: 'components', percent: 0, done: 0, total: 1000 });
+      expect(screen.getByRole('progressbar')).not.toHaveTextContent('left');
+      act(() => {
+        vi.advanceTimersByTime(30_000);
+      });
+      fromPlugin({ type: 'progress', stage: 'components', percent: 10, done: 100, total: 1000 });
+      // 100 of 1000 in 30 s: about 270 s more
+      expect(screen.getByRole('progressbar')).toHaveTextContent('about 5 min left');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
