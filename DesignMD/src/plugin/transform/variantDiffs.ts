@@ -44,6 +44,8 @@ const ATTRIBUTES = [
 interface Indexed {
   layer: Layer;
   parentPath: string | undefined;
+  /** Position among the parent's children in this tree. 0 for the root. */
+  index: number;
 }
 
 /** Name paths for every layer in a tree, in document order. Reports duplicated sibling names. */
@@ -53,12 +55,12 @@ function indexTree(
   componentId: string | undefined,
 ): Map<string, Indexed> {
   const out = new Map<string, Indexed>();
-  const visit = (layer: Layer, path: string, parentPath: string | undefined) => {
-    out.set(path, { layer, parentPath });
+  const visit = (layer: Layer, path: string, parentPath: string | undefined, index: number) => {
+    out.set(path, { layer, parentPath, index });
     const counts = new Map<string, number>();
     for (const child of layer.children) counts.set(child.name, (counts.get(child.name) ?? 0) + 1);
     const seen = new Map<string, number>();
-    for (const child of layer.children) {
+    for (const [childIndex, child] of layer.children.entries()) {
       const total = counts.get(child.name)!;
       const n = seen.get(child.name) ?? 0;
       seen.set(child.name, n + 1);
@@ -71,10 +73,10 @@ function indexTree(
           layerId: child.id,
         });
       }
-      visit(child, `${path}/${segment}`, path);
+      visit(child, `${path}/${segment}`, path, childIndex);
     }
   };
-  visit(root, root.name, undefined);
+  visit(root, root.name, undefined, 0);
   return out;
 }
 
@@ -129,7 +131,11 @@ export function diffVariant(
       const changes = changesBetween(baseIndex.get(path)!.layer, entry.layer);
       if (Object.keys(changes).length > 0) layers.push({ path, changes });
     } else if (entry.parentPath === undefined || isMatch(entry.parentPath)) {
-      added.push({ parentPath: entry.parentPath ?? '', layer: entry.layer });
+      added.push({
+        parentPath: entry.parentPath ?? '',
+        index: entry.index,
+        layer: entry.layer,
+      });
     }
   }
   for (const [path, entry] of baseIndex) {

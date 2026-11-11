@@ -484,7 +484,7 @@ describe('App: components.json is built in the UI', () => {
         includeVariantDiffs: true,
         includeInstanceInternals: true,
         includeVectorShapes: true,
-        includeImages: false,
+        includeImages: true,
       },
     ]);
   });

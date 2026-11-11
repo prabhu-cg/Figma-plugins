@@ -40,10 +40,10 @@ describe('sanitizeSavedSettings', () => {
 });
 
 describe('new components.json options', () => {
-  it('default to vectors on, pictures off, split only when large', () => {
+  it('default to vectors and pictures on, split only when large', () => {
     expect(DEFAULT_EXPORT_OPTIONS).toMatchObject({
       includeVectorShapes: true,
-      includeImages: false,
+      includeImages: true,
       splitComponentsJson: 'auto',
     });
   });
@@ -59,9 +59,9 @@ describe('new components.json options', () => {
 
   it('do not let a boolean overwrite the split mode, or a string overwrite a switch', () => {
     const r = sanitizeSavedSettings({
-      options: { includeImages: 'yes', splitComponentsJson: false },
+      options: { includeImages: 'no', splitComponentsJson: false },
     });
-    expect(r?.options.includeImages).toBe(false);
+    expect(r?.options.includeImages).toBe(true);
     expect(r?.options.splitComponentsJson).toBe('auto');
   });
 });

@@ -58,8 +58,34 @@ describe('diffVariant', () => {
     expect(diff.removed).toEqual(['Button/Icon']);
     expect(diff.added).toHaveLength(1);
     expect(diff.added[0].parentPath).toBe('Button');
+    expect(diff.added[0].index).toBe(1);
     expect(diff.added[0].layer.name).toBe('Badge');
     expect(diff.added[0].layer.children[0].name).toBe('BadgeText');
+  });
+
+  it("gives each added layer its position among the parent's children in the variant", () => {
+    const v = base();
+    // New layers at the start, in the middle and at the end of the parent's children.
+    v.children = [L('First'), v.children[0], L('Middle'), v.children[1], L('Last')];
+    const { diff } = diffVariant(base(), v, info);
+    expect(diff.added.map((a) => [a.layer.name, a.index])).toEqual([
+      ['First', 0],
+      ['Middle', 2],
+      ['Last', 4],
+    ]);
+    // Rebuilding the variant from the default children, the removals and the indexes gives it back.
+    const rebuilt = base().children.filter((c) => !diff.removed.includes(`Button/${c.name}`));
+    for (const a of [...diff.added].sort((x, y) => x.index! - y.index!)) {
+      rebuilt.splice(a.index!, 0, a.layer);
+    }
+    expect(rebuilt.map((c) => c.name)).toEqual(v.children.map((c) => c.name));
+  });
+
+  it('indexes an added layer inside a nested parent', () => {
+    const b = L('Card', {}, [L('Body', {}, [L('Text', { type: 'TEXT' })])]);
+    const v = L('Card', {}, [L('Body', {}, [L('Text', { type: 'TEXT' }), L('Avatar')])]);
+    const { diff } = diffVariant(b, v, info);
+    expect(diff.added.map((a) => [a.parentPath, a.index])).toEqual([['Card/Body', 1]]);
   });
 
   it('counts a layer whose type changed as removed plus added', () => {

@@ -43,7 +43,7 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   includeVariantDiffs: true,
   includeInstanceInternals: true,
   includeVectorShapes: true,
-  includeImages: false,
+  includeImages: true,
   splitComponentsJson: 'auto',
   zip: true,
 };

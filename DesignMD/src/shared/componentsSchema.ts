@@ -569,6 +569,13 @@ export interface LayerDiff {
 export interface AddedLayer {
   /** Name path of the parent in the default structure. */
   parentPath: string;
+  /**
+   * Position of the new layer among its parent's children in this variant (0 is first in paint
+   * order). To build the variant: start from the parent's children in the default variant, drop the
+   * ones in `removed`, then insert each added layer at its `index`, lowest first. Absent in files
+   * from before 1.2.0.
+   */
+  index?: number;
   /** The new layer, in full. */
   layer: Layer;
 }

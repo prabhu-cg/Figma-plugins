@@ -107,7 +107,9 @@ Enough to rebuild a layer's box and paint without guessing:
 - **Bound variables.** `bindings` maps fields such as `paddingLeft`, `itemSpacing`, `topLeftRadius`,
   `fontSize` or `width` to the token the layer uses, so generated code can write `var(--space-4)`
   instead of `16px`. Colour bindings are on the paints.
-- Variant diffs compare all of the above.
+- Variant diffs compare all of the above. A layer a variant adds has an `index`, its position among
+  the parent's children in that variant: take the default variant's children, drop `removed`, then
+  insert each added layer at its `index`, lowest first.
 
 Not captured: OpenType features, and variable bindings that do not resolve to a token in the file.
 
@@ -130,7 +132,7 @@ at the layer's `size`.
 
 With **Export pictures behind image fills** on, each image fill gets `image` and its picture is saved
 next to `components.json` as `assets/images/<hash>.<png|jpg|gif|webp>`. The same picture in many layers
-is one file. Off (the default), image fills have no `image` and no bytes are exported.
+is one file. On by default, so avatars and photos come through. Off, image fills have no `image` and no bytes are exported.
 
 - `image.hash`, `scaleMode`, and where they apply `rotation`, `scalingFactor` (TILE) and
   `imageTransform` (CROP, a 2x3 matrix as Figma reports it) say how the picture is placed.

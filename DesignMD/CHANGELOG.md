@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.1
+
+### Added
+
+- **Added layers know their position.** A layer a variant adds has `index`, its place among its
+  parent's children in that variant (the real position, not a guess from names). To build the variant,
+  take the default variant's children, drop `removed`, then insert each added layer at its `index`,
+  lowest first.
+
+### Changed
+
+- **Pictures behind image fills are now exported by default**, so avatars and photos are not left as a
+  flat colour. A choice you saved earlier is kept: tick **Export pictures** once if an export says
+  `includeImages: false`.
+
 ## 1.2.0
 
 ### Added
@@ -11,7 +26,7 @@
 - **Pictures behind image fills.** With **Export pictures behind image fills** on, image paints get
   `image` (hash, scale mode, placement, pixel size, file) and the picture is saved as
   `assets/images/<hash>.<ext>` in the export (ZIP or individual download). Limits: 8 MB per picture,
-  96 MB in total; anything left out gets an `IMAGE_OMITTED` warning. Off by default.
+  96 MB in total; anything left out gets an `IMAGE_OMITTED` warning. Off by default (on from 1.2.1).
 - **Instance changes.** An instance now lists `instanceOf.properties` (the value each component
   property has in that use) and, when its insides are not read, `instanceOf.overrides` (the layers
   that use changed, such as a different label, with their new values). A consumer that fills the

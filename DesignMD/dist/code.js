@@ -13,7 +13,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     includeVariantDiffs: true,
     includeInstanceInternals: true,
     includeVectorShapes: true,
-    includeImages: false,
+    includeImages: true,
     splitComponentsJson: "auto",
     zip: true
   };
@@ -1870,12 +1870,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   ];
   function indexTree(root, warnings, componentId) {
     const out = /* @__PURE__ */ new Map();
-    const visit = (layer, path, parentPath) => {
-      out.set(path, { layer, parentPath });
+    const visit = (layer, path, parentPath, index) => {
+      out.set(path, { layer, parentPath, index });
       const counts = /* @__PURE__ */ new Map();
       for (const child of layer.children) counts.set(child.name, (counts.get(child.name) ?? 0) + 1);
       const seen = /* @__PURE__ */ new Map();
-      for (const child of layer.children) {
+      for (const [childIndex, child] of layer.children.entries()) {
         const total = counts.get(child.name);
         const n = seen.get(child.name) ?? 0;
         seen.set(child.name, n + 1);
@@ -1888,10 +1888,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
             layerId: child.id
           });
         }
-        visit(child, `${path}/${segment}`, path);
+        visit(child, `${path}/${segment}`, path, childIndex);
       }
     };
-    visit(root, root.name, void 0);
+    visit(root, root.name, void 0, 0);
     return out;
   }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -1925,7 +1925,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         const changes = changesBetween(baseIndex.get(path).layer, entry.layer);
         if (Object.keys(changes).length > 0) layers.push({ path, changes });
       } else if (entry.parentPath === void 0 || isMatch(entry.parentPath)) {
-        added.push({ parentPath: entry.parentPath ?? "", layer: entry.layer });
+        added.push({
+          parentPath: entry.parentPath ?? "",
+          index: entry.index,
+          layer: entry.layer
+        });
       }
     }
     for (const [path, entry] of baseIndex) {
@@ -3868,7 +3872,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     [...styles.text, ...styles.color, ...styles.effect, ...styles.grid].forEach(claim);
     return { renamed };
   }
-  const PLUGIN_VERSION = "1.2.0";
+  const PLUGIN_VERSION = "1.2.1";
   function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
     const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));

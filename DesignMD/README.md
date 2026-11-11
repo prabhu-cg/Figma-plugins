@@ -39,7 +39,7 @@ With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
 `components.json` is opt-in and read from your layers only when selected. It contains text content,
 layer names and design values from your file; turn off **Include text content** to leave the text out.
 Nothing leaves the plugin. It can also carry the drawn shape of icons (**Include vector shapes**, on by
-default) and the pictures behind image fills as files under `assets/images/` (**Export pictures**, off
+default) and the pictures behind image fills as files under `assets/images/` (**Export pictures**, on
 by default); an instance lists the property values and changes of that use of its component.
 
 ### What the docs cover

@@ -498,7 +498,7 @@ describe('generateComponentsJson', () => {
       includeVariantDiffs: false,
       includeInstanceInternals: true,
       includeVectorShapes: true,
-      includeImages: false,
+      includeImages: true,
     });
     const withInternals = generateOutputs(
       ds,

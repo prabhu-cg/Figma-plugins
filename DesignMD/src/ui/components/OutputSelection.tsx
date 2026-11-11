@@ -81,7 +81,7 @@ const COMPONENT_SUBOPTIONS: Array<{
     label: 'Include layers inside nested instances (slower, larger)',
   },
   { key: 'includeVectorShapes', label: 'Include vector shapes (so icons can be drawn)' },
-  { key: 'includeImages', label: 'Export pictures behind image fills (larger)' },
+  { key: 'includeImages', label: 'Export pictures behind image fills (photos, avatars; larger)' },
 ];
 
 interface OptionCardProps {
