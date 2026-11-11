@@ -910,6 +910,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       __publicField(this, "styles", /* @__PURE__ */ new Set());
       __publicField(this, "warnings", []);
       __publicField(this, "unresolved", /* @__PURE__ */ new Set());
+      __publicField(this, "fonts", /* @__PURE__ */ new Map());
+      __publicField(this, "gradientWarned", /* @__PURE__ */ new Set());
       this.resolve = resolve;
       this.images = images;
     }
@@ -969,6 +971,39 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return image;
   }
+  function inverse(m) {
+    const [[a, b, c], [d, e, f]] = m;
+    const det = a * e - b * d;
+    if (Math.abs(det) < 1e-9) return void 0;
+    return (u, v) => ({
+      x: (e * (u - c) - b * (v - f)) / det,
+      y: (-d * (u - c) + a * (v - f)) / det
+    });
+  }
+  function describeGradients(paints, size) {
+    if (!paints || !size || size.width <= 0 || size.height <= 0) return;
+    for (const paint of paints) {
+      if (!paint.transform) continue;
+      const at = inverse(paint.transform);
+      if (!at) continue;
+      if (paint.type === "GRADIENT_LINEAR") {
+        const start = at(0, 0.5);
+        const end = at(1, 0.5);
+        const dx = (end.x - start.x) * size.width;
+        const dy = (end.y - start.y) * size.height;
+        const degrees = Math.atan2(dx, -dy) * 180 / Math.PI;
+        paint.angle = round2((degrees + 360) % 360);
+      } else if (paint.type === "GRADIENT_RADIAL") {
+        const centre = at(0.5, 0.5);
+        const right = at(1, 0.5);
+        const bottom = at(0.5, 1);
+        const length = (p) => Math.hypot((p.x - centre.x) * size.width, (p.y - centre.y) * size.height);
+        const point = (x, y) => ({ x: round3(x), y: round3(y) });
+        paint.center = point(centre.x, centre.y);
+        paint.radii = point(length(right) / size.width, length(bottom) / size.height);
+      }
+    }
+  }
   function readPaints(paints, styleId, layerId, t) {
     if (!Array.isArray(paints)) return void 0;
     return paints.map((p) => {
@@ -1000,21 +1035,29 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
           for (const stop of stops.slice(0, MAX_GRADIENT_STOPS)) {
             const color = rgba(read(stop, "color"));
             const position = num(stop, "position");
-            if (color && position !== void 0)
-              readStops.push({ position: round3(position), color });
+            if (color && position !== void 0) {
+              readStops.push({ position: round3(position), hex: color.hex, alpha: color.alpha });
+            }
           }
         }
         if (readStops.length > 0) paint.stops = readStops;
         const transform = matrix2x3(read(p, "gradientTransform"));
         if (transform) paint.transform = transform;
-        const opacity = num(p, "opacity");
-        if (opacity !== void 0 && opacity !== 1) paint.alpha = round3(opacity);
+        paint.opacity = round3(num(p, "opacity") ?? 1);
+        if ((type === "GRADIENT_ANGULAR" || type === "GRADIENT_DIAMOND") && !t.gradientWarned.has(type)) {
+          t.gradientWarned.add(type);
+          t.warnings.push({
+            code: "UNSUPPORTED_GRADIENT",
+            message: `A ${type.slice(9).toLowerCase()} gradient is used (first on layer ${layerId}). It has no CSS equivalent, so only its type, stops and transform are written.`,
+            layerId
+          });
+        }
       } else if (type === "IMAGE") {
         paint.description = `image, scale mode ${str(p, "scaleMode") ?? "unknown"}`;
         const image = t.images ? readImage(p) : void 0;
         if (image) paint.image = image;
         const opacity = num(p, "opacity");
-        if (opacity !== void 0 && opacity !== 1) paint.alpha = round3(opacity);
+        if (opacity !== void 0 && opacity !== 1) paint.opacity = round3(opacity);
       }
       const blend = str(p, "blendMode");
       if (blend && blend !== "NORMAL") paint.blendMode = blend;
@@ -1205,6 +1248,30 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     "textRangeFills",
     "componentProperties"
   ]);
+  function takeLayoutTokens(bindings) {
+    const out = {};
+    const take = (field) => {
+      const token = bindings[field];
+      delete bindings[field];
+      return token;
+    };
+    const gap = take("itemSpacing");
+    if (gap) out.gap = gap;
+    const counter = take("counterAxisSpacing");
+    if (counter) out.counterGap = counter;
+    const padding = {};
+    for (const [side, field] of [
+      ["top", "paddingTop"],
+      ["right", "paddingRight"],
+      ["bottom", "paddingBottom"],
+      ["left", "paddingLeft"]
+    ]) {
+      const token = take(field);
+      if (token) padding[side] = token;
+    }
+    if (Object.keys(padding).length > 0) out.padding = padding;
+    return Object.keys(out).length > 0 ? out : void 0;
+  }
   function readBindings(n, layerId, t) {
     if (!t.resolves) return void 0;
     const bound = read(n, "boundVariables");
@@ -1253,7 +1320,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         "NONE"
       )
     };
-    if (/italic|oblique/i.test(str(fontName, "style") ?? "")) fields.italic = true;
+    const style = str(fontName, "style") ?? "";
+    const italic = /italic|oblique/i.test(style);
+    if (italic) fields.italic = true;
+    t.fonts.set(`${family}\0${style}`, {
+      family,
+      style,
+      weight: fields.fontWeight,
+      italic
+    });
     const styleId = str(src, styleIdKey);
     if (styleId) {
       const token = t.token("style", styleId, layerId);
@@ -1292,9 +1367,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (auto === "NONE" || auto === "WIDTH_AND_HEIGHT" || auto === "HEIGHT" || auto === "TRUNCATE") {
       out.autoResize = auto;
     }
-    if (read(n, "textTruncation") === "ENDING") out.truncation = "ENDING";
+    out.truncation = read(n, "textTruncation") === "ENDING" ? "ENDING" : "NONE";
     const maxLines = num(n, "maxLines");
-    if (maxLines !== void 0 && maxLines > 0) out.maxLines = maxLines;
+    out.maxLines = maxLines !== void 0 && maxLines > 0 ? maxLines : null;
+    const trim = read(n, "leadingTrim");
+    if (trim === "CAP_HEIGHT" || trim === "NONE") out.leadingTrim = trim;
     const vertical = read(n, "textAlignVertical");
     if (vertical === "CENTER" || vertical === "BOTTOM") out.alignVertical = vertical;
     const spacing = num(n, "paragraphSpacing");
@@ -1404,6 +1481,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (properties) instance.properties = properties;
     return instance;
   }
+  function readOrigin(n) {
+    const t = read(n, "absoluteTransform");
+    if (!Array.isArray(t) || t.length < 2) return void 0;
+    const x = Array.isArray(t[0]) ? t[0][2] : void 0;
+    const y = Array.isArray(t[1]) ? t[1][2] : void 0;
+    return typeof x === "number" && Number.isFinite(x) && typeof y === "number" && Number.isFinite(y) ? { x, y } : void 0;
+  }
   function readPaths(n, key) {
     const raw = read(n, key);
     if (!Array.isArray(raw)) return void 0;
@@ -1490,7 +1574,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     let count = 0;
     let truncated = false;
     const imageOmissions = /* @__PURE__ */ new Set();
+    const origin = readOrigin(root);
     const readAttributes = async (n, insideBoolean, parent) => {
+      var _a;
       const id = str(n, "id") ?? "";
       const type = str(n, "type") ?? "UNKNOWN";
       const layer = {
@@ -1505,12 +1591,25 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (width !== void 0 && height !== void 0) {
         layer.size = { width: round2(width), height: round2(height) };
       }
+      if (origin && layer.size) {
+        const at = readOrigin(n);
+        if (at) {
+          layer.box = {
+            x: round2(at.x - origin.x),
+            y: round2(at.y - origin.y),
+            width: layer.size.width,
+            height: layer.size.height
+          };
+        }
+      }
       const layout = readLayout(n);
       if (layout) layer.layout = layout;
       const radius = readRadius(n);
       if (radius !== void 0) layer.radius = radius;
       const opacity = num(n, "opacity");
       if (opacity !== void 0) layer.opacity = round3(opacity);
+      const drawnOpacity = round3(((parent == null ? void 0 : parent.opacity) ?? 1) * (opacity ?? 1));
+      if (drawnOpacity !== 1) layer.effectiveOpacity = drawnOpacity;
       const placement = (parent == null ? void 0 : parent.auto) ? readPlacement(n) : void 0;
       if (placement) layer.placement = placement;
       if (parent && (!parent.auto || (placement == null ? void 0 : placement.positioning) === "ABSOLUTE")) {
@@ -1538,7 +1637,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       const smoothing = num(n, "cornerSmoothing");
       if (smoothing) layer.cornerSmoothing = round3(smoothing);
       const bindings = readBindings(n, id, t);
-      if (bindings) layer.bindings = bindings;
+      if (bindings) {
+        const tokens = layer.layout ? takeLayoutTokens(bindings) : void 0;
+        if (tokens && layer.layout) layer.layout.token = tokens;
+        if (Object.keys(bindings).length > 0) layer.bindings = bindings;
+      }
       const rawFills = read(n, "fills");
       const fills = readPaints(
         rawFills,
@@ -1569,6 +1672,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       }
       const strokes = readStrokes(n, id, t);
       if (strokes) layer.strokes = strokes;
+      describeGradients(layer.fills, layer.size);
+      describeGradients((_a = layer.strokes) == null ? void 0 : _a.paints, layer.size);
       const rawEffects = read(n, "effects");
       const effects = readEffects(
         rawEffects,
@@ -1618,7 +1723,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         }
         if (!node) continue;
         const layer = await readAttributes(node, true, {
-          auto: isAutoLayout(read(node, "parent"))
+          auto: isAutoLayout(read(node, "parent")),
+          opacity: 1
         });
         const changes = {};
         for (const attribute of wanted) {
@@ -1677,7 +1783,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
                 depth + 1,
                 insideInstance || type === "INSTANCE",
                 insideBoolean || type === "BOOLEAN_OPERATION",
-                { auto: !!layer.layout }
+                { auto: !!layer.layout, opacity: layer.effectiveOpacity ?? layer.opacity ?? 1 }
               )
             );
           }
@@ -1700,6 +1806,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       truncated,
       usedVariableIds: Array.from(t.variables),
       usedStyleIds: Array.from(t.styles),
+      usedFonts: Array.from(t.fonts.values()),
       warnings
     };
   }
@@ -1846,6 +1953,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const ATTRIBUTES = [
     "visible",
     "size",
+    "box",
+    "effectiveOpacity",
     "position",
     "rotation",
     "constraints",
@@ -1915,6 +2024,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const layers = [];
     const added = [];
     const removed = [];
+    const reordered = [];
     const isMatch = (path) => {
       const a = baseIndex.get(path);
       const b = variantIndex.get(path);
@@ -1923,7 +2033,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     for (const [path, entry] of variantIndex) {
       if (isMatch(path)) {
         const changes = changesBetween(baseIndex.get(path).layer, entry.layer);
-        if (Object.keys(changes).length > 0) layers.push({ path, changes });
+        if (Object.keys(changes).length > 0) {
+          layers.push({ path, layerId: baseIndex.get(path).layer.id, changes });
+        }
       } else if (entry.parentPath === void 0 || isMatch(entry.parentPath)) {
         added.push({
           parentPath: entry.parentPath ?? "",
@@ -1937,13 +2049,58 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         removed.push(path);
       }
     }
+    for (const [path, entry] of variantIndex) {
+      if (!isMatch(path)) continue;
+      const baseKids = baseIndex.get(path).layer.children;
+      const variantKids = entry.layer.children;
+      if (baseKids.length === 0 && variantKids.length === 0) continue;
+      const pathsOf = (parent, kids) => {
+        const counts = /* @__PURE__ */ new Map();
+        for (const k of kids) counts.set(k.name, (counts.get(k.name) ?? 0) + 1);
+        const seen = /* @__PURE__ */ new Map();
+        return kids.map((k) => {
+          const n = seen.get(k.name) ?? 0;
+          seen.set(k.name, n + 1);
+          return `${parent}/${counts.get(k.name) > 1 ? `${k.name}[${n}]` : k.name}`;
+        });
+      };
+      const basePaths = pathsOf(path, baseKids);
+      const variantPaths = pathsOf(path, variantKids);
+      const inVariant = new Set(variantPaths);
+      const inBase = new Set(basePaths);
+      const commonBase = basePaths.filter((p) => inVariant.has(p));
+      const commonVariant = variantPaths.filter((p) => inBase.has(p));
+      if (commonBase.some((p, i) => p !== commonVariant[i])) {
+        reordered.push({ parentPath: path, order: variantPaths });
+      }
+      const count = (kids) => {
+        const m = /* @__PURE__ */ new Map();
+        for (const k of kids) m.set(k.name, (m.get(k.name) ?? 0) + 1);
+        return m;
+      };
+      const a = count(baseKids);
+      const b = count(variantKids);
+      const unsure = [.../* @__PURE__ */ new Set([...a.keys(), ...b.keys()])].filter(
+        (name) => (a.get(name) ?? 0) !== (b.get(name) ?? 0) && Math.max(a.get(name) ?? 0, b.get(name) ?? 0) > 1
+      );
+      if (unsure.length > 0) {
+        warnings.push({
+          code: "AMBIGUOUS_SIBLINGS",
+          message: `Inside "${path}" the default variant and this variant have a different number of layers named ${unsure.map((n) => `"${n}"`).join(", ")}, so matching them by position is a guess. Use layerId.`,
+          ...info.componentId ? { componentId: info.componentId } : {},
+          variantId: info.variantId,
+          layerId: baseIndex.get(path).layer.id
+        });
+      }
+    }
     return {
       diff: {
         variantId: info.variantId,
         variantProperties: info.variantProperties,
         layers,
         added,
-        removed
+        removed,
+        reordered
       },
       warnings
     };
@@ -2017,6 +2174,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     let truncated = base.truncated;
     const variables = new Set(base.usedVariableIds);
     const styles = new Set(base.usedStyleIds);
+    const fonts = new Map(base.usedFonts.map((f) => [`${f.family}\0${f.style}`, f]));
     const diffs = [];
     const duplicateGroups = /* @__PURE__ */ new Map();
     const others = members.filter((m) => m.id !== defaultNode.id);
@@ -2060,6 +2218,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         if (read2.truncated) truncated = true;
         read2.usedVariableIds.forEach((id) => variables.add(id));
         read2.usedStyleIds.forEach((id) => styles.add(id));
+        read2.usedFonts.forEach((f) => fonts.set(`${f.family}\0${f.style}`, f));
         const { diff, warnings: diffWarnings } = diffVariant(base.tree, named(read2.tree), {
           variantId: variant.id,
           variantProperties: { ...variant.variantProperties ?? {} },
@@ -2117,6 +2276,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       treeTruncated: truncated,
       usedVariableIds: Array.from(variables),
       usedStyleIds: Array.from(styles),
+      usedFonts: Array.from(fonts.values()),
       warnings: warnings.map((w) => w.componentId ? w : { ...w, componentId: node.id })
     };
   }
@@ -3872,7 +4032,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     [...styles.text, ...styles.color, ...styles.effect, ...styles.grid].forEach(claim);
     return { renamed };
   }
-  const PLUGIN_VERSION = "1.2.1";
+  const PLUGIN_VERSION = "1.3.0";
   function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
     const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));

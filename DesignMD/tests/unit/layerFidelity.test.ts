@@ -50,35 +50,155 @@ const checked = (tree: Layer) => {
 };
 
 describe('gradients', () => {
-  it('keep their stops, transform and opacity', async () => {
-    const fill = {
+  const stops = [
+    { position: 0, color: { r: 1, g: 0, b: 0, a: 1 } },
+    { position: 1, color: { r: 0, g: 0, b: 1, a: 0.25 } },
+  ];
+  const gradient = (type: string, transform: number[][], extra: object = {}) => ({
+    type,
+    visible: true,
+    opacity: 1,
+    gradientStops: stops,
+    gradientTransform: transform,
+    ...extra,
+  });
+  const read = async (fill: object, size = { width: 200, height: 100 }) =>
+    checked((await readLayerTree(node('FRAME', 'Card', { ...size, fills: [fill] }))).tree)
+      .fills![0];
+
+  it('keep their stops as hex and alpha, the opacity, the blend mode and the transform', async () => {
+    const paint = await read(
+      gradient(
+        'GRADIENT_LINEAR',
+        [
+          [1, 0, 0],
+          [0, 1, 0],
+        ],
+        { opacity: 0.5, blendMode: 'MULTIPLY' },
+      ),
+    );
+    expect(paint).toMatchObject({
       type: 'GRADIENT_LINEAR',
-      visible: true,
       opacity: 0.5,
       blendMode: 'MULTIPLY',
-      gradientStops: [
-        { position: 0, color: { r: 1, g: 0, b: 0, a: 1 } },
-        { position: 1, color: { r: 0, g: 0, b: 1, a: 0.25 } },
-      ],
-      gradientTransform: [
-        [0, 1, 0],
-        [-1, 0, 1],
-      ],
-    };
-    const tree = checked((await readLayerTree(node('FRAME', 'Card', { fills: [fill] }))).tree);
-    expect(tree.fills![0]).toMatchObject({
-      type: 'GRADIENT_LINEAR',
-      alpha: 0.5,
-      blendMode: 'MULTIPLY',
       stops: [
-        { position: 0, color: { hex: '#ff0000', alpha: 1 } },
-        { position: 1, color: { hex: '#0000ff', alpha: 0.25 } },
+        { position: 0, hex: '#ff0000', alpha: 1 },
+        { position: 1, hex: '#0000ff', alpha: 0.25 },
       ],
       transform: [
+        [1, 0, 0],
         [0, 1, 0],
-        [-1, 0, 1],
       ],
     });
+    expect(paint).not.toHaveProperty('alpha');
+  });
+
+  it('give a linear gradient its CSS angle: 90 is left to right, 180 top to bottom', async () => {
+    const leftToRight = await read(
+      gradient('GRADIENT_LINEAR', [
+        [1, 0, 0],
+        [0, 1, 0],
+      ]),
+    );
+    expect(leftToRight.angle).toBe(90);
+    // Figma's transform for a top-to-bottom gradient.
+    const topToBottom = await read(
+      gradient('GRADIENT_LINEAR', [
+        [0, 1, 0],
+        [-1, 0, 1],
+      ]),
+    );
+    expect(topToBottom.angle).toBe(180);
+    // Right to left, and bottom to top.
+    expect(
+      (
+        await read(
+          gradient('GRADIENT_LINEAR', [
+            [-1, 0, 1],
+            [0, 1, 0],
+          ]),
+        )
+      ).angle,
+    ).toBe(270);
+    expect(
+      (
+        await read(
+          gradient('GRADIENT_LINEAR', [
+            [0, -1, 1],
+            [1, 0, 0],
+          ]),
+        )
+      ).angle,
+    ).toBe(0);
+  });
+
+  it('measures the angle in pixels, so a diagonal across a wide box is not 45 degrees', async () => {
+    // Corner to corner of a 200 x 100 box: direction (200, 100) in px.
+    const paint = await read(
+      gradient('GRADIENT_LINEAR', [
+        [1, 0, 0],
+        [0, 1, 0],
+      ]),
+      { width: 200, height: 100 },
+    );
+    expect(paint.angle).toBe(90);
+    const diagonal = await read(
+      gradient('GRADIENT_LINEAR', [
+        [0.5, -0.5, 0.5],
+        [0.5, 0.5, 0],
+      ]),
+      { width: 200, height: 100 },
+    );
+    // This transform runs from the bottom-left to the top-right corner: in px that is (200, -100),
+    // so the CSS angle is atan2(200, 100) = 63.43, not the 45 a square box would give.
+    expect(diagonal.angle).toBeCloseTo(63.43, 1);
+  });
+
+  it('give a radial gradient its centre and radii as fractions of the box', async () => {
+    const paint = await read(
+      gradient('GRADIENT_RADIAL', [
+        [1, 0, 0],
+        [0, 1, 0],
+      ]),
+    );
+    expect(paint.center).toEqual({ x: 0.5, y: 0.5 });
+    expect(paint.radii).toEqual({ x: 0.5, y: 0.5 });
+    expect(paint).not.toHaveProperty('angle');
+  });
+
+  it("keep an angular or diamond gradient's type and stops, and warn once per kind", async () => {
+    const r = await readLayerTree(
+      node('FRAME', 'Card', {}, [
+        node('FRAME', 'A', {
+          fills: [
+            gradient('GRADIENT_ANGULAR', [
+              [1, 0, 0],
+              [0, 1, 0],
+            ]),
+          ],
+        }),
+        node('FRAME', 'B', {
+          fills: [
+            gradient('GRADIENT_ANGULAR', [
+              [1, 0, 0],
+              [0, 1, 0],
+            ]),
+          ],
+        }),
+        node('FRAME', 'C', {
+          fills: [
+            gradient('GRADIENT_DIAMOND', [
+              [1, 0, 0],
+              [0, 1, 0],
+            ]),
+          ],
+        }),
+      ]),
+    );
+    expect(r.tree.children[0].fills![0]).toMatchObject({ type: 'GRADIENT_ANGULAR' });
+    expect(r.tree.children[0].fills![0].stops).toHaveLength(2);
+    expect(r.tree.children[0].fills![0]).not.toHaveProperty('angle');
+    expect(r.warnings.filter((w) => w.code === 'UNSUPPORTED_GRADIENT')).toHaveLength(2);
   });
 
   it('ignore a malformed transform and unreadable stops instead of failing', async () => {
@@ -91,6 +211,17 @@ describe('gradients', () => {
     const { tree } = await readLayerTree(node('FRAME', 'Card', { fills: [fill] }));
     expect(tree.fills![0].stops).toBeUndefined();
     expect(tree.fills![0].transform).toBeUndefined();
+    expect(tree.fills![0].center).toBeUndefined();
+  });
+
+  it('skip a gradient whose transform cannot be inverted', async () => {
+    const paint = await read(
+      gradient('GRADIENT_LINEAR', [
+        [0, 0, 0],
+        [0, 0, 0],
+      ]),
+    );
+    expect(paint.angle).toBeUndefined();
   });
 });
 
@@ -287,7 +418,9 @@ describe('placement and position', () => {
       ],
     });
     const { diff } = diffVariant(make(0), make(10), { variantId: 'v', variantProperties: {} });
-    expect(diff.layers).toEqual([{ path: 'Root/Dot', changes: { position: { x: 10, y: 0 } } }]);
+    expect(diff.layers).toEqual([
+      { path: 'Root/Dot', layerId: 'c', changes: { position: { x: 10, y: 0 } } },
+    ]);
   });
 });
 
@@ -295,11 +428,12 @@ describe('bindings to variables', () => {
   const resolveToken = (kind: string, id: string) =>
     kind === 'variable' ? `--${id.replace(/\W/g, '-')}` : undefined;
 
-  it('lists number and string bindings by field, as tokens, and counts them as used', async () => {
+  it('puts gap and padding next to the numbers in layout.token, and the rest in bindings', async () => {
     const frame = row([], {
       boundVariables: {
         paddingLeft: { type: 'VARIABLE_ALIAS', id: 'VariableID:1:1' },
         itemSpacing: { type: 'VARIABLE_ALIAS', id: 'VariableID:1:2' },
+        cornerRadius: { type: 'VARIABLE_ALIAS', id: 'VariableID:1:3' },
         fills: [{ type: 'VARIABLE_ALIAS', id: 'VariableID:9:9' }],
         topLeftRadius: { type: 'VARIABLE_ALIAS', id: 'VariableID:not-in-file' },
       },
@@ -308,13 +442,29 @@ describe('bindings to variables', () => {
       resolveToken: (kind, id) =>
         id === 'VariableID:not-in-file' ? undefined : resolveToken(kind, id),
     });
-    expect(r.tree.bindings).toEqual({
-      itemSpacing: { variableId: 'VariableID:1:2', cssName: '--VariableID-1-2' },
-      paddingLeft: { variableId: 'VariableID:1:1', cssName: '--VariableID-1-1' },
+    expect(r.tree.layout!.token).toEqual({
+      gap: { variableId: 'VariableID:1:2', cssName: '--VariableID-1-2' },
+      padding: { left: { variableId: 'VariableID:1:1', cssName: '--VariableID-1-1' } },
     });
-    expect(r.usedVariableIds.sort()).toEqual(['VariableID:1:1', 'VariableID:1:2']);
+    expect(r.tree.bindings).toEqual({
+      cornerRadius: { variableId: 'VariableID:1:3', cssName: '--VariableID-1-3' },
+    });
+    expect(r.usedVariableIds.sort()).toEqual([
+      'VariableID:1:1',
+      'VariableID:1:2',
+      'VariableID:1:3',
+    ]);
     expect(r.warnings.map((w) => w.code)).toEqual(['UNRESOLVED_REFERENCE']);
     checked(r.tree);
+  });
+
+  it('leaves out bindings and layout.token when nothing is bound to a layout number', async () => {
+    const { tree } = await readLayerTree(
+      row([], { boundVariables: { itemSpacing: { id: 'unknown' } } }),
+      { resolveToken: () => undefined },
+    );
+    expect(tree.layout!.token).toBeUndefined();
+    expect(tree.bindings).toBeUndefined();
   });
 
   it('writes none without a way to look tokens up', async () => {
@@ -380,10 +530,22 @@ describe('text', () => {
         'fontWeight',
         'letterSpacing',
         'lineHeight',
+        'maxLines',
         'textCase',
         'textDecoration',
+        'truncation',
       ].sort(),
     );
+  });
+
+  it('says explicitly when text is not truncated and has no line limit', async () => {
+    const { tree } = await readLayerTree(
+      textNode('Plain', { textTruncation: 'DISABLED', maxLines: null, leadingTrim: 'NONE' }),
+    );
+    expect(tree.text).toMatchObject({ truncation: 'NONE', maxLines: null, leadingTrim: 'NONE' });
+    const trimmed = await readLayerTree(textNode('T', { leadingTrim: 'CAP_HEIGHT', maxLines: 3 }));
+    expect(trimmed.tree.text).toMatchObject({ leadingTrim: 'CAP_HEIGHT', maxLines: 3 });
+    checked(trimmed.tree);
   });
 
   it('keeps a different colour per run when the text colours are mixed', async () => {
@@ -420,5 +582,158 @@ describe('text', () => {
     expect(tree.text!.runs![1]).toMatchObject({ hyperlink: 'https://x.test', listType: 'ORDERED' });
     // The layer-level fields describe the first run but do not copy its colour or link.
     expect(tree.text).not.toHaveProperty('fills');
+  });
+});
+
+describe('box and drawn opacity', () => {
+  /** An absolute transform that places a node's top-left corner at (x, y) on the page. */
+  const at = (x: number, y: number, width = 10, height = 10) => ({
+    width,
+    height,
+    absoluteTransform: [
+      [1, 0, x],
+      [0, 1, y],
+    ],
+  });
+
+  it("measures every layer from the root, with the layer's own size", async () => {
+    const tree = checked(
+      (
+        await readLayerTree(
+          node('FRAME', 'Root', at(100, 200, 300, 400), [
+            node('FRAME', 'Card', at(110, 220, 280, 100.126), [
+              node('TEXT', 'Label', { ...at(120.5, 230, 50, 20), characters: 'x' }),
+            ]),
+            node('RECTANGLE', 'NoTransform', { width: 5, height: 5 }),
+          ]),
+        )
+      ).tree,
+    );
+    expect(tree.box).toEqual({ x: 0, y: 0, width: 300, height: 400 });
+    expect(tree.children[0].box).toEqual({ x: 10, y: 20, width: 280, height: 100.13 });
+    expect(tree.children[0].box!.width).toBe(tree.children[0].size!.width);
+    expect(tree.children[0].children[0].box).toEqual({ x: 20.5, y: 30, width: 50, height: 20 });
+    expect(tree.children[1].box).toBeUndefined();
+  });
+
+  it('includes hidden layers, so hidden can be told from missing', async () => {
+    const { tree } = await readLayerTree(
+      node('FRAME', 'Root', at(0, 0, 100, 100), [
+        node('RECTANGLE', 'Ghost', { visible: false, ...at(30, 40, 5, 6) }),
+      ]),
+    );
+    expect(tree.children[0].visible).toBe(false);
+    expect(tree.children[0].box).toEqual({ x: 30, y: 40, width: 5, height: 6 });
+  });
+
+  it('uses the origin a rotation turns about, not the box around the rotated layer', async () => {
+    // A 40 x 10 layer rotated 90 degrees about its top-left corner at (50, 60).
+    const { tree } = await readLayerTree(
+      node('FRAME', 'Root', at(0, 0, 100, 100), [
+        node('RECTANGLE', 'Bar', {
+          width: 40,
+          height: 10,
+          rotation: 90,
+          absoluteBoundingBox: { x: 40, y: 60, width: 10, height: 40 },
+          absoluteTransform: [
+            [0, -1, 50],
+            [1, 0, 60],
+          ],
+        }),
+      ]),
+    );
+    expect(tree.children[0].box).toEqual({ x: 50, y: 60, width: 40, height: 10 });
+    expect(tree.children[0].rotation).toBe(90);
+  });
+
+  it('writes no box when the root has no transform', async () => {
+    const { tree } = await readLayerTree(node('FRAME', 'Root', {}, [node('FRAME', 'A', at(1, 1))]));
+    expect(tree.children[0].box).toBeUndefined();
+  });
+
+  it('multiplies opacity down the tree and writes it only when it is not 1', async () => {
+    const tree = checked(
+      (
+        await readLayerTree(
+          node('FRAME', 'Root', { opacity: 1 }, [
+            node('FRAME', 'Half', { opacity: 0.5 }, [
+              node('RECTANGLE', 'Inner', { opacity: 0.5 }),
+              node('RECTANGLE', 'Plain', { opacity: 1 }),
+            ]),
+            node('RECTANGLE', 'Opaque', { opacity: 1 }),
+          ]),
+        )
+      ).tree,
+    );
+    expect(tree.effectiveOpacity).toBeUndefined();
+    expect(tree.children[0].effectiveOpacity).toBe(0.5);
+    expect(tree.children[0].children.map((c) => c.effectiveOpacity)).toEqual([0.25, 0.5]);
+    expect(tree.children[1].effectiveOpacity).toBeUndefined();
+  });
+
+  it('variant diffs list the new box of a layer that moved or grew', () => {
+    const make = (h: number): Layer => ({
+      id: 'r',
+      name: 'Root',
+      type: 'FRAME',
+      visible: true,
+      box: { x: 0, y: 0, width: 100, height: h },
+      children: [
+        {
+          id: 'c',
+          name: 'Dot',
+          type: 'ELLIPSE',
+          visible: true,
+          box: { x: 0, y: h - 10, width: 10, height: 10 },
+          children: [],
+        },
+      ],
+    });
+    const { diff } = diffVariant(make(50), make(80), { variantId: 'v', variantProperties: {} });
+    expect(diff.layers).toEqual([
+      { path: 'Root', layerId: 'r', changes: { box: { x: 0, y: 0, width: 100, height: 80 } } },
+      { path: 'Root/Dot', layerId: 'c', changes: { box: { x: 0, y: 70, width: 10, height: 10 } } },
+    ]);
+  });
+});
+
+describe('fonts', () => {
+  it('collects each family and style once, with weight and italic, including mixed-style runs', async () => {
+    const seg = (style: string, weight: number) => ({
+      characters: 'x',
+      fontName: { family: 'Playfair', style },
+      fontWeight: weight,
+      fontSize: 12,
+      lineHeight: { unit: 'AUTO' },
+      letterSpacing: { unit: 'PIXELS', value: 0 },
+      textCase: 'ORIGINAL',
+      textDecoration: 'NONE',
+      textStyleId: '',
+      fills: [solid()],
+      hyperlink: null,
+      listOptions: { type: 'NONE' },
+    });
+    const tree = node('FRAME', 'Root', {}, [
+      textNode('A'),
+      textNode('B'),
+      textNode('C', {
+        fontName: { family: 'Inter', style: 'Semi Bold Italic' },
+        fontWeight: 600,
+      }),
+      textNode('Mixed', {
+        fontName: MIXED,
+        getStyledTextSegments: () => [seg('Regular', 400), seg('Bold Italic', 700)],
+      }),
+    ]);
+    const { usedFonts } = await readLayerTree(tree);
+    const sorted = [...usedFonts].sort((a, b) =>
+      (a.family + a.style).localeCompare(b.family + b.style),
+    );
+    expect(sorted).toEqual([
+      { family: 'Inter', style: 'Regular', weight: 400, italic: false },
+      { family: 'Inter', style: 'Semi Bold Italic', weight: 600, italic: true },
+      { family: 'Playfair', style: 'Bold Italic', weight: 700, italic: true },
+      { family: 'Playfair', style: 'Regular', weight: 400, italic: false },
+    ]);
   });
 });

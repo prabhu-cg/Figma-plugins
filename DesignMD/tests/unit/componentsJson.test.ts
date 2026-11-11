@@ -514,6 +514,14 @@ describe('generateComponentsJson', () => {
     expect(parse(withInternals[0].content).includeInstanceInternals).toBe(true);
   });
 
+  it('lists the fonts the components use in metadata.fonts, once each, sorted', async () => {
+    const { ds, structures } = await generate();
+    const file = JSON.parse(generateComponentsJson(ds, structures).content) as ComponentsFileV1;
+    expect(file.metadata.fonts).toEqual([
+      { family: 'Inter', style: 'Regular', weight: 400, italic: false },
+    ]);
+  });
+
   it('is only produced when selected', async () => {
     const { ds, structures } = await generate();
     const off = generateOutputs(ds, DEFAULT_EXPORT_OPTIONS, { structures }).map((f) => f.path);

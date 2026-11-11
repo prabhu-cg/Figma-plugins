@@ -2,6 +2,7 @@
 import type {
   ComponentPropertyV1,
   ComponentsWarning,
+  FontUse,
   Layer,
   VariantDiff,
 } from './componentsSchema';
@@ -14,6 +15,8 @@ export interface ComponentStructure {
   treeTruncated: boolean;
   usedVariableIds: string[];
   usedStyleIds: string[];
+  /** Fonts used by text in the component's trees. */
+  usedFonts?: FontUse[];
   warnings: ComponentsWarning[];
 }
 

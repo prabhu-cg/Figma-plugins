@@ -40,7 +40,8 @@ With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
 layer names and design values from your file; turn off **Include text content** to leave the text out.
 Nothing leaves the plugin. It can also carry the drawn shape of icons (**Include vector shapes**, on by
 default) and the pictures behind image fills as files under `assets/images/` (**Export pictures**, on
-by default); an instance lists the property values and changes of that use of its component.
+by default); every layer has its measured box (`box`) in every variant, so a generated component can be checked
+layer by layer against the design; an instance lists the property values and changes of that use of its component.
 
 ### What the docs cover
 
@@ -112,6 +113,15 @@ independently wrapped in try/catch: a single corrupted style or missing referenc
 a warning (shown in the plugin UI) rather than aborting the whole run. Each component's layers
 are scanned up to a budget (500 layers, 10 levels deep) and a warning is shown when a component
 exceeds it, since its token usage may then be under-reported.
+
+**What the exact-fidelity fields cost (1.3.0).** `box` on every layer, `layerId`, `reordered`, gradient
+stops, text details and `metadata.fonts` together were measured on the synthetic 1,000-component test
+file (`tests/unit/stress.test.ts`, every layer with a transform): 8.3 s and 40.5 MB for 1.2.1, 8.7 s
+(+5%) and 37.6 MB (-7%) for 1.3.0, because small flat objects are now written on one line. Peak heap
+growth went from about 180 MB to 330 MB. A synthetic file is not Rayna: to record the real numbers,
+export the Rayna UI file with 1.2.1 and with 1.3.0 and compare the plugin console's time line
+(`[DesignMD] read ... layers in ...s`) and the size of `components.json` (or the sum of
+`components/*.json` when split).
 
 **Whole-file scans.** Scanning a large design-system file is a normal case, so every step is bounded
 and none of them can take the plugin down:

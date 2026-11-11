@@ -63,8 +63,9 @@ export function FilePreview({ files }: FilePreviewProps) {
             <span className="dmd-preview-title">{selected.path}</span>
           </div>
           <p className="dmd-section-subtitle">
-            A picture used by an image fill ({formatBytes(fileSize(selected))}). It is saved with
-            the export and referenced from components.json; there is no text to preview.
+            A picture saved with the export (an image fill, {formatBytes(fileSize(selected))}). It
+            is saved with the export and referenced from components.json; there is no text to
+            preview.
           </p>
         </>
       ) : (

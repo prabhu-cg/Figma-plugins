@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.3.0
+
+Exact-fidelity fields, from docs/designmd-exact-fidelity.md in Aemora. All additive within
+`designmd.components/v1`.
+
+### Added
+
+- **`box` on every layer, in every variant.** The layer's layout box (`x`, `y`, `width`, `height`) in the
+  coordinates of its variant's root, from its absolute transform. Hidden layers included. Variant diffs
+  list it for every layer whose box differs from the default. Also `effectiveOpacity` (own opacity times
+  every ancestor's).
+- **`reordered`** on each variant diff: the full child order of every parent whose children the variant
+  draws in a different order.
+- **`layerId`** on each changed layer in a variant diff: the id of the layer in the default variant, so
+  layers can be matched by id instead of by name path. New warning `AMBIGUOUS_SIBLINGS` where same-named
+  siblings differ in number between a variant and the default.
+- **Gradients** now follow the spec: `stops` as `{ position, hex, alpha }`, `opacity`, a CSS `angle` for
+  linear gradients, `center` and `radii` for radial ones. Angular and diamond gradients get an
+  `UNSUPPORTED_GRADIENT` warning. (The `stops[].color` and paint `alpha` of 1.2.x gradients are gone.)
+- **Text:** `truncation` is always written (`ENDING` or `NONE`), `maxLines` too (`null` for no limit), and
+  `leadingTrim` is new.
+- **`metadata.fonts`:** every font used (family, style, weight, italic). The PostScript name is not
+  available from Figma's plugin API.
+- **`layout.token`:** the tokens bound to a frame's gap and padding sides, next to the numbers. They moved
+  out of `bindings`, which keeps radius, size and the rest.
+
+### Changed
+
+- Small flat objects and arrays of numbers are written on one line. The data is identical, the file is
+  about a third smaller, and the content hash covers the new text.
+- The earlier `bounds` field (never released) is `box`, with the spec's meaning.
+
+### Measured
+
+On the synthetic 1,000-component stress file (every layer with a transform): 1.2.1 takes 8.3 s and writes
+40.5 MB; 1.3.0 takes 8.7 s (+5%) and writes 37.6 MB (-7%), with peak heap growth rising from about 180 MB
+to 330 MB (limit 600). The real numbers on the Rayna file need a run in Figma; see the README.
+
 ## 1.2.1
 
 ### Added

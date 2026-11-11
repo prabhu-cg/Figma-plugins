@@ -9,7 +9,10 @@ import type {
   ColorRgba,
   ComponentsWarning,
   CornerRadii,
+  FontUse,
   GradientStop,
+  LayerLayoutTokens,
+  UnitPoint,
   LayerConstraints,
   LayerGrid,
   LayerPlacement,
@@ -112,6 +115,8 @@ export interface ReadLayerResult {
   usedVariableIds: string[];
   /** Style ids written as tokens in the tree. */
   usedStyleIds: string[];
+  /** Fonts used by text in the tree. */
+  usedFonts: FontUse[];
   warnings: ComponentsWarning[];
 }
 
@@ -168,6 +173,8 @@ class Tracker {
   styles = new Set<string>();
   warnings: ComponentsWarning[] = [];
   private unresolved = new Set<string>();
+  fonts = new Map<string, FontUse>();
+  gradientWarned = new Set<string>();
   constructor(
     private resolve: ReadLayerOptions['resolveToken'],
     /** Whether image paints carry their picture details (only when pictures are exported). */
@@ -242,6 +249,51 @@ function readImage(p: unknown): LayerImage | undefined {
   return image;
 }
 
+/** Inverse of a 2x3 matrix, as a function from a point to a point; undefined when it cannot be inverted. */
+function inverse(m: number[][]): ((u: number, v: number) => { x: number; y: number }) | undefined {
+  const [[a, b, c], [d, e, f]] = m;
+  const det = a * e - b * d;
+  if (Math.abs(det) < 1e-9) return undefined;
+  return (u, v) => ({
+    x: (e * (u - c) - b * (v - f)) / det,
+    y: (-d * (u - c) + a * (v - f)) / det,
+  });
+}
+
+/**
+ * Works the CSS angle (linear) or the centre and radii (radial) out of a gradient's transform.
+ * Figma's transform takes the layer's box (0 to 1 each way) to a space where the gradient line runs
+ * from (0, 0.5) to (1, 0.5), so inverting it gives the line on the layer.
+ */
+function describeGradients(
+  paints: LayerPaint[] | undefined,
+  size: { width: number; height: number } | undefined,
+) {
+  if (!paints || !size || size.width <= 0 || size.height <= 0) return;
+  for (const paint of paints) {
+    if (!paint.transform) continue;
+    const at = inverse(paint.transform);
+    if (!at) continue;
+    if (paint.type === 'GRADIENT_LINEAR') {
+      const start = at(0, 0.5);
+      const end = at(1, 0.5);
+      const dx = (end.x - start.x) * size.width;
+      const dy = (end.y - start.y) * size.height;
+      const degrees = (Math.atan2(dx, -dy) * 180) / Math.PI;
+      paint.angle = round2((degrees + 360) % 360);
+    } else if (paint.type === 'GRADIENT_RADIAL') {
+      const centre = at(0.5, 0.5);
+      const right = at(1, 0.5);
+      const bottom = at(0.5, 1);
+      const length = (p: { x: number; y: number }) =>
+        Math.hypot((p.x - centre.x) * size.width, (p.y - centre.y) * size.height);
+      const point = (x: number, y: number): UnitPoint => ({ x: round3(x), y: round3(y) });
+      paint.center = point(centre.x, centre.y);
+      paint.radii = point(length(right) / size.width, length(bottom) / size.height);
+    }
+  }
+}
+
 function readPaints(
   paints: unknown,
   styleId: string | undefined,
@@ -278,21 +330,32 @@ function readPaints(
         for (const stop of stops.slice(0, MAX_GRADIENT_STOPS)) {
           const color = rgba(read(stop, 'color'));
           const position = num(stop, 'position');
-          if (color && position !== undefined)
-            readStops.push({ position: round3(position), color });
+          if (color && position !== undefined) {
+            readStops.push({ position: round3(position), hex: color.hex, alpha: color.alpha });
+          }
         }
       }
       if (readStops.length > 0) paint.stops = readStops;
       const transform = matrix2x3(read(p, 'gradientTransform'));
       if (transform) paint.transform = transform;
-      const opacity = num(p, 'opacity');
-      if (opacity !== undefined && opacity !== 1) paint.alpha = round3(opacity);
+      paint.opacity = round3(num(p, 'opacity') ?? 1);
+      if (
+        (type === 'GRADIENT_ANGULAR' || type === 'GRADIENT_DIAMOND') &&
+        !t.gradientWarned.has(type)
+      ) {
+        t.gradientWarned.add(type);
+        t.warnings.push({
+          code: 'UNSUPPORTED_GRADIENT',
+          message: `A ${type.slice(9).toLowerCase()} gradient is used (first on layer ${layerId}). It has no CSS equivalent, so only its type, stops and transform are written.`,
+          layerId,
+        });
+      }
     } else if (type === 'IMAGE') {
       paint.description = `image, scale mode ${str(p, 'scaleMode') ?? 'unknown'}`;
       const image = t.images ? readImage(p) : undefined;
       if (image) paint.image = image;
       const opacity = num(p, 'opacity');
-      if (opacity !== undefined && opacity !== 1) paint.alpha = round3(opacity);
+      if (opacity !== undefined && opacity !== 1) paint.opacity = round3(opacity);
     }
     const blend = str(p, 'blendMode');
     if (blend && blend !== 'NORMAL') paint.blendMode = blend;
@@ -518,6 +581,32 @@ const NON_NUMERIC_BINDINGS = new Set([
 ]);
 
 /** Variables bound to number, string or boolean fields, as tokens. */
+/** Moves the gap and padding bindings out of `bindings` into the shape layout.token uses. */
+function takeLayoutTokens(bindings: Record<string, TokenRef>): LayerLayoutTokens | undefined {
+  const out: LayerLayoutTokens = {};
+  const take = (field: string): TokenRef | undefined => {
+    const token = bindings[field];
+    delete bindings[field];
+    return token;
+  };
+  const gap = take('itemSpacing');
+  if (gap) out.gap = gap;
+  const counter = take('counterAxisSpacing');
+  if (counter) out.counterGap = counter;
+  const padding: NonNullable<LayerLayoutTokens['padding']> = {};
+  for (const [side, field] of [
+    ['top', 'paddingTop'],
+    ['right', 'paddingRight'],
+    ['bottom', 'paddingBottom'],
+    ['left', 'paddingLeft'],
+  ] as const) {
+    const token = take(field);
+    if (token) padding[side] = token;
+  }
+  if (Object.keys(padding).length > 0) out.padding = padding;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function readBindings(
   n: unknown,
   layerId: string,
@@ -586,7 +675,15 @@ function textFields(
       'NONE',
     ),
   };
-  if (/italic|oblique/i.test(str(fontName, 'style') ?? '')) fields.italic = true;
+  const style = str(fontName, 'style') ?? '';
+  const italic = /italic|oblique/i.test(style);
+  if (italic) fields.italic = true;
+  t.fonts.set(`${family}\u0000${style}`, {
+    family,
+    style,
+    weight: fields.fontWeight,
+    italic,
+  });
   const styleId = str(src, styleIdKey);
   if (styleId) {
     const token = t.token('style', styleId, layerId);
@@ -632,9 +729,11 @@ function textBox(n: unknown, includeText: boolean): Partial<LayerText> {
   if (auto === 'NONE' || auto === 'WIDTH_AND_HEIGHT' || auto === 'HEIGHT' || auto === 'TRUNCATE') {
     out.autoResize = auto;
   }
-  if (read(n, 'textTruncation') === 'ENDING') out.truncation = 'ENDING';
+  out.truncation = read(n, 'textTruncation') === 'ENDING' ? 'ENDING' : 'NONE';
   const maxLines = num(n, 'maxLines');
-  if (maxLines !== undefined && maxLines > 0) out.maxLines = maxLines;
+  out.maxLines = maxLines !== undefined && maxLines > 0 ? maxLines : null;
+  const trim = read(n, 'leadingTrim');
+  if (trim === 'CAP_HEIGHT' || trim === 'NONE') out.leadingTrim = trim;
   const vertical = read(n, 'textAlignVertical');
   if (vertical === 'CENTER' || vertical === 'BOTTOM') out.alignVertical = vertical;
   const spacing = num(n, 'paragraphSpacing');
@@ -767,6 +866,21 @@ async function readInstance(n: unknown): Promise<InstanceOf | undefined> {
   return instance;
 }
 
+/**
+ * Where a node's own layout box starts, in page coordinates: the translation of its absolute
+ * transform. For a rotated node this is the corner the rotation turns about, not the corner of
+ * the box that encloses it. Hidden nodes have a transform too.
+ */
+function readOrigin(n: unknown): { x: number; y: number } | undefined {
+  const t = read(n, 'absoluteTransform');
+  if (!Array.isArray(t) || t.length < 2) return undefined;
+  const x = Array.isArray(t[0]) ? t[0][2] : undefined;
+  const y = Array.isArray(t[1]) ? t[1][2] : undefined;
+  return typeof x === 'number' && Number.isFinite(x) && typeof y === 'number' && Number.isFinite(y)
+    ? { x, y }
+    : undefined;
+}
+
 function readPaths(n: unknown, key: string): VectorPath[] | undefined {
   const raw = read(n, key);
   if (!Array.isArray(raw)) return undefined;
@@ -879,7 +993,12 @@ export async function readLayerTree(
   /** What the parent of a layer says about how the layer is placed. `undefined` for the root. */
   interface ParentInfo {
     auto: boolean;
+    /** Opacity as drawn for the parent: its own times that of every layer above it. */
+    opacity: number;
   }
+
+  /** Top-left corner of the root layer; bounds are measured from it. */
+  const origin = readOrigin(root);
 
   const readAttributes = async (
     n: unknown,
@@ -901,12 +1020,27 @@ export async function readLayerTree(
     if (width !== undefined && height !== undefined) {
       layer.size = { width: round2(width), height: round2(height) };
     }
+    // The layout box in the variant's own coordinates; the same size as `size`, repeated so a box is
+    // one value. Hidden layers are included so "hidden" can be told from "missing".
+    if (origin && layer.size) {
+      const at = readOrigin(n);
+      if (at) {
+        layer.box = {
+          x: round2(at.x - origin.x),
+          y: round2(at.y - origin.y),
+          width: layer.size.width,
+          height: layer.size.height,
+        };
+      }
+    }
     const layout = readLayout(n);
     if (layout) layer.layout = layout;
     const radius = readRadius(n);
     if (radius !== undefined) layer.radius = radius;
     const opacity = num(n, 'opacity');
     if (opacity !== undefined) layer.opacity = round3(opacity);
+    const drawnOpacity = round3((parent?.opacity ?? 1) * (opacity ?? 1));
+    if (drawnOpacity !== 1) layer.effectiveOpacity = drawnOpacity;
 
     // Where the layer sits. In an auto-layout parent the flow decides, except for absolute layers.
     const placement = parent?.auto ? readPlacement(n) : undefined;
@@ -936,7 +1070,12 @@ export async function readLayerTree(
     const smoothing = num(n, 'cornerSmoothing');
     if (smoothing) layer.cornerSmoothing = round3(smoothing);
     const bindings = readBindings(n, id, t);
-    if (bindings) layer.bindings = bindings;
+    if (bindings) {
+      // Gap and padding are written next to the numbers they replace, in layout.token.
+      const tokens = layer.layout ? takeLayoutTokens(bindings) : undefined;
+      if (tokens && layer.layout) layer.layout.token = tokens;
+      if (Object.keys(bindings).length > 0) layer.bindings = bindings;
+    }
 
     const rawFills = read(n, 'fills');
     const fills = readPaints(
@@ -968,6 +1107,8 @@ export async function readLayerTree(
     }
     const strokes = readStrokes(n, id, t);
     if (strokes) layer.strokes = strokes;
+    describeGradients(layer.fills, layer.size);
+    describeGradients(layer.strokes?.paints, layer.size);
     const rawEffects = read(n, 'effects');
     const effects = readEffects(
       rawEffects,
@@ -1028,6 +1169,7 @@ export async function readLayerTree(
       if (!node) continue;
       const layer = await readAttributes(node, true, {
         auto: isAutoLayout(read(node, 'parent')),
+        opacity: 1,
       });
       const changes: Record<string, unknown> = {};
       for (const attribute of wanted) {
@@ -1100,7 +1242,7 @@ export async function readLayerTree(
               depth + 1,
               insideInstance || type === 'INSTANCE',
               insideBoolean || type === 'BOOLEAN_OPERATION',
-              { auto: !!layer.layout },
+              { auto: !!layer.layout, opacity: layer.effectiveOpacity ?? layer.opacity ?? 1 },
             ),
           );
         }
@@ -1124,6 +1266,7 @@ export async function readLayerTree(
     truncated,
     usedVariableIds: Array.from(t.variables),
     usedStyleIds: Array.from(t.styles),
+    usedFonts: Array.from(t.fonts.values()),
     warnings,
   };
 }

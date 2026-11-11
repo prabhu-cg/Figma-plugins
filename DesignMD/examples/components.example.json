@@ -6,13 +6,13 @@
     "fileKey": "AbC123exampleKey",
     "scope": "file",
     "generatedAt": "2026-11-09T10:00:00.000Z",
-    "pluginVersion": "1.2.1",
+    "pluginVersion": "1.3.0",
     "options": {
       "includeText": true,
       "includeVariantDiffs": true,
       "includeInstanceInternals": true
     },
-    "contentHash": "78d434755290068f8d2c4856f223fdff823ae47d58c53a8d4404047194b80124"
+    "contentHash": "b769e7681571711f0fadb06c53fdaac56c3a8e299b9c6383eed44f52641135ba"
   },
   "index": {
     "componentCount": 1,

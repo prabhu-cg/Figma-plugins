@@ -262,7 +262,12 @@ describe('readLayerTree', () => {
     });
     const { tree } = await readLayerTree(node);
     expect(tree.fills).toEqual([
-      { type: 'GRADIENT_LINEAR', visible: true, description: 'linear gradient, 2 stops' },
+      {
+        type: 'GRADIENT_LINEAR',
+        visible: true,
+        description: 'linear gradient, 2 stops',
+        opacity: 1,
+      },
       { type: 'IMAGE', visible: true, description: 'image, scale mode FILL' },
     ]);
     expect(JSON.stringify(tree)).not.toContain('abc');

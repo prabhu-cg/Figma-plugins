@@ -96,22 +96,64 @@ Enough to rebuild a layer's box and paint without guessing:
 - **Limits and clipping.** `sizeLimits` (min/max width and height), `clipsContent` (overflow hidden),
   `isMask`, `blendMode`, `cornerSmoothing`, and `layoutGrids` on frames. Auto layout also has
   `counterGap`/`counterAlignContent` for wrapping, `reverseZIndex` and `strokesIncludedInLayout`.
-- **Gradients.** A gradient paint has `stops` (position and colour with alpha), `transform` (Figma's
-  `gradientTransform`, a 2x3 matrix; invert it to get the start and end points) and `alpha`. Any paint
-  may have a `blendMode`.
+- **Gradients.** A gradient paint has `stops` (`{ position, hex, alpha }`, first to last), `opacity`,
+  and `transform` (Figma's `gradientTransform`, a 2x3 matrix). A linear gradient also has `angle`, the
+  CSS angle in degrees (0 points up, 90 right), worked out in pixels from the transform and the layer's
+  size. A radial gradient has `center` and `radii` as fractions of the layer's box (a rotated or skewed
+  radial is only approximated; use `transform`). Angular and diamond gradients keep their `type`, stops
+  and transform, with one `UNSUPPORTED_GRADIENT` warning per kind. Any paint may have a `blendMode`.
 - **Strokes.** `strokes.sides` holds each side's weight when they differ (`weight` is then the largest),
   with `dash`, `cap`, `join` and `miterLimit`. A missing `cap` is flat, a missing `join` is MITER.
-- **Text.** `italic`, `autoResize` (fixed, hug or truncate), `truncation` and `maxLines`,
-  `alignVertical`, `paragraphSpacing`, `paragraphIndent`, `listType` and `hyperlink`. When the colours
+- **Text.** `italic`, `autoResize` (fixed, hug or truncate), `truncation` (`ENDING` or `NONE`) and
+  `maxLines` (a number, or `null` for no limit), `leadingTrim` (`CAP_HEIGHT` or `NONE`, it changes the
+  height of the box), `alignVertical`, `paragraphSpacing`, `paragraphIndent`, `listType` and `hyperlink`. When the colours
   of the text differ, the layer has no `fills` and each run has its own `fills`.
-- **Bound variables.** `bindings` maps fields such as `paddingLeft`, `itemSpacing`, `topLeftRadius`,
-  `fontSize` or `width` to the token the layer uses, so generated code can write `var(--space-4)`
-  instead of `16px`. Colour bindings are on the paints.
-- Variant diffs compare all of the above. A layer a variant adds has an `index`, its position among
-  the parent's children in that variant: take the default variant's children, drop `removed`, then
-  insert each added layer at its `index`, lowest first.
+- **Bound variables.** A gap or padding side bound to a variable has its token next to the number, in
+  `layout.token` (`{ gap, counterGap, padding: { top, right, bottom, left } }`, only the bound ones), so
+  generated code can write `gap: var(--space-2)` instead of `8px`. Other numbers (`cornerRadius`,
+  `topLeftRadius`, `width`, `height`, `fontSize`, ...) are in `bindings`, keyed by Figma's field name.
+  Colour bindings are on the paints.
+- Variant diffs compare all of the above.
 
 Not captured: OpenType features, and variable bindings that do not resolve to a token in the file.
+
+## Measured positions: `box`
+
+Every layer with a size has `box`: `{ x, y, width, height }` in px, the layer's own layout box in the
+coordinates of the root layer of the same variant. `x` and `y` are the layer's absolute transform minus
+the root's; `width` and `height` are the same as `size`, repeated so a box is one value. For a rotated
+layer `x` and `y` are where its unrotated box sits, the origin `rotation` turns about. Hidden layers
+have a `box` too, so "hidden" can be told from "missing". Shadows and strokes outside the box are not
+counted. A layer also has `effectiveOpacity` when what is drawn is not fully opaque: its `opacity`
+times the opacity of every layer above it.
+
+A variant's `layers[].changes` has `box` for every layer whose box differs from the default variant, and
+leaves it out for the rest, as with every other attribute. A layer a variant adds has its full `box`.
+With that, position, size and order of every layer in every variant can be checked against the browser
+without a picture. Colour is on the paints (`fills`, `strokes`, text `fills`), resolved to hex and
+alpha, and variants carry theirs through the diffs.
+
+## Telling variants apart: `layerId`, `index`, `reordered`
+
+- **`layers[].layerId`** is the id of the layer the entry changes **in the default variant**. Match
+  layers across variants by it, not by `path`: when two variants have different numbers of layers
+  with the same name (a flag made of several layers called `Vector`), the `[n]` in a path points at
+  different layers. Where that happens inside a parent, the plugin also writes an
+  `AMBIGUOUS_SIBLINGS` warning (with `componentId`, `variantId` and the parent's `layerId`), because the
+  match by position is a guess.
+- **`added[].index`** is the position of an added layer among its parent's children in that variant. To
+  build the variant, take the default variant's children, drop `removed`, then insert each added layer
+  at its `index`, lowest first.
+- **`reordered`** lists, for each parent whose children a variant draws in a different order from the
+  default variant, `{ parentPath, order }` with the paths of **all** the parent's children, first to
+  last, hidden ones included. The order is compared between the children both variants have; adding or
+  removing a layer alone is not a reorder. `reordered` is `[]` when no parent changes order.
+
+## Fonts
+
+`metadata.fonts` lists every font the exported components use, once each, sorted by family and style:
+`{ family, style, weight, italic }`. Figma's plugin API does not give a font's PostScript name, so it is
+not included. In a split export every file lists all the fonts of the whole export.
 
 ## Vector shapes
 
@@ -147,10 +189,12 @@ is one file. On by default, so avatars and photos come through. Off, image fills
 `metadata.options` says which options the file was made with. `includeVariantDiffs: false` means every
 `variantDiffs` is `[]` because nothing was compared, not because the variants are identical.
 `includeText: false` means `text.characters` is absent everywhere. `includeVectorShapes` and
-`includeImages` are absent in files from before 1.2.0, which have neither; `false` means no `vector`
-or `image` was written.
+`includeImages` are absent in files from before 1.2.0, which have neither; `false` means no `vector` or
+`image` was written.
 
 ## Content hash
 
 `metadata.contentHash` is the SHA-256 of the file text with `generatedAt` and `contentHash` set to `""`.
+Small flat objects (`{ "x": 0, "y": 8 }`) and arrays of numbers are written on one line, which keeps the
+file about a third smaller; it is the same data and the same text every time.
 Equal hashes mean equal content.

@@ -11,6 +11,7 @@ import {
   type ComponentV1,
   type ComponentsFileV1,
   type ComponentsWarning,
+  type FontUse,
   type Layer,
   type TokenEntry,
 } from '@shared/componentsSchema';
@@ -182,6 +183,7 @@ export function buildComponentsFile(
     ]),
   );
   const warnings: ComponentsWarning[] = [];
+  const fonts = new Map<string, FontUse>();
   const used = new Set<string>();
   const tokens: Record<string, TokenEntry> = {};
 
@@ -233,6 +235,7 @@ export function buildComponentsFile(
       warnings.push(...structure.warnings);
     }
 
+    for (const f of structure?.usedFonts ?? []) fonts.set(`${f.family}\u0000${f.style}`, f);
     const variableIds = new Set([...doc.boundVariableIds, ...(structure?.usedVariableIds ?? [])]);
     const styleIds = new Set([...(doc.styleIds ?? []), ...(structure?.usedStyleIds ?? [])]);
     const boundVariableIds = [...variableIds].sort().filter((id) => addToken(id, doc.id));
@@ -286,6 +289,9 @@ export function buildComponentsFile(
         includeVectorShapes: chosen.includeVectorShapes === true,
         includeImages: chosen.includeImages === true,
       },
+      fonts: [...fonts.values()].sort(
+        (a, b) => a.family.localeCompare(b.family) || a.style.localeCompare(b.style),
+      ),
       contentHash: '',
     },
     index: {
@@ -298,17 +304,33 @@ export function buildComponentsFile(
   };
 }
 
+/**
+ * Small flat objects and arrays of numbers on one line: `{ "x": 0, "y": 8, "width": 37, "height": 20 }`
+ * instead of six. A layer tree is mostly these, and indenting each number cost about a third of the
+ * file. Only values that cannot contain a newline are joined (numbers, booleans, null and short
+ * plain strings), so the text still parses to exactly the same data and is the same every time.
+ */
+const FLAT_VALUE = String.raw`(?:-?\d+(?:\.\d+)?(?:e[+-]?\d+)?|true|false|null|"[^"\\\n]{0,30}")`;
+const FLAT_OBJECT = new RegExp(
+  String.raw`\{\n\s*(?:"[^"\\\n]{1,40}": ${FLAT_VALUE},?\n\s*)+\}`,
+  'g',
+);
+const FLAT_ARRAY = new RegExp(String.raw`\[\n\s*(?:${FLAT_VALUE},?\n\s*)+\]`, 'g');
+
+export function stringifyCompact(value: unknown): string {
+  const join = (m: string) => m.replace(/\n\s*/g, ' ');
+  return JSON.stringify(value, null, 2).replace(FLAT_OBJECT, join).replace(FLAT_ARRAY, join);
+}
+
 /** Serializes with the hash filled in: SHA-256 of the text with generatedAt and contentHash blanked. */
 export function hashAndSerialize(file: ComponentsFileV1): { content: string; contentHash: string } {
-  const blank = JSON.stringify(
-    { ...file, metadata: { ...file.metadata, generatedAt: '', contentHash: '' } },
-    null,
-    2,
-  );
+  const blank = stringifyCompact({
+    ...file,
+    metadata: { ...file.metadata, generatedAt: '', contentHash: '' },
+  });
   const contentHash = sha256(blank + '\n');
   return {
-    content:
-      JSON.stringify({ ...file, metadata: { ...file.metadata, contentHash } }, null, 2) + '\n',
+    content: stringifyCompact({ ...file, metadata: { ...file.metadata, contentHash } }) + '\n',
     contentHash,
   };
 }

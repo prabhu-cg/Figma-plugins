@@ -153,6 +153,18 @@ export interface LayerLayout {
   reverseZIndex?: boolean;
   /** True when the stroke takes up space in the layout (like CSS border-box). Absent means false: the stroke does not. */
   strokesIncludedInLayout?: boolean;
+  /** Variables bound to the numbers above, written next to them. Only the bound ones. */
+  token?: LayerLayoutTokens;
+}
+
+/** Tokens bound to the gap and padding of an auto-layout frame. */
+export interface LayerLayoutTokens {
+  /** Token for `gap`. */
+  gap?: TokenRef;
+  /** Token for `counterGap`. */
+  counterGap?: TokenRef;
+  /** Tokens for the padding sides. */
+  padding?: { top?: TokenRef; right?: TokenRef; bottom?: TokenRef; left?: TokenRef };
 }
 
 /** How a layer sits inside its auto-layout parent. Only on children of an auto-layout frame. */
@@ -167,6 +179,18 @@ export interface LayerPlacement {
   sizingH: 'FIXED' | 'HUG' | 'FILL';
   /** Vertical sizing: fixed size, hug the content, or fill the parent. For any layer, not only frames. */
   sizingV: 'FIXED' | 'HUG' | 'FILL';
+}
+
+/** The layout box of a layer, in px, in the coordinates of the root layer of its variant. */
+export interface LayerBox {
+  /** Distance from the root's left edge to the box's left edge. For a rotated layer, the corner the rotation turns about. */
+  x: number;
+  /** Distance from the root's top edge to the box's top edge. For a rotated layer, the corner the rotation turns about. */
+  y: number;
+  /** Width of the box. The same as `size.width`. */
+  width: number;
+  /** Height of the box. The same as `size.height`. */
+  height: number;
 }
 
 /** Position of a layer inside its parent, in px, from the parent's top-left corner. */
@@ -217,10 +241,20 @@ export interface LayerGrid {
 
 /** One colour stop of a gradient. */
 export interface GradientStop {
-  /** Position along the gradient, 0 to 1. */
+  /** Position along the gradient line, 0 to 1. */
   position: number;
-  /** The colour at this stop, with its own alpha. */
-  color: ColorRgba;
+  /** Six-digit lowercase hex without alpha. */
+  hex: string;
+  /** Opacity of this stop, 0 to 1. */
+  alpha: number;
+}
+
+/** A point or size as fractions of a layer's box. */
+export interface UnitPoint {
+  /** Fraction of the layer's width. */
+  x: number;
+  /** Fraction of the layer's height. */
+  y: number;
 }
 
 /** The picture behind an IMAGE paint. The bytes are a separate file, and only when "Include images" is on. */
@@ -259,12 +293,20 @@ export interface LayerPaint {
   visible: boolean;
   /** Six-digit lowercase hex without alpha, for SOLID paints. */
   hex?: string;
-  /** Opacity of the whole paint, 0 to 1. For SOLID paints this is the colour's opacity. Absent on gradients and images means 1. */
+  /** Opacity of a SOLID paint's colour, 0 to 1. */
   alpha?: number;
+  /** Opacity of a gradient or image paint, 0 to 1. Absent on an image means 1. */
+  opacity?: number;
   /** Short human-readable description of a gradient or image paint. */
   description?: string;
-  /** Colour stops, for gradient paints. */
+  /** Colour stops, for gradient paints, first to last. */
   stops?: GradientStop[];
+  /** Linear gradients: the CSS angle in degrees (0 points up, 90 points right), worked out from the paint's transform and the layer's size. */
+  angle?: number;
+  /** Radial gradients: the centre as fractions of the layer's box. */
+  center?: UnitPoint;
+  /** Radial gradients: the radii as fractions of the layer's width and height. A rotated or skewed gradient is only approximated; use `transform`. */
+  radii?: UnitPoint;
   /** Maps the gradient onto the layer, as the 2x3 matrix Figma reports (`gradientTransform`). It takes layer space (0 to 1) to gradient space, so a consumer inverts it to find the start and end points. */
   transform?: number[][];
   /** How the paint blends with what is under it. Absent means NORMAL. */
@@ -371,10 +413,12 @@ export interface LayerText extends TextStyleFields {
   align: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFIED';
   /** How the box follows the text: NONE is a fixed box, WIDTH_AND_HEIGHT hugs both, HEIGHT hugs the height (fixed width, wraps), TRUNCATE is fixed and cuts off. */
   autoResize?: 'NONE' | 'WIDTH_AND_HEIGHT' | 'HEIGHT' | 'TRUNCATE';
-  /** "ENDING" cuts overflowing text with an ellipsis. Absent means no truncation. */
-  truncation?: 'ENDING';
-  /** Most lines shown before truncating. Absent means no limit. */
-  maxLines?: number;
+  /** "ENDING" cuts overflowing text with an ellipsis; "NONE" does not. */
+  truncation?: 'ENDING' | 'NONE';
+  /** Most lines shown before truncating. null means no limit. */
+  maxLines?: number | null;
+  /** "CAP_HEIGHT" trims the text box to the height of capital letters (it changes the height of the box); "NONE" does not. */
+  leadingTrim?: 'CAP_HEIGHT' | 'NONE';
   /** Vertical alignment inside the box. Absent means TOP. */
   alignVertical?: 'CENTER' | 'BOTTOM';
   /** Space between paragraphs in px. Absent means 0. */
@@ -494,6 +538,14 @@ export interface LayerAttributes {
   size?: LayerSize;
   /** Position inside the parent. Written when the parent is not auto layout, or this layer is absolute in it. For children of a group, measured from the nearest ancestor that is not a group. */
   position?: LayerPosition;
+  /**
+   * The layer's own layout box relative to the root layer of the same variant, from its absolute
+   * transform minus the root's. Written for every layer with a size, hidden ones included. A rotated
+   * layer's box is its unrotated box (the origin `rotation` turns about), so shadows, strokes outside
+   * the box and the corners of a rotated layer are not counted. Variant diffs list `box` for every layer
+   * whose box differs from the default variant.
+   */
+  box?: LayerBox;
   /** Rotation in degrees, counter-clockwise as Figma reports it (CSS rotates clockwise, so negate it). The size is the unrotated size. Absent means 0. */
   rotation?: number;
   /** Constraints against the parent. Written together with `position`. */
@@ -514,8 +566,9 @@ export interface LayerAttributes {
   layoutGrids?: LayerGrid[];
   /**
    * Variables bound to number, string or boolean fields of the layer, keyed by the Figma field name
-   * (for example "paddingLeft", "itemSpacing", "topLeftRadius", "fontSize", "width"). Colour bindings
-   * are on the paints. Only variables that resolve to a token in the file are listed.
+   * (for example "topLeftRadius", "cornerRadius", "fontSize", "width"). Gap and padding bindings are in
+   * `layout.token` instead, and colour bindings on the paints. Only variables that resolve to a token
+   * in the file are listed.
    */
   bindings?: Record<string, TokenRef>;
   /** Auto-layout settings. Only on auto-layout frames. */
@@ -524,6 +577,8 @@ export interface LayerAttributes {
   radius?: number | CornerRadii;
   /** Opacity from 0 to 1. */
   opacity?: number;
+  /** Opacity as drawn: this layer's `opacity` times that of every layer above it. Written only when it is not 1. */
+  effectiveOpacity?: number;
   /** Fill paints. */
   fills?: LayerPaint[];
   /** Stroke settings. */
@@ -561,8 +616,22 @@ export type LayerChanges = LayerAttributes;
 export interface LayerDiff {
   /** Name path from the root, for example "Button/Label". Duplicate siblings get an index, "Icon[1]". */
   path: string;
+  /**
+   * Id of the layer this entry changes in the default variant. Match layers across variants by it
+   * rather than by `path`, which is a guess when same-named siblings differ in number (see
+   * AMBIGUOUS_SIBLINGS). Absent in files from before 1.3.0.
+   */
+  layerId?: string;
   /** Only the attributes that differ from the default variant. */
   changes: LayerChanges;
+}
+
+/** The children of one layer, in the order a variant draws them, when that differs from the default variant. */
+export interface ReorderedChildren {
+  /** Name path of the parent, as in `LayerDiff.path`. */
+  parentPath: string;
+  /** Name paths of all the parent's children in this variant, first to last, hidden layers included. */
+  order: string[];
 }
 
 /** A layer that exists in a variant but not in the default variant. */
@@ -590,6 +659,8 @@ export interface VariantDiff {
   layers: LayerDiff[];
   /** Layers present here and not in the default variant. */
   added: AddedLayer[];
+  /** Parents whose children this variant draws in a different order from the default variant. Empty when none do. Absent in files from before 1.3.0. */
+  reordered?: ReorderedChildren[];
   /** Name paths of layers present in the default variant and missing here. */
   removed: string[];
 }
@@ -711,7 +782,9 @@ export type WarningCode =
   | 'OUTPUT_TOO_LARGE'
   | 'OUTPUT_SPLIT'
   | 'IMAGE_OMITTED'
-  | 'VECTOR_OMITTED';
+  | 'VECTOR_OMITTED'
+  | 'AMBIGUOUS_SIBLINGS'
+  | 'UNSUPPORTED_GRADIENT';
 
 /** A non-fatal issue found while generating the file. */
 export interface ComponentsWarning {
@@ -723,6 +796,8 @@ export interface ComponentsWarning {
   componentId?: string;
   /** Id of the layer the warning is about. */
   layerId?: string;
+  /** Id of the variant the warning is about. */
+  variantId?: string;
 }
 
 /** The export options the file was made with, so an empty list can be told from a switched-off option. */
@@ -739,6 +814,18 @@ export interface ComponentsOptionsUsed {
   includeImages?: boolean;
 }
 
+/** A font used by the exported components. */
+export interface FontUse {
+  /** Font family, for example "Inter". */
+  family: string;
+  /** Font style as Figma names it, for example "Semi Bold Italic". */
+  style: string;
+  /** Numeric weight, for example 600. */
+  weight: number;
+  /** True for an italic or oblique style. */
+  italic: boolean;
+}
+
 /** Details about the file the output was made from. */
 export interface ComponentsMetadata {
   /** Name of the Figma file. */
@@ -753,6 +840,11 @@ export interface ComponentsMetadata {
   pluginVersion: string;
   /** The options this file was made with. */
   options: ComponentsOptionsUsed;
+  /**
+   * Every font the exported components use, sorted by family, then style, so a tool knows what to load
+   * and what falls back. Figma's plugin API does not give the PostScript name. Absent in files from before 1.3.0.
+   */
+  fonts?: FontUse[];
   /** SHA-256 of the file with generatedAt and contentHash set to "". Use it to detect changes. */
   contentHash: string;
 }

@@ -154,6 +154,7 @@ export async function extractComponentStructure(
   let truncated = base.truncated;
   const variables = new Set(base.usedVariableIds);
   const styles = new Set(base.usedStyleIds);
+  const fonts = new Map(base.usedFonts.map((f) => [`${f.family}\u0000${f.style}`, f]));
 
   const diffs: VariantDiff[] = [];
   const duplicateGroups = new Map<string, ComponentsWarning>();
@@ -198,6 +199,7 @@ export async function extractComponentStructure(
       if (read.truncated) truncated = true;
       read.usedVariableIds.forEach((id) => variables.add(id));
       read.usedStyleIds.forEach((id) => styles.add(id));
+      read.usedFonts.forEach((f) => fonts.set(`${f.family}\u0000${f.style}`, f));
       const { diff, warnings: diffWarnings } = diffVariant(base.tree, named(read.tree), {
         variantId: variant.id,
         variantProperties: { ...(variant.variantProperties ?? {}) },
@@ -261,6 +263,7 @@ export async function extractComponentStructure(
     treeTruncated: truncated,
     usedVariableIds: Array.from(variables),
     usedStyleIds: Array.from(styles),
+    usedFonts: Array.from(fonts.values()),
     warnings: warnings.map((w) => (w.componentId ? w : { ...w, componentId: node.id })),
   };
 }

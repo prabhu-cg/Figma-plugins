@@ -28,6 +28,7 @@ describe('diffVariant', () => {
       layers: [],
       added: [],
       removed: [],
+      reordered: [],
     });
     expect(warnings).toEqual([]);
   });
@@ -38,8 +39,8 @@ describe('diffVariant', () => {
     v.children[0].visible = false;
     const { diff } = diffVariant(base(), v, info);
     expect(diff.layers).toEqual([
-      { path: 'Button', changes: { fills: fill('#0d3fc4') } },
-      { path: 'Button/Label', changes: { visible: false } },
+      { path: 'Button', layerId: expect.any(String), changes: { fills: fill('#0d3fc4') } },
+      { path: 'Button/Label', layerId: expect.any(String), changes: { visible: false } },
     ]);
   });
 
@@ -48,7 +49,9 @@ describe('diffVariant', () => {
     delete v.radius;
     delete v.fills;
     const { diff } = diffVariant(base(), v, info);
-    expect(diff.layers).toEqual([{ path: 'Button', changes: { radius: 0 } }]);
+    expect(diff.layers).toEqual([
+      { path: 'Button', layerId: expect.any(String), changes: { radius: 0 } },
+    ]);
   });
 
   it('reports added and removed layers once, at the top-most layer', () => {
@@ -102,9 +105,94 @@ describe('diffVariant', () => {
     const v = twin();
     v.children[1].fills = fill('#ffffff');
     const { diff, warnings } = diffVariant(twin(), v, info);
-    expect(diff.layers).toEqual([{ path: 'Row/Dot[1]', changes: { fills: fill('#ffffff') } }]);
+    expect(diff.layers).toEqual([
+      { path: 'Row/Dot[1]', layerId: expect.any(String), changes: { fills: fill('#ffffff') } },
+    ]);
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatchObject({ code: 'DUPLICATE_SIBLING_NAME', componentId: 'c1' });
+  });
+
+  it("names the default variant's layer in every change, so layers can be matched by id", () => {
+    const b = base();
+    const v = base();
+    v.children[1].visible = false;
+    const { diff } = diffVariant(b, v, info);
+    expect(diff.layers).toEqual([
+      { path: 'Button/Icon', layerId: b.children[1].id, changes: { visible: false } },
+    ]);
+  });
+
+  describe('reordered children', () => {
+    const tip = (names: string[]) =>
+      L(
+        'Tool tip',
+        {},
+        names.map((n) => L(n)),
+      );
+
+    it('lists all children, first to last, for a parent a variant draws in another order', () => {
+      const { diff } = diffVariant(
+        tip(['pointer', 'Container']),
+        tip(['Container', 'pointer']),
+        info,
+      );
+      expect(diff.reordered).toEqual([
+        { parentPath: 'Tool tip', order: ['Tool tip/Container', 'Tool tip/pointer'] },
+      ]);
+    });
+
+    it('is empty when the order is the same, however layers are added or removed', () => {
+      const { diff } = diffVariant(
+        tip(['pointer', 'Container', 'Tail']),
+        tip(['pointer', 'New', 'Container']),
+        info,
+      );
+      expect(diff.reordered).toEqual([]);
+      expect(diff.added.map((a) => [a.layer.name, a.index])).toEqual([['New', 1]]);
+      expect(diff.removed).toEqual(['Tool tip/Tail']);
+    });
+
+    it('finds a reorder deeper down, and counts hidden layers in the order', () => {
+      const wrap = (kids: Layer[]) => L('Root', {}, [L('Tool tip', {}, kids)]);
+      const hidden = L('Ghost', { visible: false });
+      const { diff } = diffVariant(
+        wrap([L('A'), hidden, L('B')]),
+        wrap([L('B'), L('Ghost', { visible: false }), L('A')]),
+        info,
+      );
+      expect(diff.reordered).toEqual([
+        {
+          parentPath: 'Root/Tool tip',
+          order: ['Root/Tool tip/B', 'Root/Tool tip/Ghost', 'Root/Tool tip/A'],
+        },
+      ]);
+    });
+  });
+
+  describe('ambiguous siblings', () => {
+    const flag = (vectors: number) =>
+      L(
+        'Flag',
+        {},
+        Array.from({ length: vectors }, () => L('Vector', { type: 'VECTOR' })),
+      );
+
+    it('warns when same-named siblings differ in number, naming the variant and parent', () => {
+      const { warnings } = diffVariant(flag(2), flag(3), info);
+      const w = warnings.find((x) => x.code === 'AMBIGUOUS_SIBLINGS')!;
+      expect(w).toMatchObject({ componentId: 'c1', variantId: 'v2' });
+      expect(w.message).toContain('"Flag"');
+      expect(w.message).toContain('"Vector"');
+    });
+
+    it('does not warn when the counts agree, or when only single layers are added or removed', () => {
+      expect(diffVariant(flag(2), flag(2), info).warnings.map((w) => w.code)).not.toContain(
+        'AMBIGUOUS_SIBLINGS',
+      );
+      const one = L('Flag', {}, [L('Vector')]);
+      const none = L('Flag', {}, []);
+      expect(diffVariant(one, none, info).warnings).toEqual([]);
+    });
   });
 
   it('does not mutate its inputs', () => {

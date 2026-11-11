@@ -25,11 +25,20 @@ afterEach(() => vi.unstubAllGlobals());
 const TIME_LIMIT_MS = 30_000;
 const HEAP_GROWTH_LIMIT_BYTES = 600 * 1024 * 1024;
 
+/** Every layer has an absolute transform, like a real node, so `box` is written and measured. */
+const placed = (x: number, y: number) => ({
+  absoluteTransform: [
+    [1, 0, x],
+    [0, 1, y],
+  ],
+});
+
 const leaf = (i: number, props: object = {}) =>
   node('RECTANGLE', `Rect ${i}`, {
     visible: true,
     width: 10,
     height: 10,
+    ...placed(i * 10, 20),
     fills: [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 }, opacity: 1, visible: true }],
     ...props,
   });
@@ -38,9 +47,21 @@ const leaf = (i: number, props: object = {}) =>
 function nested(depth: number, width: number, seed: number, props: object = {}): FakeNode {
   let inner: FakeNode[] = Array.from({ length: width }, (_, i) => leaf(i));
   for (let d = depth; d > 0; d--) {
-    inner = [node('FRAME', `Level ${d}`, { visible: true, width: 100, height: 100 }, inner)];
+    inner = [
+      node(
+        'FRAME',
+        `Level ${d}`,
+        { visible: true, width: 100, height: 100, ...placed(d, d) },
+        inner,
+      ),
+    ];
   }
-  return node('FRAME', `Root ${seed}`, { visible: true, width: 200, height: 200, ...props }, inner);
+  return node(
+    'FRAME',
+    `Root ${seed}`,
+    { visible: true, width: 200, height: 200, ...placed(0, 0), ...props },
+    inner,
+  );
 }
 
 function buildSyntheticFile() {
@@ -49,7 +70,7 @@ function buildSyntheticFile() {
       `Set ${s}`,
       Array.from({ length: 100 }, (_, v) => ({
         props: { Variant: String(v) },
-        extra: { width: 100 + v, height: 40 },
+        extra: { width: 100 + v, height: 40, ...placed(v * 500, s * 100) },
         children: [nested(3, 5, v, { opacity: 1 - v / 200 })],
       })),
     ),
@@ -57,7 +78,7 @@ function buildSyntheticFile() {
   const standalone = Array.from({ length: 960 }, (_, i) =>
     component(
       `Standalone ${i}`,
-      {},
+      placed(i * 400, 5000),
       // every 100th is deeper than the depth budget; every 250th is wider than the layer budget
       [nested(i % 100 === 0 ? 20 : 4, i % 250 === 0 ? 2100 : 6, i)],
     ),
