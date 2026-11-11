@@ -1,5 +1,49 @@
 # Changelog
 
+## 1.2.0
+
+### Added
+
+- **Vector shapes in `components.json`.** Vector layers (`VECTOR`, `BOOLEAN_OPERATION`, `STAR`,
+  `POLYGON`, `LINE`) carry `vector: { fill, stroke }` as SVG path data, so icons can be drawn. On by
+  default (**Include vector shapes**). A layer over 60,000 characters of path data is left out with
+  a `VECTOR_OMITTED` warning; the parts of a boolean shape are not repeated.
+- **Pictures behind image fills.** With **Export pictures behind image fills** on, image paints get
+  `image` (hash, scale mode, placement, pixel size, file) and the picture is saved as
+  `assets/images/<hash>.<ext>` in the export (ZIP or individual download). Limits: 8 MB per picture,
+  96 MB in total; anything left out gets an `IMAGE_OMITTED` warning. Off by default.
+- **Instance changes.** An instance now lists `instanceOf.properties` (the value each component
+  property has in that use) and, when its insides are not read, `instanceOf.overrides` (the layers
+  that use changed, such as a different label, with their new values). A consumer that fills the
+  insides in from the library component can apply them.
+- **Split setting.** _Split into one file per component_ can be _Only above 20 MB_ (as before) or
+  _Always_. New warning code `OUTPUT_SPLIT`.
+- **Placement and position.** Every child of an auto-layout frame has `placement` (sizing, grow, align,
+  absolute), including text layers, which had no sizing before. Children of other frames have
+  `position` and `constraints`; layers have `rotation`, `sizeLimits`, `clipsContent`, `isMask`,
+  `blendMode`, `cornerSmoothing`, and frames have `layoutGrids`. Wrapping auto layout adds
+  `counterGap`, `counterAlignContent`, `reverseZIndex` and `strokesIncludedInLayout`.
+- **Gradients** now have `stops`, `transform` and `alpha`; paints may carry a `blendMode`.
+- **Strokes** keep each side's weight when sides differ (`sides`), plus `dash`, `cap`, `join` and
+  `miterLimit`.
+- **Text** adds `italic`, `autoResize`, `truncation`, `maxLines`, `alignVertical`, `paragraphSpacing`,
+  `paragraphIndent`, `listType` and `hyperlink`, and per-run `fills` when the colours differ (before,
+  a text layer with two colours had no colour at all).
+- **Variable bindings** on number and string fields (`bindings`: padding, gap, radius, size, font
+  size, ...) as tokens, so code can use `var(--space-4)` rather than `16px`.
+- Variant diffs compare all of the new attributes.
+- Generated files can now be binary (the pictures); the Files tab shows them with their size.
+
+### Changed
+
+- **Layers inside nested instances are now read by default** (the option is still there, and a saved
+  choice is kept). A component used inside another no longer arrives empty.
+- The layer budget per component went from 500 layers and 10 levels to 2,000 layers and 16 levels.
+  A component over it is still flagged `treeTruncated`, with a `TREE_TRUNCATED` warning.
+- The schema gained `LayerAttributes`, the optional attributes shared by `Layer` and `LayerChanges`.
+  All additions are optional fields and new enum values, so `designmd.components/v1` is unchanged for
+  existing consumers. `metadata.options` gains optional `includeVectorShapes` and `includeImages`.
+
 ## 1.1.0
 
 ### Added

@@ -163,6 +163,10 @@ export interface ComponentsJsonOptions {
   includeVariantDiffs?: boolean;
   /** Whether the layers inside nested instances were read. Recorded in the file's metadata. Default false. */
   includeInstanceInternals?: boolean;
+  /** Whether the drawn shape of vector layers was read. Recorded in the file's metadata. Default false. */
+  includeVectorShapes?: boolean;
+  /** Whether the pictures behind image fills were exported. Recorded in the file's metadata. Default false. */
+  includeImages?: boolean;
 }
 
 export function buildComponentsFile(
@@ -279,6 +283,8 @@ export function buildComponentsFile(
         includeText: chosen.includeText !== false,
         includeVariantDiffs: chosen.includeVariantDiffs !== false,
         includeInstanceInternals: chosen.includeInstanceInternals === true,
+        includeVectorShapes: chosen.includeVectorShapes === true,
+        includeImages: chosen.includeImages === true,
       },
       contentHash: '',
     },
@@ -329,7 +335,7 @@ const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
 
 /**
  * components.json, split into `components.json` (index and tokens) plus one `components/<name>.json`
- * per component when the single file would pass `splitThresholdBytes`. Each per-component file is
+ * per component when the single file would pass `splitThresholdBytes` (0 splits always). Each per-component file is
  * a complete, valid file of its own (with the tokens it uses), so a tool can load one at a time.
  */
 export function generateComponentsJsonFiles(
@@ -340,7 +346,10 @@ export function generateComponentsJsonFiles(
   const threshold = options.splitThresholdBytes ?? COMPONENTS_JSON_SPLIT_BYTES;
   const file = buildComponentsFile(ds, structures, options);
   const single = hashAndSerialize(file);
-  if (single.content.length <= threshold) return [{ path: OUTPUT_PATH, content: single.content }];
+  const always = threshold <= 0;
+  if (file.components.length === 0 || (!always && single.content.length <= threshold)) {
+    return [{ path: OUTPUT_PATH, content: single.content }];
+  }
 
   const docPaths = assignComponentDocPaths(ds.components);
   const parts: GeneratedFile[] = [];
@@ -370,10 +379,15 @@ export function generateComponentsJsonFiles(
     components: [],
     warnings: [
       ...file.warnings,
-      {
-        code: 'OUTPUT_TOO_LARGE',
-        message: `components.json would be ${mb(single.content.length)} MB (limit ${mb(threshold)} MB), so each component is in its own file under components/ and this file holds the index and tokens.`,
-      },
+      always
+        ? {
+            code: 'OUTPUT_SPLIT',
+            message: `Each component is in its own file under components/ because splitting was set to "Always" (the single file would be ${mb(single.content.length)} MB). This file holds the index and tokens.`,
+          }
+        : {
+            code: 'OUTPUT_TOO_LARGE',
+            message: `components.json would be ${mb(single.content.length)} MB (limit ${mb(threshold)} MB), so each component is in its own file under components/ and this file holds the index and tokens.`,
+          },
     ],
   };
   return [{ path: OUTPUT_PATH, content: serializeComponentsFile(main) }, ...parts];

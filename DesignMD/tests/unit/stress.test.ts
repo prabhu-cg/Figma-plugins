@@ -59,7 +59,7 @@ function buildSyntheticFile() {
       `Standalone ${i}`,
       {},
       // every 100th is deeper than the depth budget; every 250th is wider than the layer budget
-      [nested(i % 100 === 0 ? 14 : 4, i % 250 === 0 ? 700 : 6, i)],
+      [nested(i % 100 === 0 ? 20 : 4, i % 250 === 0 ? 2100 : 6, i)],
     ),
   );
   return document('Synthetic', [page('Sets', sets), page('Standalone', standalone)]);

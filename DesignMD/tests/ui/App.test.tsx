@@ -252,16 +252,16 @@ describe('App: components.json option', () => {
     expect(screen.getByText(/text content, layer names and design values/)).toBeInTheDocument();
   });
 
-  it('offers layers inside nested instances as an option that starts off', async () => {
+  it('offers layers inside nested instances as an option that starts on', async () => {
     await toExport();
     fireEvent.click(checkbox(/^components\.json$/));
     const box = screen.getByLabelText(/Include layers inside nested instances/);
-    expect(box).not.toBeChecked();
+    expect(box).toBeChecked();
     fireEvent.click(box);
     const saved = messagesOfType('save-settings').at(-1) as {
       settings: { options: typeof DEFAULT_EXPORT_OPTIONS };
     };
-    expect(saved.settings.options.includeInstanceInternals).toBe(true);
+    expect(saved.settings.options.includeInstanceInternals).toBe(false);
   });
 
   it('counts as an output, and is remembered with its sub-options', async () => {
@@ -482,7 +482,9 @@ describe('App: components.json is built in the UI', () => {
         excludedPages: [],
         includeText: true,
         includeVariantDiffs: true,
-        includeInstanceInternals: false,
+        includeInstanceInternals: true,
+        includeVectorShapes: true,
+        includeImages: false,
       },
     ]);
   });

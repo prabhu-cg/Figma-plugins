@@ -1,5 +1,5 @@
 import { Fragment } from 'react';
-import type { ExportOptions } from '@shared/messages';
+import type { BooleanOptionKey, ExportOptions } from '@shared/messages';
 import { ArchiveIcon, BracesIcon, CodeIcon, DocumentIcon, StackIcon, TreeIcon } from './icons';
 
 interface OutputSelectionProps {
@@ -7,7 +7,7 @@ interface OutputSelectionProps {
   onChange: (options: ExportOptions) => void;
 }
 
-type OutputKey = keyof Omit<ExportOptions, 'zip'>;
+type OutputKey = Exclude<BooleanOptionKey, 'zip'>;
 
 interface OutputItem {
   key: OutputKey;
@@ -66,7 +66,12 @@ const OUTPUT_GROUPS: Array<{ title: string; items: OutputItem[] }> = [
 ];
 
 const COMPONENT_SUBOPTIONS: Array<{
-  key: 'includeText' | 'includeVariantDiffs' | 'includeInstanceInternals';
+  key:
+    | 'includeText'
+    | 'includeVariantDiffs'
+    | 'includeInstanceInternals'
+    | 'includeVectorShapes'
+    | 'includeImages';
   label: string;
 }> = [
   { key: 'includeText', label: 'Include text content' },
@@ -75,6 +80,8 @@ const COMPONENT_SUBOPTIONS: Array<{
     key: 'includeInstanceInternals',
     label: 'Include layers inside nested instances (slower, larger)',
   },
+  { key: 'includeVectorShapes', label: 'Include vector shapes (so icons can be drawn)' },
+  { key: 'includeImages', label: 'Export pictures behind image fills (larger)' },
 ];
 
 interface OptionCardProps {
@@ -104,7 +111,7 @@ function OptionCard({ checked, onToggle, title, description, icon }: OptionCardP
 }
 
 export function OutputSelection({ options, onChange }: OutputSelectionProps) {
-  const toggle = (key: keyof ExportOptions) => {
+  const toggle = (key: BooleanOptionKey) => {
     onChange({ ...options, [key]: !options[key] });
   };
 
@@ -137,6 +144,21 @@ export function OutputSelection({ options, onChange }: OutputSelectionProps) {
                         <span>{sub.label}</span>
                       </label>
                     ))}
+                    <label className="dmd-suboption">
+                      <span>Split into one file per component</span>
+                      <select
+                        value={options.splitComponentsJson}
+                        onChange={(e) =>
+                          onChange({
+                            ...options,
+                            splitComponentsJson: e.target.value === 'always' ? 'always' : 'auto',
+                          })
+                        }
+                      >
+                        <option value="auto">Only above 20 MB</option>
+                        <option value="always">Always</option>
+                      </select>
+                    </label>
                     <p className="dmd-suboption-note">
                       This file includes text content, layer names and design values from your Figma
                       file. Nothing leaves the plugin; the file is only saved where you download it.

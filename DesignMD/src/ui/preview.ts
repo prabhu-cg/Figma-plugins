@@ -25,6 +25,11 @@ export function formatBytes(bytes: number): string {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
+/** Size of a generated file: its bytes when it is binary, else the UTF-8 length of its text. */
+export function fileSize(file: { content: string; bytes?: Uint8Array }): number {
+  return file.bytes ? file.bytes.length : byteLength(file.content);
+}
+
 export function byteLength(text: string): number {
   return new TextEncoder().encode(text).length;
 }

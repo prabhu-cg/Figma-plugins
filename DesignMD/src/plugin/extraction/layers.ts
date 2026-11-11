@@ -9,8 +9,18 @@ import type {
   ColorRgba,
   ComponentsWarning,
   CornerRadii,
+  GradientStop,
+  LayerConstraints,
+  LayerGrid,
+  LayerPlacement,
+  SizeLimits,
+  InstanceOf,
+  InstanceOverride,
+  InstanceProperty,
   Layer,
+  LayerChanges,
   LayerEffect,
+  LayerImage,
   LayerLayout,
   LayerPaint,
   LayerStrokes,
@@ -20,11 +30,26 @@ import type {
   TextStyleFields,
   TokenRef,
   UnitValue,
+  VectorPath,
 } from '@shared/componentsSchema';
 
-/** Same budget as the token-usage scan, so a component costs the same everywhere. */
-export const MAX_LAYERS = 500;
-export const MAX_DEPTH = 10;
+/** Layers and levels read per component tree. A component over either is flagged `treeTruncated`. */
+export const MAX_LAYERS = 2000;
+export const MAX_DEPTH = 16;
+/** Characters of path data kept for one layer (fill and stroke together). A layer over it is left without a shape. */
+export const MAX_VECTOR_CHARS = 60_000;
+/** Overrides listed for one instance. */
+export const MAX_OVERRIDES = 100;
+
+/** Layer types that have a drawn shape worth exporting. Rectangles and ellipses are described by size and radius. */
+/** Layer types that can clip their content and carry layout grids. */
+const CLIPPING_TYPES = new Set(['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE', 'SECTION']);
+
+const VECTOR_TYPES = new Set(['VECTOR', 'BOOLEAN_OPERATION', 'STAR', 'POLYGON', 'LINE']);
+
+/** What the caller found out about one image: where its file is, or why there is none. */
+export type ImageResolution =
+  { file: string; width?: number; height?: number } | { omitted: string };
 
 type Node = Record<string, unknown>;
 
@@ -42,6 +67,20 @@ export interface ReadLayerOptions {
    * component it points at but its insides are not read: far fewer calls and a smaller file.
    */
   includeInstanceInternals?: boolean;
+  /** Include the drawn shape (fill and stroke paths) of vector layers. Default false. */
+  includeVectorShapes?: boolean;
+  /**
+   * Exports the picture behind an image fill and says where its file is. Without it, image paints
+   * carry the hash and scale mode only.
+   */
+  resolveImage?: (hash: string) => Promise<ImageResolution>;
+  /**
+   * Finds a node by id, to read the layers an instance changed. Without it, instances list their
+   * property values but no overrides.
+   */
+  getNodeById?: (id: string) => Promise<unknown>;
+  /** Overrides listed per instance. Default MAX_OVERRIDES. */
+  maxOverrides?: number;
   /** Checked before each layer; when it returns true the tree is cut short and flagged truncated. */
   shouldStop?: () => boolean;
   /** Awaited before each layer; lets the caller hand control back to Figma now and then. */
@@ -129,7 +168,11 @@ class Tracker {
   styles = new Set<string>();
   warnings: ComponentsWarning[] = [];
   private unresolved = new Set<string>();
-  constructor(private resolve: ReadLayerOptions['resolveToken']) {}
+  constructor(
+    private resolve: ReadLayerOptions['resolveToken'],
+    /** Whether image paints carry their picture details (only when pictures are exported). */
+    readonly images = false,
+  ) {}
 
   /** Whether token references are being looked up at all. */
   get resolves(): boolean {
@@ -163,6 +206,42 @@ function boundVariableId(holder: unknown, field: string): string | undefined {
   return typeof id === 'string' ? id : undefined;
 }
 
+const MAX_GRADIENT_STOPS = 32;
+
+/** A 2x3 matrix of finite numbers, rounded, or undefined. */
+function matrix2x3(v: unknown): number[][] | undefined {
+  if (!Array.isArray(v) || v.length !== 2) return undefined;
+  const rows = v.map((row) =>
+    Array.isArray(row) &&
+    row.length === 3 &&
+    row.every((x) => typeof x === 'number' && Number.isFinite(x))
+      ? (row as number[]).map((x) => Math.round(x * 10000) / 10000)
+      : undefined,
+  );
+  return rows.every((r) => r) ? (rows as number[][]) : undefined;
+}
+
+function readImage(p: unknown): LayerImage | undefined {
+  const hash = str(p, 'imageHash');
+  if (!hash) return undefined;
+  const image: LayerImage = {
+    hash,
+    scaleMode: oneOf(read(p, 'scaleMode'), ['FILL', 'FIT', 'CROP', 'TILE'] as const, 'FILL'),
+  };
+  const rotation = num(p, 'rotation');
+  if (rotation) image.rotation = round2(rotation);
+  const scale = num(p, 'scalingFactor');
+  if (image.scaleMode === 'TILE' && scale !== undefined) image.scalingFactor = round3(scale);
+  const transform = read(p, 'imageTransform');
+  if (image.scaleMode === 'CROP' && Array.isArray(transform)) {
+    const rows = transform.map((row) =>
+      Array.isArray(row) ? row.map((v) => (typeof v === 'number' ? round3(v) : 0)) : [],
+    );
+    if (rows.length === 2 && rows.every((r) => r.length === 3)) image.imageTransform = rows;
+  }
+  return image;
+}
+
 function readPaints(
   paints: unknown,
   styleId: string | undefined,
@@ -194,9 +273,29 @@ function readPaints(
       const stops = read(p, 'gradientStops');
       const count = Array.isArray(stops) ? stops.length : 0;
       paint.description = `${type.slice(9).toLowerCase()} gradient, ${count} stops`;
+      const readStops: GradientStop[] = [];
+      if (Array.isArray(stops)) {
+        for (const stop of stops.slice(0, MAX_GRADIENT_STOPS)) {
+          const color = rgba(read(stop, 'color'));
+          const position = num(stop, 'position');
+          if (color && position !== undefined)
+            readStops.push({ position: round3(position), color });
+        }
+      }
+      if (readStops.length > 0) paint.stops = readStops;
+      const transform = matrix2x3(read(p, 'gradientTransform'));
+      if (transform) paint.transform = transform;
+      const opacity = num(p, 'opacity');
+      if (opacity !== undefined && opacity !== 1) paint.alpha = round3(opacity);
     } else if (type === 'IMAGE') {
       paint.description = `image, scale mode ${str(p, 'scaleMode') ?? 'unknown'}`;
+      const image = t.images ? readImage(p) : undefined;
+      if (image) paint.image = image;
+      const opacity = num(p, 'opacity');
+      if (opacity !== undefined && opacity !== 1) paint.alpha = round3(opacity);
     }
+    const blend = str(p, 'blendMode');
+    if (blend && blend !== 'NORMAL') paint.blendMode = blend;
     const token =
       t.token('variable', boundVariableId(p, 'color'), layerId) ??
       t.token('style', styleId, layerId);
@@ -247,20 +346,44 @@ function readStrokes(n: unknown, layerId: string, t: Tracker): LayerStrokes | un
   if (Array.isArray(raw) && raw.length === 0) return { paints: [], weight: 0, align: 'INSIDE' };
   const paints = readPaints(raw, str(n, 'strokeStyleId'), layerId, t);
   if (!paints) return undefined;
-  return {
+  const sides = {
+    top: num(n, 'strokeTopWeight'),
+    right: num(n, 'strokeRightWeight'),
+    bottom: num(n, 'strokeBottomWeight'),
+    left: num(n, 'strokeLeftWeight'),
+  };
+  const sideValues = Object.values(sides).map((v) => v ?? 0);
+  const strokes: LayerStrokes = {
     paints,
     // strokeWeight is figma.mixed when sides differ; use the largest side then.
-    weight: round2(
-      num(n, 'strokeWeight') ??
-        Math.max(
-          0,
-          ...['strokeTopWeight', 'strokeRightWeight', 'strokeBottomWeight', 'strokeLeftWeight'].map(
-            (k) => num(n, k) ?? 0,
-          ),
-        ),
-    ),
+    weight: round2(num(n, 'strokeWeight') ?? Math.max(0, ...sideValues)),
     align: oneOf(read(n, 'strokeAlign'), ['INSIDE', 'CENTER', 'OUTSIDE'] as const, 'INSIDE'),
   };
+  if (
+    paints.length > 0 &&
+    Object.values(sides).every((v) => v !== undefined) &&
+    new Set(sideValues).size > 1
+  ) {
+    strokes.sides = {
+      top: round2(sides.top!),
+      right: round2(sides.right!),
+      bottom: round2(sides.bottom!),
+      left: round2(sides.left!),
+    };
+  }
+  if (paints.length > 0) {
+    const dashes = read(n, 'dashPattern');
+    if (Array.isArray(dashes) && dashes.length > 0 && dashes.every((d) => typeof d === 'number')) {
+      strokes.dash = (dashes as number[]).map(round2);
+    }
+    const cap = str(n, 'strokeCap');
+    if (cap && cap !== 'NONE') strokes.cap = cap;
+    const join = str(n, 'strokeJoin');
+    if (join && join !== 'MITER') strokes.join = join;
+    const miter = num(n, 'strokeMiterLimit');
+    if (join === 'MITER' && miter !== undefined && miter !== 4) strokes.miterLimit = round2(miter);
+  }
+  return strokes;
 }
 
 function readRadius(n: unknown): number | CornerRadii | undefined {
@@ -301,7 +424,120 @@ function readLayout(n: unknown): LayerLayout | undefined {
     sizingH: oneOf(read(n, 'layoutSizingHorizontal'), ['FIXED', 'HUG', 'FILL'] as const, 'FIXED'),
     sizingV: oneOf(read(n, 'layoutSizingVertical'), ['FIXED', 'HUG', 'FILL'] as const, 'FIXED'),
     wrap: read(n, 'layoutWrap') === 'WRAP',
+    ...layoutExtras(n),
   };
+}
+
+function layoutExtras(n: unknown): Partial<LayerLayout> {
+  const out: Partial<LayerLayout> = {};
+  if (read(n, 'layoutWrap') === 'WRAP') {
+    const gap = num(n, 'counterAxisSpacing');
+    if (gap !== undefined) out.counterGap = round2(gap);
+    const content = read(n, 'counterAxisAlignContent');
+    if (content === 'AUTO' || content === 'SPACE_BETWEEN') out.counterAlignContent = content;
+  }
+  if (read(n, 'itemReverseZIndex') === true) out.reverseZIndex = true;
+  if (read(n, 'strokesIncludedInLayout') === true) out.strokesIncludedInLayout = true;
+  return out;
+}
+
+const AUTO_LAYOUT_MODES = ['HORIZONTAL', 'VERTICAL'];
+const isAutoLayout = (n: unknown): boolean =>
+  AUTO_LAYOUT_MODES.includes(read(n, 'layoutMode') as string);
+
+function readPlacement(n: unknown): LayerPlacement {
+  return {
+    positioning: read(n, 'layoutPositioning') === 'ABSOLUTE' ? 'ABSOLUTE' : 'AUTO',
+    grow: num(n, 'layoutGrow') ?? 0,
+    align: oneOf(
+      read(n, 'layoutAlign'),
+      ['INHERIT', 'STRETCH', 'MIN', 'CENTER', 'MAX'] as const,
+      'INHERIT',
+    ),
+    sizingH: oneOf(read(n, 'layoutSizingHorizontal'), ['FIXED', 'HUG', 'FILL'] as const, 'FIXED'),
+    sizingV: oneOf(read(n, 'layoutSizingVertical'), ['FIXED', 'HUG', 'FILL'] as const, 'FIXED'),
+  };
+}
+
+function readConstraints(n: unknown): LayerConstraints | undefined {
+  const c = read(n, 'constraints');
+  const kinds = ['MIN', 'CENTER', 'MAX', 'STRETCH', 'SCALE'] as const;
+  const h = read(c, 'horizontal');
+  const v = read(c, 'vertical');
+  if (!kinds.includes(h as never) || !kinds.includes(v as never)) return undefined;
+  return {
+    horizontal: h as LayerConstraints['horizontal'],
+    vertical: v as LayerConstraints['vertical'],
+  };
+}
+
+function readSizeLimits(n: unknown): SizeLimits | undefined {
+  const out: SizeLimits = {};
+  for (const key of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight'] as const) {
+    const v = num(n, key);
+    if (v !== undefined) out[key] = round2(v);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function readGrids(n: unknown): LayerGrid[] | undefined {
+  const raw = read(n, 'layoutGrids');
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  return raw.flatMap((g): LayerGrid[] => {
+    const pattern = read(g, 'pattern');
+    if (pattern !== 'GRID' && pattern !== 'COLUMNS' && pattern !== 'ROWS') return [];
+    const grid: LayerGrid = { pattern, visible: read(g, 'visible') !== false };
+    const section = num(g, 'sectionSize');
+    if (section !== undefined) grid.sectionSize = round2(section);
+    const count = num(g, 'count');
+    if (count !== undefined && count > 0 && count < 1e6) grid.count = count;
+    const gutter = num(g, 'gutterSize');
+    if (gutter !== undefined) grid.gutterSize = round2(gutter);
+    const offset = num(g, 'offset');
+    if (offset !== undefined) grid.offset = round2(offset);
+    const alignment = read(g, 'alignment');
+    if (
+      alignment === 'MIN' ||
+      alignment === 'CENTER' ||
+      alignment === 'MAX' ||
+      alignment === 'STRETCH'
+    ) {
+      grid.alignment = alignment;
+    }
+    return [grid];
+  });
+}
+
+/** Fields whose bindings are written on the paints, or that are not layer values. */
+const NON_NUMERIC_BINDINGS = new Set([
+  'fills',
+  'strokes',
+  'effects',
+  'textRangeFills',
+  'componentProperties',
+]);
+
+/** Variables bound to number, string or boolean fields, as tokens. */
+function readBindings(
+  n: unknown,
+  layerId: string,
+  t: Tracker,
+): Record<string, TokenRef> | undefined {
+  if (!t.resolves) return undefined;
+  const bound = read(n, 'boundVariables');
+  if (!bound || typeof bound !== 'object') return undefined;
+  const out: Record<string, TokenRef> = {};
+  for (const field of Object.keys(bound as Node).sort()) {
+    if (NON_NUMERIC_BINDINGS.has(field)) continue;
+    const alias = (bound as Node)[field];
+    const id =
+      typeof alias === 'object' && alias !== null && !Array.isArray(alias)
+        ? (alias as Node).id
+        : undefined;
+    const token = typeof id === 'string' ? t.token('variable', id, layerId) : undefined;
+    if (token) out[field] = token;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function unitValue(v: unknown): UnitValue {
@@ -350,6 +586,7 @@ function textFields(
       'NONE',
     ),
   };
+  if (/italic|oblique/i.test(str(fontName, 'style') ?? '')) fields.italic = true;
   const styleId = str(src, styleIdKey);
   if (styleId) {
     const token = t.token('style', styleId, layerId);
@@ -375,18 +612,70 @@ const SEGMENT_FIELDS = [
   'textCase',
   'textDecoration',
   'textStyleId',
+  'fills',
+  'hyperlink',
+  'listOptions',
 ];
 
-function readText(n: unknown, layerId: string, includeText: boolean, t: Tracker): LayerText {
+function hyperlinkOf(v: unknown): string | undefined {
+  return read(v, 'type') === 'URL' ? str(v, 'value') : undefined;
+}
+function listTypeOf(v: unknown): 'ORDERED' | 'UNORDERED' | undefined {
+  const type = read(v, 'type');
+  return type === 'ORDERED' || type === 'UNORDERED' ? type : undefined;
+}
+
+/** Box and paragraph settings of a text layer that are not about the font. */
+function textBox(n: unknown, includeText: boolean): Partial<LayerText> {
+  const out: Partial<LayerText> = {};
+  const auto = read(n, 'textAutoResize');
+  if (auto === 'NONE' || auto === 'WIDTH_AND_HEIGHT' || auto === 'HEIGHT' || auto === 'TRUNCATE') {
+    out.autoResize = auto;
+  }
+  if (read(n, 'textTruncation') === 'ENDING') out.truncation = 'ENDING';
+  const maxLines = num(n, 'maxLines');
+  if (maxLines !== undefined && maxLines > 0) out.maxLines = maxLines;
+  const vertical = read(n, 'textAlignVertical');
+  if (vertical === 'CENTER' || vertical === 'BOTTOM') out.alignVertical = vertical;
+  const spacing = num(n, 'paragraphSpacing');
+  if (spacing) out.paragraphSpacing = round2(spacing);
+  const indent = num(n, 'paragraphIndent');
+  if (indent) out.paragraphIndent = round2(indent);
+  const link = hyperlinkOf(read(n, 'hyperlink'));
+  if (link) out.hyperlink = link;
+  if (includeText) {
+    const length = (str(n, 'characters') ?? '').length;
+    const getter = read(n, 'getRangeListOptions');
+    if (length > 0 && typeof getter === 'function') {
+      try {
+        const list = listTypeOf((getter as (a: number, b: number) => unknown).call(n, 0, length));
+        if (list) out.listType = list;
+      } catch {
+        /* a text layer with unreadable lists is just not a list */
+      }
+    }
+  }
+  return out;
+}
+
+function readText(
+  n: unknown,
+  layerId: string,
+  includeText: boolean,
+  t: Tracker,
+  /** True when the text colours differ between runs, so the layer has no single fill. */
+  fillsMixed: boolean,
+): LayerText {
   const align = oneOf(
     read(n, 'textAlignHorizontal'),
     ['LEFT', 'CENTER', 'RIGHT', 'JUSTIFIED'] as const,
     'LEFT',
   );
   const characters = includeText ? str(n, 'characters') : undefined;
-  const whole = textFields(n, layerId, t, 'textStyleId');
+  const box = textBox(n, includeText);
+  const whole = fillsMixed ? undefined : textFields(n, layerId, t, 'textStyleId');
   if (whole) {
-    const text: LayerText = { ...whole, align };
+    const text: LayerText = { ...whole, align, ...box };
     if (characters !== undefined) text.characters = characters;
     return text;
   }
@@ -405,8 +694,18 @@ function readText(n: unknown, layerId: string, includeText: boolean, t: Tracker)
   const runs: TextRun[] = [];
   for (const seg of segments) {
     const fields = textFields(seg, layerId, t, 'textStyleId');
-    if (fields)
-      runs.push({ ...fields, characters: includeText ? (str(seg, 'characters') ?? '') : '' });
+    if (!fields) continue;
+    const run: TextRun = {
+      ...fields,
+      characters: includeText ? (str(seg, 'characters') ?? '') : '',
+    };
+    const fills = readPaints(read(seg, 'fills'), undefined, layerId, t);
+    if (fills) run.fills = fills;
+    const link = hyperlinkOf(read(seg, 'hyperlink'));
+    if (link) run.hyperlink = link;
+    const list = listTypeOf(read(seg, 'listOptions'));
+    if (list) run.listType = list;
+    runs.push(run);
   }
   if (runs.length === 0) {
     return {
@@ -418,13 +717,15 @@ function readText(n: unknown, layerId: string, includeText: boolean, t: Tracker)
       textCase: 'ORIGINAL',
       textDecoration: 'NONE',
       align,
+      ...box,
       mixed: true,
       runs: [],
     };
   }
-  const { characters: _first, ...first } = runs[0];
-  void _first;
-  const text: LayerText = { ...first, align, mixed: true, runs };
+  // The layer-level fields describe the first run; its colour, link and list kind stay on the run.
+  const { characters: _c, fills: _f, hyperlink: _h, listType: _l, ...first } = runs[0];
+  void [_c, _f, _h, _l];
+  const text: LayerText = { ...first, align, ...box, mixed: true, runs };
   if (characters !== undefined) text.characters = characters;
   return text;
 }
@@ -440,7 +741,7 @@ function readPropertyRefs(n: unknown): PropertyRefs | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-async function readInstance(n: unknown): Promise<Layer['instanceOf']> {
+async function readInstance(n: unknown): Promise<InstanceOf | undefined> {
   if (read(n, 'type') !== 'INSTANCE') return undefined;
   let main: unknown;
   try {
@@ -460,7 +761,99 @@ async function readInstance(n: unknown): Promise<Layer['instanceOf']> {
     read(parent, 'type') === 'COMPONENT_SET'
       ? (str(parent, 'name') ?? '')
       : (str(main, 'name') ?? '');
-  return { componentId, componentName };
+  const instance: InstanceOf = { componentId, componentName };
+  const properties = readInstanceProperties(n);
+  if (properties) instance.properties = properties;
+  return instance;
+}
+
+function readPaths(n: unknown, key: string): VectorPath[] | undefined {
+  const raw = read(n, key);
+  if (!Array.isArray(raw)) return undefined;
+  const out: VectorPath[] = [];
+  for (const p of raw) {
+    const data = str(p, 'data');
+    if (data)
+      out.push({
+        windingRule: oneOf(
+          read(p, 'windingRule'),
+          ['NONZERO', 'EVENODD', 'NONE'] as const,
+          'NONZERO',
+        ),
+        data,
+      });
+  }
+  return out;
+}
+
+/**
+ * The drawn shape of a vector layer. Only what the layer paints is read (fill paths when it has a
+ * fill, the stroke outline when it has a stroke), because each is a separate call into Figma.
+ */
+function readVector(n: unknown, layer: Layer, t: Tracker): Layer['vector'] | undefined {
+  const fill = hasItems(layer.fills) ? readPaths(n, 'fillGeometry') : [];
+  const stroke = hasItems(layer.strokes?.paints) ? readPaths(n, 'strokeGeometry') : [];
+  if (!fill || !stroke) return undefined;
+  const size = [...fill, ...stroke].reduce((sum, p) => sum + p.data.length, 0);
+  if (size === 0) return undefined;
+  if (size > MAX_VECTOR_CHARS) {
+    t.warnings.push({
+      code: 'VECTOR_OMITTED',
+      message: `The shape of "${layer.name}" is ${Math.round(size / 1024)} KB of path data (limit ${Math.round(MAX_VECTOR_CHARS / 1024)} KB), so it is left out.`,
+      layerId: layer.id,
+    });
+    return undefined;
+  }
+  return { fill, stroke };
+}
+
+/** Which layer attribute a Figma "overridden field" changes. Fields that change none (name, lock) are not listed. */
+function attributeOfField(field: string): keyof LayerChanges | undefined {
+  if (field === 'visible') return 'visible';
+  if (field === 'opacity') return 'opacity';
+  if (field === 'mainComponent' || field === 'componentProperties') return 'instanceOf';
+  if (/^(characters|font|lineHeight|letterSpacing|text)/.test(field)) return 'text';
+  if (/^(fills|fillStyleId)/.test(field)) return 'fills';
+  if (
+    /^(strokes|strokeStyleId|strokeWeight|stroke(Top|Right|Bottom|Left)Weight|strokeAlign)/.test(
+      field,
+    )
+  )
+    return 'strokes';
+  if (/^(effects|effectStyleId)/.test(field)) return 'effects';
+  if (/Radius$|^cornerRadius$/.test(field)) return 'radius';
+  if (/^(width|height|size)$/.test(field)) return 'size';
+  if (field === 'x' || field === 'y' || field === 'relativeTransform') return 'position';
+  if (field === 'rotation') return 'rotation';
+  if (/^(layoutPositioning|layoutGrow|layoutAlign|layoutSizing)/.test(field)) return 'placement';
+  if (field === 'constraints') return 'constraints';
+  if (field === 'clipsContent') return 'clipsContent';
+  if (field === 'blendMode') return 'blendMode';
+  if (
+    /^(layoutMode|layoutWrap|padding|itemSpacing|primaryAxis|counterAxis|itemReverse|strokesIncluded)/.test(
+      field,
+    )
+  )
+    return 'layout';
+  return undefined;
+}
+
+function readInstanceProperties(n: unknown): Record<string, InstanceProperty> | undefined {
+  const props = read(n, 'componentProperties');
+  if (!props || typeof props !== 'object') return undefined;
+  const out: Record<string, InstanceProperty> = {};
+  for (const key of Object.keys(props as Node).sort()) {
+    const entry = (props as Node)[key];
+    const type = read(entry, 'type');
+    const value = read(entry, 'value');
+    if (
+      (type === 'BOOLEAN' || type === 'TEXT' || type === 'INSTANCE_SWAP' || type === 'VARIANT') &&
+      (typeof value === 'string' || typeof value === 'boolean')
+    ) {
+      out[key] = { type, value };
+    }
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function childrenOf(n: unknown): unknown[] {
@@ -476,14 +869,23 @@ export async function readLayerTree(
   const includeText = options.includeText !== false;
   const maxLayers = options.maxLayers ?? MAX_LAYERS;
   const maxDepth = options.maxDepth ?? MAX_DEPTH;
-  const t = new Tracker(options.resolveToken);
+  const t = new Tracker(options.resolveToken, !!options.resolveImage);
   let count = 0;
   let truncated = false;
 
-  const visit = async (n: unknown, depth: number, insideInstance: boolean): Promise<Layer> => {
-    count++;
-    if (options.yieldIfDue) await options.yieldIfDue();
-    if (options.stats) options.stats.layers++;
+  const imageOmissions = new Set<string>();
+
+  /** Everything about one layer except its children and its own instance details. */
+  /** What the parent of a layer says about how the layer is placed. `undefined` for the root. */
+  interface ParentInfo {
+    auto: boolean;
+  }
+
+  const readAttributes = async (
+    n: unknown,
+    insideBoolean: boolean,
+    parent?: ParentInfo,
+  ): Promise<Layer> => {
     const id = str(n, 'id') ?? '';
     const type = str(n, 'type') ?? 'UNKNOWN';
     const layer: Layer = {
@@ -506,6 +908,36 @@ export async function readLayerTree(
     const opacity = num(n, 'opacity');
     if (opacity !== undefined) layer.opacity = round3(opacity);
 
+    // Where the layer sits. In an auto-layout parent the flow decides, except for absolute layers.
+    const placement = parent?.auto ? readPlacement(n) : undefined;
+    if (placement) layer.placement = placement;
+    if (parent && (!parent.auto || placement?.positioning === 'ABSOLUTE')) {
+      const x = num(n, 'x');
+      const y = num(n, 'y');
+      if (x !== undefined && y !== undefined) layer.position = { x: round2(x), y: round2(y) };
+      const constraints = readConstraints(n);
+      if (constraints) layer.constraints = constraints;
+    }
+    const rotation = num(n, 'rotation');
+    if (rotation) layer.rotation = round2(rotation);
+    if (layout || placement) {
+      const limits = readSizeLimits(n);
+      if (limits) layer.sizeLimits = limits;
+    }
+    if (CLIPPING_TYPES.has(type)) {
+      const clips = read(n, 'clipsContent');
+      if (typeof clips === 'boolean') layer.clipsContent = clips;
+      const grids = readGrids(n);
+      if (grids) layer.layoutGrids = grids;
+    }
+    if (read(n, 'isMask') === true) layer.isMask = true;
+    const blend = str(n, 'blendMode');
+    if (blend && blend !== 'NORMAL' && blend !== 'PASS_THROUGH') layer.blendMode = blend;
+    const smoothing = num(n, 'cornerSmoothing');
+    if (smoothing) layer.cornerSmoothing = round3(smoothing);
+    const bindings = readBindings(n, id, t);
+    if (bindings) layer.bindings = bindings;
+
     const rawFills = read(n, 'fills');
     const fills = readPaints(
       rawFills,
@@ -513,7 +945,27 @@ export async function readLayerTree(
       id,
       t,
     );
-    if (fills) layer.fills = fills;
+    if (fills) {
+      layer.fills = fills;
+      if (options.resolveImage) {
+        for (const paint of fills) {
+          if (!paint.image) continue;
+          const found = await options.resolveImage(paint.image.hash);
+          if ('file' in found) {
+            paint.image.file = found.file;
+            if (found.width !== undefined) paint.image.width = found.width;
+            if (found.height !== undefined) paint.image.height = found.height;
+          } else if (!imageOmissions.has(paint.image.hash)) {
+            imageOmissions.add(paint.image.hash);
+            t.warnings.push({
+              code: 'IMAGE_OMITTED',
+              message: `The picture used by "${layer.name}" was not exported: ${found.omitted}`,
+              layerId: id,
+            });
+          }
+        }
+      }
+    }
     const strokes = readStrokes(n, id, t);
     if (strokes) layer.strokes = strokes;
     const rawEffects = read(n, 'effects');
@@ -525,7 +977,87 @@ export async function readLayerTree(
     );
     if (effects) layer.effects = effects;
 
-    if (type === 'TEXT') layer.text = readText(n, id, includeText, t);
+    if (type === 'TEXT') layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills));
+    // The parts of a boolean shape are already merged into its own path; drawing them again would
+    // double the size for nothing.
+    if (options.includeVectorShapes && VECTOR_TYPES.has(type) && !insideBoolean) {
+      const vector = readVector(n, layer, t);
+      if (vector) layer.vector = vector;
+    }
+    return layer;
+  };
+
+  /**
+   * What this use of an instance changed inside it. Figma lists the changed layers and fields;
+   * each layer is read once and only the attributes those fields touch are kept.
+   */
+  const readOverrides = async (
+    instance: unknown,
+    instanceId: string,
+  ): Promise<{ overrides: InstanceOverride[]; truncated: boolean } | undefined> => {
+    const lookup = options.getNodeById;
+    const list = read(instance, 'overrides');
+    if (!lookup || !Array.isArray(list)) return undefined;
+    const overrides: InstanceOverride[] = [];
+    let truncated = false;
+    for (const entry of list) {
+      const layerId = str(entry, 'id');
+      const fields = read(entry, 'overriddenFields');
+      if (!layerId || layerId === instanceId || !Array.isArray(fields)) continue;
+      const wanted = new Set<keyof LayerChanges>();
+      for (const f of fields) {
+        const attribute = typeof f === 'string' ? attributeOfField(f) : undefined;
+        if (attribute) wanted.add(attribute);
+      }
+      if (wanted.size === 0) continue;
+      if (overrides.length >= (options.maxOverrides ?? MAX_OVERRIDES)) {
+        truncated = true;
+        break;
+      }
+      if (options.shouldStop?.()) {
+        truncated = true;
+        break;
+      }
+      if (options.yieldIfDue) await options.yieldIfDue();
+      let node: unknown;
+      try {
+        node = await lookup(layerId);
+      } catch {
+        node = undefined;
+      }
+      if (!node) continue;
+      const layer = await readAttributes(node, true, {
+        auto: isAutoLayout(read(node, 'parent')),
+      });
+      const changes: Record<string, unknown> = {};
+      for (const attribute of wanted) {
+        if (attribute === 'instanceOf') {
+          const inst = await readInstance(node);
+          if (inst) changes.instanceOf = inst;
+        } else if (layer[attribute as keyof Layer] !== undefined) {
+          changes[attribute] = layer[attribute as keyof Layer];
+        }
+      }
+      if (Object.keys(changes).length > 0) {
+        overrides.push({ layerId, name: layer.name, changes: changes as LayerChanges });
+      }
+    }
+    return overrides.length > 0 || truncated ? { overrides, truncated } : undefined;
+  };
+
+  const visit = async (
+    n: unknown,
+    depth: number,
+    insideInstance: boolean,
+    insideBoolean = false,
+    parent?: ParentInfo,
+  ): Promise<Layer> => {
+    count++;
+    if (options.yieldIfDue) await options.yieldIfDue();
+    if (options.stats) options.stats.layers++;
+    const layer = await readAttributes(n, insideBoolean, parent);
+    const { id, type } = layer;
+
     const stats = options.stats;
     const lookupStart = stats ? Date.now() : 0;
     const instanceOf = await readInstance(n);
@@ -533,7 +1065,18 @@ export async function readLayerTree(
       stats.instanceLookups++;
       stats.instanceMs += Date.now() - lookupStart;
     }
-    if (instanceOf) layer.instanceOf = instanceOf;
+    if (instanceOf) {
+      // Layers read inside the instance carry their own values; only an instance whose insides
+      // are not read needs its changes listed.
+      if (options.includeInstanceInternals === false) {
+        const found = await readOverrides(n, id);
+        if (found) {
+          if (found.overrides.length > 0) instanceOf.overrides = found.overrides;
+          if (found.truncated) instanceOf.overridesTruncated = true;
+        }
+      }
+      layer.instanceOf = instanceOf;
+    }
     // A layer inside a nested instance is driven by the nested component's properties, not by this
     // component's, so its references would point at keys this file does not have. The instance
     // layer itself is driven by this component, and keeps its references.
@@ -551,7 +1094,15 @@ export async function readLayerTree(
             truncated = true;
             break;
           }
-          layer.children.push(await visit(child, depth + 1, insideInstance || type === 'INSTANCE'));
+          layer.children.push(
+            await visit(
+              child,
+              depth + 1,
+              insideInstance || type === 'INSTANCE',
+              insideBoolean || type === 'BOOLEAN_OPERATION',
+              { auto: !!layer.layout },
+            ),
+          );
         }
       }
     }

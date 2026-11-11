@@ -16,8 +16,22 @@ export interface ExportOptions {
   includeVariantDiffs: boolean;
   /** components.json: read the layers inside nested instances (slower, larger). */
   includeInstanceInternals: boolean;
+  /** components.json: include the drawn shape (paths) of vector layers, so icons can be drawn. */
+  includeVectorShapes: boolean;
+  /** components.json: export the pictures behind image fills as files under assets/images/. */
+  includeImages: boolean;
+  /**
+   * components.json: "auto" splits into one file per component only above 20 MB; "always" splits
+   * whatever the size (an index plus components/<name>.json).
+   */
+  splitComponentsJson: 'auto' | 'always';
   zip: boolean;
 }
+
+/** The options that are plain on/off switches. */
+export type BooleanOptionKey = {
+  [K in keyof ExportOptions]: ExportOptions[K] extends boolean ? K : never;
+}[keyof ExportOptions];
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   designMd: true,
@@ -27,7 +41,10 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   componentsJson: false,
   includeText: true,
   includeVariantDiffs: true,
-  includeInstanceInternals: false,
+  includeInstanceInternals: true,
+  includeVectorShapes: true,
+  includeImages: false,
+  splitComponentsJson: 'auto',
   zip: true,
 };
 
@@ -40,7 +57,10 @@ export interface OutputFailure {
 export interface GeneratedFile {
   /** Relative output path, e.g. "design.md" or "components/Button.md" */
   path: string;
+  /** Text of the file. Empty for a binary file, which has `bytes` instead. */
   content: string;
+  /** The raw bytes of a binary file, such as an exported picture. */
+  bytes?: Uint8Array;
 }
 
 /** Settings remembered between sessions (figma.clientStorage). */
@@ -60,8 +80,12 @@ export function sanitizeSavedSettings(value: unknown): SavedSettings | null {
   const options = { ...DEFAULT_EXPORT_OPTIONS };
   for (const key of Object.keys(DEFAULT_EXPORT_OPTIONS) as Array<keyof ExportOptions>) {
     const candidate = (stored as Record<string, unknown>)[key];
-    if (typeof candidate === 'boolean') options[key] = candidate;
+    if (typeof candidate === 'boolean' && typeof DEFAULT_EXPORT_OPTIONS[key] === 'boolean') {
+      (options as Record<string, unknown>)[key] = candidate;
+    }
   }
+  const split = (stored as Record<string, unknown>).splitComponentsJson;
+  if (split === 'auto' || split === 'always') options.splitComponentsJson = split;
   return { options };
 }
 
@@ -112,6 +136,8 @@ export type UIToPluginMessage =
       includeText: boolean;
       includeVariantDiffs: boolean;
       includeInstanceInternals: boolean;
+      includeVectorShapes: boolean;
+      includeImages: boolean;
     }
   /** Stop the running scan or generation and return what is done so far. */
   | { type: 'cancel' };
@@ -129,6 +155,8 @@ export type PluginToUIMessage =
   | { type: 'settings'; settings: SavedSettings | null; fileSettings: FileSettings }
   | { type: 'extraction-complete'; designSystem: DesignSystem }
   | FileChunk
+  /** A picture behind an image fill, found while reading layers (see includeImages). */
+  | { type: 'image'; path: string; bytes: Uint8Array }
   | { type: 'structures'; items: Array<[string, StructureResult]> }
   | { type: 'structures-complete'; cancelled: boolean }
   | {

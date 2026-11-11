@@ -10,7 +10,7 @@ export async function buildZip(files: GeneratedFile[]): Promise<ArrayBuffer> {
   const zip = new JSZip();
   let sinceYield = 0;
   for (const file of files) {
-    zip.file(file.path, file.content);
+    zip.file(file.path, file.bytes ?? file.content);
     // Hundreds of files: give the UI a turn now and then so it stays responsive.
     if (++sinceYield >= 50) {
       sinceYield = 0;
@@ -32,6 +32,10 @@ export async function downloadAsZip(files: GeneratedFile[], zipFileName: string)
 function mimeTypeFor(path: string): string {
   if (path.endsWith('.json')) return 'application/json;charset=utf-8';
   if (path.endsWith('.md')) return 'text/markdown;charset=utf-8';
+  if (path.endsWith('.png')) return 'image/png';
+  if (path.endsWith('.jpg')) return 'image/jpeg';
+  if (path.endsWith('.gif')) return 'image/gif';
+  if (path.endsWith('.webp')) return 'image/webp';
   return 'text/plain;charset=utf-8';
 }
 
@@ -41,7 +45,9 @@ export function downloadIndividually(files: GeneratedFile[]): void {
     // Stagger slightly — firing many saveAs calls in the same tick causes
     // browsers to silently drop all but the first download.
     setTimeout(() => {
-      const blob = new Blob([file.content], { type: mimeTypeFor(file.path) });
+      const blob = new Blob([(file.bytes as BlobPart | undefined) ?? file.content], {
+        type: mimeTypeFor(file.path),
+      });
       saveAs(blob, file.path.replace(/\//g, '__'));
     }, index * 150);
   });

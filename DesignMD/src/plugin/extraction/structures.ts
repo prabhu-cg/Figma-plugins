@@ -34,7 +34,10 @@ export const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
 /** Small: a batch runs its components side by side, and Figma's API calls are not parallel anyway. */
 const BATCH_SIZE = 4;
 
-export interface StructureOptions extends Pick<ReadLayerOptions, 'includeText' | 'resolveToken'> {
+export interface StructureOptions extends Pick<
+  ReadLayerOptions,
+  'includeText' | 'resolveToken' | 'includeVectorShapes' | 'resolveImage' | 'getNodeById'
+> {
   includeVariantDiffs?: boolean;
   /** Read the layers inside nested instances. Default false. */
   includeInstanceInternals?: boolean;
@@ -125,6 +128,11 @@ export async function extractComponentStructure(
     includeText: options.includeText,
     resolveToken: options.resolveToken,
     includeInstanceInternals: options.includeInstanceInternals === true,
+    includeVectorShapes: options.includeVectorShapes === true,
+    resolveImage: options.resolveImage,
+    getNodeById:
+      options.getNodeById ??
+      (typeof figma !== 'undefined' ? (id: string) => figma.getNodeByIdAsync(id) : undefined),
     shouldStop,
     stats: options.stats,
     yieldIfDue: options.yieldIfDue ?? createTimeSlicer(),

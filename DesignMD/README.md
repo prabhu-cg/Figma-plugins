@@ -38,7 +38,9 @@ With Tailwind v3, point `theme.extend` at the same `var(--…)` names.
 
 `components.json` is opt-in and read from your layers only when selected. It contains text content,
 layer names and design values from your file; turn off **Include text content** to leave the text out.
-Nothing leaves the plugin.
+Nothing leaves the plugin. It can also carry the drawn shape of icons (**Include vector shapes**, on by
+default) and the pictures behind image fills as files under `assets/images/` (**Export pictures**, off
+by default); an instance lists the property values and changes of that use of its component.
 
 ### What the docs cover
 
@@ -114,8 +116,8 @@ exceeds it, since its token usage may then be under-reported.
 **Whole-file scans.** Scanning a large design-system file is a normal case, so every step is bounded
 and none of them can take the plugin down:
 
-- **Budgets.** `components.json` reads each component's layers inside the same budget (500 layers,
-  10 levels), plus a 20 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
+- **Budgets.** `components.json` reads each component's layers inside a budget (2,000 layers,
+  16 levels), plus a 20 s time budget (checked per layer) and a 4 MB budget for its serialized variant diffs, inside a
   10-minute budget for the whole run. A component
   that goes over is written with `treeTruncated: true` and a warning, never skipped silently. Sets
   with more than 512 variants get no diffs (a warning says so).
@@ -134,7 +136,8 @@ and none of them can take the plugin down:
   be tens of megabytes) runs in the plugin's UI iframe instead of the plugin. The plugin only reads
   from Figma and streams the results over.
 - **Large results.** Other results over 2 MB are sent from the plugin to the UI in 512 KB pieces. If
-  `components.json` would pass 20 MB it is split automatically: `components.json` keeps the index and
+  `components.json` would pass 20 MB it is split automatically (or always, if you choose
+  **Always** under _Split into one file per component_): `components.json` keeps the index and
   tokens, and each component gets its own valid file in `components/<name>.json`.
 - **Partial success.** If one output fails to generate, the others are still offered and the Files
   tab says which failed and why.

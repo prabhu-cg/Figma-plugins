@@ -39,6 +39,33 @@ describe('sanitizeSavedSettings', () => {
   });
 });
 
+describe('new components.json options', () => {
+  it('default to vectors on, pictures off, split only when large', () => {
+    expect(DEFAULT_EXPORT_OPTIONS).toMatchObject({
+      includeVectorShapes: true,
+      includeImages: false,
+      splitComponentsJson: 'auto',
+    });
+  });
+
+  it('keep a valid split mode and fall back for anything else', () => {
+    const keep = sanitizeSavedSettings({ options: { splitComponentsJson: 'always' } });
+    expect(keep?.options.splitComponentsJson).toBe('always');
+    for (const bad of ['sometimes', true, 3, null]) {
+      const r = sanitizeSavedSettings({ options: { splitComponentsJson: bad } });
+      expect(r?.options.splitComponentsJson).toBe('auto');
+    }
+  });
+
+  it('do not let a boolean overwrite the split mode, or a string overwrite a switch', () => {
+    const r = sanitizeSavedSettings({
+      options: { includeImages: 'yes', splitComponentsJson: false },
+    });
+    expect(r?.options.includeImages).toBe(false);
+    expect(r?.options.splitComponentsJson).toBe('auto');
+  });
+});
+
 describe('sanitizeFileSettings', () => {
   it('falls back to empty settings for anything malformed', () => {
     expect(sanitizeFileSettings(undefined)).toEqual(EMPTY_FILE_SETTINGS);

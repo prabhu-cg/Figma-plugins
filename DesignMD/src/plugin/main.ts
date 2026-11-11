@@ -10,6 +10,7 @@ import {
 } from '@shared/messages';
 import { extractDesignSystem } from './extraction';
 import { newReadStats } from './extraction/layers';
+import { createImageResolver } from './extraction/images';
 import { extractStructures } from './extraction/structures';
 import { generateOutputsDetailed } from './generators';
 import { transformToDesignSystem } from './transform';
@@ -243,6 +244,10 @@ async function handleReadStructures(
             includeText: message.includeText,
             includeVariantDiffs: message.includeVariantDiffs,
             includeInstanceInternals: message.includeInstanceInternals,
+            includeVectorShapes: message.includeVectorShapes,
+            resolveImage: message.includeImages
+              ? createImageResolver((path, bytes) => post({ type: 'image', path, bytes }))
+              : undefined,
             resolveToken: tokenResolver(designSystem),
             stats,
           },

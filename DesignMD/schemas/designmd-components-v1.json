@@ -120,6 +120,14 @@
         "includeInstanceInternals": {
           "type": "boolean",
           "description": "True when the layers inside nested instances were read. When false, an instance layer has no children: its insides are in the component it points at (`instanceOf`)."
+        },
+        "includeVectorShapes": {
+          "type": "boolean",
+          "description": "True when the drawn shape of vector layers is included (`vector`). Absent in files from before this option existed, which have none."
+        },
+        "includeImages": {
+          "type": "boolean",
+          "description": "True when the pictures behind image fills were exported as files (`image.file`). Absent in files from before this option existed."
         }
       },
       "required": [
@@ -723,18 +731,6 @@
     "Layer": {
       "type": "object",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Figma node id."
-        },
-        "name": {
-          "type": "string",
-          "description": "Layer name, for display."
-        },
-        "type": {
-          "type": "string",
-          "description": "Figma node type, for example FRAME, TEXT, INSTANCE, RECTANGLE, VECTOR, ELLIPSE or GROUP."
-        },
         "role": {
           "$ref": "#/definitions/LayerRole",
           "description": "Inferred role."
@@ -750,6 +746,56 @@
         "size": {
           "$ref": "#/definitions/LayerSize",
           "description": "Size in px."
+        },
+        "position": {
+          "$ref": "#/definitions/LayerPosition",
+          "description": "Position inside the parent. Written when the parent is not auto layout, or this layer is absolute in it. For children of a group, measured from the nearest ancestor that is not a group."
+        },
+        "rotation": {
+          "type": "number",
+          "description": "Rotation in degrees, counter-clockwise as Figma reports it (CSS rotates clockwise, so negate it). The size is the unrotated size. Absent means 0."
+        },
+        "constraints": {
+          "$ref": "#/definitions/LayerConstraints",
+          "description": "Constraints against the parent. Written together with `position`."
+        },
+        "placement": {
+          "$ref": "#/definitions/LayerPlacement",
+          "description": "How this layer sits in its auto-layout parent. Only on children of an auto-layout frame."
+        },
+        "sizeLimits": {
+          "$ref": "#/definitions/SizeLimits",
+          "description": "Minimum and maximum size, when set."
+        },
+        "clipsContent": {
+          "type": "boolean",
+          "description": "True when content outside the frame is clipped (CSS overflow: hidden). Only on frames, components and instances."
+        },
+        "isMask": {
+          "type": "boolean",
+          "description": "True when this layer masks the layers after it in the same parent."
+        },
+        "blendMode": {
+          "type": "string",
+          "description": "How the layer blends with what is under it. Absent means NORMAL (or PASS_THROUGH for groups)."
+        },
+        "cornerSmoothing": {
+          "type": "number",
+          "description": "Corner smoothing (squircle) from 0 to 1. Absent means 0."
+        },
+        "layoutGrids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerGrid"
+          },
+          "description": "Layout grids on a frame. Absent when there are none."
+        },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/TokenRef"
+          },
+          "description": "Variables bound to number, string or boolean fields of the layer, keyed by the Figma field name (for example \"paddingLeft\", \"itemSpacing\", \"topLeftRadius\", \"fontSize\", \"width\"). Colour bindings are on the paints. Only variables that resolve to a token in the file are listed."
         },
         "layout": {
           "$ref": "#/definitions/LayerLayout",
@@ -792,6 +838,10 @@
           "$ref": "#/definitions/LayerText",
           "description": "Text properties. Only on TEXT layers."
         },
+        "vector": {
+          "$ref": "#/definitions/LayerVector",
+          "description": "Drawn shape. Only on vector layers (VECTOR, BOOLEAN_OPERATION, STAR, POLYGON, LINE), and only when \"Include vector shapes\" is on."
+        },
         "instanceOf": {
           "$ref": "#/definitions/InstanceOf",
           "description": "Main component. Only on INSTANCE layers."
@@ -799,6 +849,18 @@
         "propertyRefs": {
           "$ref": "#/definitions/PropertyRefs",
           "description": "Component properties that drive this layer."
+        },
+        "id": {
+          "type": "string",
+          "description": "Figma node id."
+        },
+        "name": {
+          "type": "string",
+          "description": "Layer name, for display."
+        },
+        "type": {
+          "type": "string",
+          "description": "Figma node type, for example FRAME, TEXT, INSTANCE, RECTANGLE, VECTOR, ELLIPSE or GROUP."
         },
         "children": {
           "type": "array",
@@ -866,6 +928,208 @@
       "additionalProperties": false,
       "description": "The size of a layer in px."
     },
+    "LayerPosition": {
+      "type": "object",
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Distance from the parent's left edge."
+        },
+        "y": {
+          "type": "number",
+          "description": "Distance from the parent's top edge."
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "additionalProperties": false,
+      "description": "Position of a layer inside its parent, in px, from the parent's top-left corner."
+    },
+    "LayerConstraints": {
+      "type": "object",
+      "properties": {
+        "horizontal": {
+          "type": "string",
+          "enum": [
+            "MIN",
+            "CENTER",
+            "MAX",
+            "STRETCH",
+            "SCALE"
+          ],
+          "description": "Horizontal behaviour. MIN pins left, MAX pins right."
+        },
+        "vertical": {
+          "type": "string",
+          "enum": [
+            "MIN",
+            "CENTER",
+            "MAX",
+            "STRETCH",
+            "SCALE"
+          ],
+          "description": "Vertical behaviour. MIN pins top, MAX pins bottom."
+        }
+      },
+      "required": [
+        "horizontal",
+        "vertical"
+      ],
+      "additionalProperties": false,
+      "description": "How a layer follows its parent when the parent is resized. Not used in auto layout, unless the layer is absolute."
+    },
+    "LayerPlacement": {
+      "type": "object",
+      "properties": {
+        "positioning": {
+          "type": "string",
+          "enum": [
+            "AUTO",
+            "ABSOLUTE"
+          ],
+          "description": "\"ABSOLUTE\" takes the layer out of the flow, positioned by `position` and `constraints`."
+        },
+        "grow": {
+          "type": "number",
+          "description": "1 when the layer grows to fill the free space along the layout direction, else 0."
+        },
+        "align": {
+          "type": "string",
+          "enum": [
+            "INHERIT",
+            "STRETCH",
+            "MIN",
+            "CENTER",
+            "MAX"
+          ],
+          "description": "\"STRETCH\" fills the parent across the layout direction. Otherwise the parent's counter alignment applies."
+        },
+        "sizingH": {
+          "type": "string",
+          "enum": [
+            "FIXED",
+            "HUG",
+            "FILL"
+          ],
+          "description": "Horizontal sizing: fixed size, hug the content, or fill the parent. For any layer, not only frames."
+        },
+        "sizingV": {
+          "type": "string",
+          "enum": [
+            "FIXED",
+            "HUG",
+            "FILL"
+          ],
+          "description": "Vertical sizing: fixed size, hug the content, or fill the parent. For any layer, not only frames."
+        }
+      },
+      "required": [
+        "positioning",
+        "grow",
+        "align",
+        "sizingH",
+        "sizingV"
+      ],
+      "additionalProperties": false,
+      "description": "How a layer sits inside its auto-layout parent. Only on children of an auto-layout frame."
+    },
+    "SizeLimits": {
+      "type": "object",
+      "properties": {
+        "minWidth": {
+          "type": "number",
+          "description": "Minimum width."
+        },
+        "maxWidth": {
+          "type": "number",
+          "description": "Maximum width."
+        },
+        "minHeight": {
+          "type": "number",
+          "description": "Minimum height."
+        },
+        "maxHeight": {
+          "type": "number",
+          "description": "Maximum height."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Minimum and maximum size in px. Only the limits that are set."
+    },
+    "LayerGrid": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "enum": [
+            "GRID",
+            "COLUMNS",
+            "ROWS"
+          ],
+          "description": "Grid kind."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the grid is shown."
+        },
+        "sectionSize": {
+          "type": "number",
+          "description": "Cell size for GRID, column width or row height for COLUMNS and ROWS, in px."
+        },
+        "count": {
+          "type": "number",
+          "description": "Number of columns or rows. Absent when it is automatic."
+        },
+        "gutterSize": {
+          "type": "number",
+          "description": "Space between columns or rows, in px."
+        },
+        "offset": {
+          "type": "number",
+          "description": "Distance from the edge to the first column or row, in px."
+        },
+        "alignment": {
+          "type": "string",
+          "enum": [
+            "MIN",
+            "CENTER",
+            "MAX",
+            "STRETCH"
+          ],
+          "description": "Where columns or rows sit when they do not fill the frame."
+        }
+      },
+      "required": [
+        "pattern",
+        "visible"
+      ],
+      "additionalProperties": false,
+      "description": "A layout grid on a frame."
+    },
+    "TokenRef": {
+      "type": "object",
+      "properties": {
+        "variableId": {
+          "type": "string",
+          "description": "Figma variable id. Also the key of this token in the file's `tokens` lookup."
+        },
+        "styleId": {
+          "type": "string",
+          "description": "Figma style id. Also the key of this token in the file's `tokens` lookup."
+        },
+        "cssName": {
+          "type": "string",
+          "description": "CSS custom property name, for example \"--color-primary-500\"."
+        }
+      },
+      "required": [
+        "cssName"
+      ],
+      "additionalProperties": false,
+      "description": "A reference to a design token. At least one of variableId and styleId is present."
+    },
     "LayerLayout": {
       "type": "object",
       "properties": {
@@ -926,6 +1190,26 @@
         "wrap": {
           "type": "boolean",
           "description": "True when children wrap onto new lines."
+        },
+        "counterGap": {
+          "type": "number",
+          "description": "Space between wrapped lines, in px. Only when `wrap` is true."
+        },
+        "counterAlignContent": {
+          "type": "string",
+          "enum": [
+            "AUTO",
+            "SPACE_BETWEEN"
+          ],
+          "description": "How wrapped lines are spread across the frame. Only when `wrap` is true."
+        },
+        "reverseZIndex": {
+          "type": "boolean",
+          "description": "True when the first child is drawn on top instead of last. Absent means false."
+        },
+        "strokesIncludedInLayout": {
+          "type": "boolean",
+          "description": "True when the stroke takes up space in the layout (like CSS border-box). Absent means false: the stroke does not."
         }
       },
       "required": [
@@ -997,11 +1281,36 @@
         },
         "alpha": {
           "type": "number",
-          "description": "Opacity from 0 to 1, for SOLID paints."
+          "description": "Opacity of the whole paint, 0 to 1. For SOLID paints this is the colour's opacity. Absent on gradients and images means 1."
         },
         "description": {
           "type": "string",
           "description": "Short human-readable description of a gradient or image paint."
+        },
+        "stops": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GradientStop"
+          },
+          "description": "Colour stops, for gradient paints."
+        },
+        "transform": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "Maps the gradient onto the layer, as the 2x3 matrix Figma reports (`gradientTransform`). It takes layer space (0 to 1) to gradient space, so a consumer inverts it to find the start and end points."
+        },
+        "blendMode": {
+          "type": "string",
+          "description": "How the paint blends with what is under it. Absent means NORMAL."
+        },
+        "image": {
+          "$ref": "#/definitions/LayerImage",
+          "description": "The picture, for IMAGE paints."
         },
         "token": {
           "$ref": "#/definitions/TokenRef",
@@ -1013,29 +1322,81 @@
         "visible"
       ],
       "additionalProperties": false,
-      "description": "A fill or stroke paint. Image bytes are never exported."
+      "description": "A fill or stroke paint. Image bytes are never inside this file; see LayerImage."
     },
-    "TokenRef": {
+    "GradientStop": {
       "type": "object",
       "properties": {
-        "variableId": {
-          "type": "string",
-          "description": "Figma variable id. Also the key of this token in the file's `tokens` lookup."
+        "position": {
+          "type": "number",
+          "description": "Position along the gradient, 0 to 1."
         },
-        "styleId": {
-          "type": "string",
-          "description": "Figma style id. Also the key of this token in the file's `tokens` lookup."
-        },
-        "cssName": {
-          "type": "string",
-          "description": "CSS custom property name, for example \"--color-primary-500\"."
+        "color": {
+          "$ref": "#/definitions/ColorRgba",
+          "description": "The colour at this stop, with its own alpha."
         }
       },
       "required": [
-        "cssName"
+        "position",
+        "color"
       ],
       "additionalProperties": false,
-      "description": "A reference to a design token. At least one of variableId and styleId is present."
+      "description": "One colour stop of a gradient."
+    },
+    "LayerImage": {
+      "type": "object",
+      "properties": {
+        "hash": {
+          "type": "string",
+          "description": "Figma image hash. The same picture has the same hash everywhere in the file."
+        },
+        "scaleMode": {
+          "type": "string",
+          "enum": [
+            "FILL",
+            "FIT",
+            "CROP",
+            "TILE"
+          ],
+          "description": "How the picture fills the layer."
+        },
+        "file": {
+          "type": "string",
+          "description": "Path of the exported picture relative to the export root, for example \"assets/images/3f2a.png\". Absent when images were not exported or this one was left out (see IMAGE_OMITTED)."
+        },
+        "width": {
+          "type": "number",
+          "description": "Pixel width of the picture. Present with `file`."
+        },
+        "height": {
+          "type": "number",
+          "description": "Pixel height of the picture. Present with `file`."
+        },
+        "rotation": {
+          "type": "number",
+          "description": "Rotation of the picture in degrees, when it is rotated."
+        },
+        "scalingFactor": {
+          "type": "number",
+          "description": "Scale of one tile, for TILE."
+        },
+        "imageTransform": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "description": "For CROP: the 2x3 matrix that places the picture, as Figma reports it."
+        }
+      },
+      "required": [
+        "hash",
+        "scaleMode"
+      ],
+      "additionalProperties": false,
+      "description": "The picture behind an IMAGE paint. The bytes are a separate file, and only when \"Include images\" is on."
     },
     "LayerStrokes": {
       "type": "object",
@@ -1059,6 +1420,29 @@
             "OUTSIDE"
           ],
           "description": "Where the stroke sits relative to the edge."
+        },
+        "sides": {
+          "$ref": "#/definitions/Padding",
+          "description": "Weight of each side in px, written when the sides differ. `weight` is then the largest of them."
+        },
+        "dash": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Dash pattern in px (dash, gap, dash, ...). Absent for a solid stroke."
+        },
+        "cap": {
+          "type": "string",
+          "description": "End shape of an open stroke, as Figma names it: ROUND, SQUARE, ARROW_LINES or ARROW_EQUILATERAL. Absent means NONE (flat)."
+        },
+        "join": {
+          "type": "string",
+          "description": "Corner shape, as Figma names it: BEVEL or ROUND. Absent means MITER."
+        },
+        "miterLimit": {
+          "type": "number",
+          "description": "Miter limit, when the join is MITER (absent) and it is not the default of 4."
         }
       },
       "required": [
@@ -1167,6 +1551,10 @@
           ],
           "description": "Text decoration."
         },
+        "italic": {
+          "type": "boolean",
+          "description": "True for an italic or oblique font style. Absent means upright."
+        },
         "token": {
           "$ref": "#/definitions/TokenRef",
           "description": "The text style token, when styleId resolves to a token in the file."
@@ -1184,6 +1572,53 @@
             "JUSTIFIED"
           ],
           "description": "Horizontal alignment."
+        },
+        "autoResize": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "WIDTH_AND_HEIGHT",
+            "HEIGHT",
+            "TRUNCATE"
+          ],
+          "description": "How the box follows the text: NONE is a fixed box, WIDTH_AND_HEIGHT hugs both, HEIGHT hugs the height (fixed width, wraps), TRUNCATE is fixed and cuts off."
+        },
+        "truncation": {
+          "type": "string",
+          "const": "ENDING",
+          "description": "\"ENDING\" cuts overflowing text with an ellipsis. Absent means no truncation."
+        },
+        "maxLines": {
+          "type": "number",
+          "description": "Most lines shown before truncating. Absent means no limit."
+        },
+        "alignVertical": {
+          "type": "string",
+          "enum": [
+            "CENTER",
+            "BOTTOM"
+          ],
+          "description": "Vertical alignment inside the box. Absent means TOP."
+        },
+        "paragraphSpacing": {
+          "type": "number",
+          "description": "Space between paragraphs in px. Absent means 0."
+        },
+        "paragraphIndent": {
+          "type": "number",
+          "description": "Indent of the first line of a paragraph in px. Absent means 0."
+        },
+        "listType": {
+          "type": "string",
+          "enum": [
+            "ORDERED",
+            "UNORDERED"
+          ],
+          "description": "List kind, when the whole text is a list."
+        },
+        "hyperlink": {
+          "type": "string",
+          "description": "URL the whole text links to."
         },
         "mixed": {
           "type": "boolean",
@@ -1282,6 +1717,10 @@
           ],
           "description": "Text decoration."
         },
+        "italic": {
+          "type": "boolean",
+          "description": "True for an italic or oblique font style. Absent means upright."
+        },
         "token": {
           "$ref": "#/definitions/TokenRef",
           "description": "The text style token, when styleId resolves to a token in the file."
@@ -1289,6 +1728,25 @@
         "characters": {
           "type": "string",
           "description": "The characters of this run."
+        },
+        "fills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerPaint"
+          },
+          "description": "Colour of this run. Written when the layer's text colours differ between runs."
+        },
+        "hyperlink": {
+          "type": "string",
+          "description": "URL this run links to."
+        },
+        "listType": {
+          "type": "string",
+          "enum": [
+            "ORDERED",
+            "UNORDERED"
+          ],
+          "description": "List kind of this run's paragraph, when it is a list."
         }
       },
       "required": [
@@ -1304,6 +1762,55 @@
       "additionalProperties": false,
       "description": "A stretch of text with its own style, used when a text layer mixes styles."
     },
+    "LayerVector": {
+      "type": "object",
+      "properties": {
+        "fill": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VectorPath"
+          },
+          "description": "Paths to fill with the layer's fills."
+        },
+        "stroke": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VectorPath"
+          },
+          "description": "Outline of the stroke, to fill with the layer's stroke paints. Empty when the layer has no stroke."
+        }
+      },
+      "required": [
+        "fill",
+        "stroke"
+      ],
+      "additionalProperties": false,
+      "description": "The drawn shape of a vector layer, enough to draw an icon."
+    },
+    "VectorPath": {
+      "type": "object",
+      "properties": {
+        "windingRule": {
+          "type": "string",
+          "enum": [
+            "NONZERO",
+            "EVENODD",
+            "NONE"
+          ],
+          "description": "How overlapping parts are filled."
+        },
+        "data": {
+          "type": "string",
+          "description": "SVG path data, for example \"M 0 0 L 10 0 L 10 10 Z\"."
+        }
+      },
+      "required": [
+        "windingRule",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "One path of a vector shape, in the layer's own coordinates (0,0 is its top-left corner)."
+    },
     "InstanceOf": {
       "type": "object",
       "properties": {
@@ -1314,6 +1821,24 @@
         "componentName": {
           "type": "string",
           "description": "Name of the main component, for display."
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/InstanceProperty"
+          },
+          "description": "Property values set in this use of the component, keyed by property key. Absent when the component has none."
+        },
+        "overrides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InstanceOverride"
+          },
+          "description": "What this use changed inside the component, such as a different label. Written only when the layers inside nested instances are not read, because otherwise they carry their own values."
+        },
+        "overridesTruncated": {
+          "type": "boolean",
+          "description": "True when there were more overrides than the limit, so `overrides` is incomplete."
         }
       },
       "required": [
@@ -1322,6 +1847,188 @@
       ],
       "additionalProperties": false,
       "description": "The main component an instance layer points at."
+    },
+    "InstanceProperty": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "BOOLEAN",
+            "TEXT",
+            "INSTANCE_SWAP",
+            "VARIANT"
+          ],
+          "description": "Property type."
+        },
+        "value": {
+          "type": [
+            "string",
+            "boolean"
+          ],
+          "description": "The value in this use of the component. For INSTANCE_SWAP it is the id of the component swapped in."
+        }
+      },
+      "required": [
+        "type",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "The value an instance gives one component property."
+    },
+    "InstanceOverride": {
+      "type": "object",
+      "properties": {
+        "layerId": {
+          "type": "string",
+          "description": "Figma id of the layer inside the instance, for example \"I12:3;45:6\". The part after the last \";\" is the id of the same layer in the main component."
+        },
+        "name": {
+          "type": "string",
+          "description": "Layer name, for display."
+        },
+        "changes": {
+          "$ref": "#/definitions/LayerChanges",
+          "description": "The attributes this use changed, with the values it has. Same shapes as in Layer."
+        }
+      },
+      "required": [
+        "layerId",
+        "name",
+        "changes"
+      ],
+      "additionalProperties": false,
+      "description": "A layer inside a nested instance that this use of the component changed."
+    },
+    "LayerChanges": {
+      "$ref": "#/definitions/LayerAttributes",
+      "description": "The attributes of a layer that a variant can change. Same shapes as in Layer."
+    },
+    "LayerAttributes": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/definitions/LayerRole",
+          "description": "Inferred role."
+        },
+        "roleSource": {
+          "$ref": "#/definitions/RoleSource",
+          "description": "How the role was decided."
+        },
+        "visible": {
+          "type": "boolean",
+          "description": "Whether the layer is visible."
+        },
+        "size": {
+          "$ref": "#/definitions/LayerSize",
+          "description": "Size in px."
+        },
+        "position": {
+          "$ref": "#/definitions/LayerPosition",
+          "description": "Position inside the parent. Written when the parent is not auto layout, or this layer is absolute in it. For children of a group, measured from the nearest ancestor that is not a group."
+        },
+        "rotation": {
+          "type": "number",
+          "description": "Rotation in degrees, counter-clockwise as Figma reports it (CSS rotates clockwise, so negate it). The size is the unrotated size. Absent means 0."
+        },
+        "constraints": {
+          "$ref": "#/definitions/LayerConstraints",
+          "description": "Constraints against the parent. Written together with `position`."
+        },
+        "placement": {
+          "$ref": "#/definitions/LayerPlacement",
+          "description": "How this layer sits in its auto-layout parent. Only on children of an auto-layout frame."
+        },
+        "sizeLimits": {
+          "$ref": "#/definitions/SizeLimits",
+          "description": "Minimum and maximum size, when set."
+        },
+        "clipsContent": {
+          "type": "boolean",
+          "description": "True when content outside the frame is clipped (CSS overflow: hidden). Only on frames, components and instances."
+        },
+        "isMask": {
+          "type": "boolean",
+          "description": "True when this layer masks the layers after it in the same parent."
+        },
+        "blendMode": {
+          "type": "string",
+          "description": "How the layer blends with what is under it. Absent means NORMAL (or PASS_THROUGH for groups)."
+        },
+        "cornerSmoothing": {
+          "type": "number",
+          "description": "Corner smoothing (squircle) from 0 to 1. Absent means 0."
+        },
+        "layoutGrids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerGrid"
+          },
+          "description": "Layout grids on a frame. Absent when there are none."
+        },
+        "bindings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/TokenRef"
+          },
+          "description": "Variables bound to number, string or boolean fields of the layer, keyed by the Figma field name (for example \"paddingLeft\", \"itemSpacing\", \"topLeftRadius\", \"fontSize\", \"width\"). Colour bindings are on the paints. Only variables that resolve to a token in the file are listed."
+        },
+        "layout": {
+          "$ref": "#/definitions/LayerLayout",
+          "description": "Auto-layout settings. Only on auto-layout frames."
+        },
+        "radius": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "$ref": "#/definitions/CornerRadii"
+            }
+          ],
+          "description": "Corner radius in px: a number when all corners match, or per-corner values when they differ."
+        },
+        "opacity": {
+          "type": "number",
+          "description": "Opacity from 0 to 1."
+        },
+        "fills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerPaint"
+          },
+          "description": "Fill paints."
+        },
+        "strokes": {
+          "$ref": "#/definitions/LayerStrokes",
+          "description": "Stroke settings."
+        },
+        "effects": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LayerEffect"
+          },
+          "description": "Effects. Always an array, even for one shadow."
+        },
+        "text": {
+          "$ref": "#/definitions/LayerText",
+          "description": "Text properties. Only on TEXT layers."
+        },
+        "vector": {
+          "$ref": "#/definitions/LayerVector",
+          "description": "Drawn shape. Only on vector layers (VECTOR, BOOLEAN_OPERATION, STAR, POLYGON, LINE), and only when \"Include vector shapes\" is on."
+        },
+        "instanceOf": {
+          "$ref": "#/definitions/InstanceOf",
+          "description": "Main component. Only on INSTANCE layers."
+        },
+        "propertyRefs": {
+          "$ref": "#/definitions/PropertyRefs",
+          "description": "Component properties that drive this layer."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The attributes of a layer that a variant or an instance can change. Every one is optional here."
     },
     "PropertyRefs": {
       "type": "object",
@@ -1407,78 +2114,6 @@
       "additionalProperties": false,
       "description": "A layer that differs between a variant and the default variant."
     },
-    "LayerChanges": {
-      "type": "object",
-      "properties": {
-        "role": {
-          "$ref": "#/definitions/LayerRole",
-          "description": "Inferred role."
-        },
-        "roleSource": {
-          "$ref": "#/definitions/RoleSource",
-          "description": "How the role was decided."
-        },
-        "visible": {
-          "type": "boolean",
-          "description": "Whether the layer is visible."
-        },
-        "size": {
-          "$ref": "#/definitions/LayerSize",
-          "description": "Size in px."
-        },
-        "layout": {
-          "$ref": "#/definitions/LayerLayout",
-          "description": "Auto-layout settings. Only on auto-layout frames."
-        },
-        "radius": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "$ref": "#/definitions/CornerRadii"
-            }
-          ],
-          "description": "Corner radius in px: a number when all corners match, or per-corner values when they differ."
-        },
-        "opacity": {
-          "type": "number",
-          "description": "Opacity from 0 to 1."
-        },
-        "fills": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/LayerPaint"
-          },
-          "description": "Fill paints."
-        },
-        "strokes": {
-          "$ref": "#/definitions/LayerStrokes",
-          "description": "Stroke settings."
-        },
-        "effects": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/LayerEffect"
-          },
-          "description": "Effects. Always an array, even for one shadow."
-        },
-        "text": {
-          "$ref": "#/definitions/LayerText",
-          "description": "Text properties. Only on TEXT layers."
-        },
-        "instanceOf": {
-          "$ref": "#/definitions/InstanceOf",
-          "description": "Main component. Only on INSTANCE layers."
-        },
-        "propertyRefs": {
-          "$ref": "#/definitions/PropertyRefs",
-          "description": "Component properties that drive this layer."
-        }
-      },
-      "additionalProperties": false,
-      "description": "The attributes of a layer that a variant can change. Same shapes as in Layer."
-    },
     "AddedLayer": {
       "type": "object",
       "properties": {
@@ -1536,7 +2171,10 @@
         "PROPERTIES_UNREADABLE",
         "SCAN_CANCELLED",
         "TIME_BUDGET_EXCEEDED",
-        "OUTPUT_TOO_LARGE"
+        "OUTPUT_TOO_LARGE",
+        "OUTPUT_SPLIT",
+        "IMAGE_OMITTED",
+        "VECTOR_OMITTED"
       ],
       "description": "Stable codes for warnings. New codes may be added within v1, so handle unknown codes."
     }

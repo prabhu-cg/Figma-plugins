@@ -11,7 +11,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     componentsJson: false,
     includeText: true,
     includeVariantDiffs: true,
-    includeInstanceInternals: false,
+    includeInstanceInternals: true,
+    includeVectorShapes: true,
+    includeImages: false,
+    splitComponentsJson: "auto",
     zip: true
   };
   function sanitizeSavedSettings(value) {
@@ -21,8 +24,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const options = { ...DEFAULT_EXPORT_OPTIONS };
     for (const key of Object.keys(DEFAULT_EXPORT_OPTIONS)) {
       const candidate = stored[key];
-      if (typeof candidate === "boolean") options[key] = candidate;
+      if (typeof candidate === "boolean" && typeof DEFAULT_EXPORT_OPTIONS[key] === "boolean") {
+        options[key] = candidate;
+      }
     }
+    const split = stored.splitComponentsJson;
+    if (split === "auto" || split === "always") options.splitComponentsJson = split;
     return { options };
   }
   const EMPTY_FILE_SETTINGS = { excludedPages: [], contrastPairs: [] };
@@ -846,8 +853,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings
     };
   }
-  const MAX_LAYERS = 500;
-  const MAX_DEPTH = 10;
+  const MAX_LAYERS = 2e3;
+  const MAX_DEPTH = 16;
+  const MAX_VECTOR_CHARS = 6e4;
+  const MAX_OVERRIDES = 100;
+  const CLIPPING_TYPES = /* @__PURE__ */ new Set(["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE", "SECTION"]);
+  const VECTOR_TYPES$1 = /* @__PURE__ */ new Set(["VECTOR", "BOOLEAN_OPERATION", "STAR", "POLYGON", "LINE"]);
   const newReadStats = () => ({
     layers: 0,
     trees: 0,
@@ -894,12 +905,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     };
   }
   class Tracker {
-    constructor(resolve) {
+    constructor(resolve, images = false) {
       __publicField(this, "variables", /* @__PURE__ */ new Set());
       __publicField(this, "styles", /* @__PURE__ */ new Set());
       __publicField(this, "warnings", []);
       __publicField(this, "unresolved", /* @__PURE__ */ new Set());
       this.resolve = resolve;
+      this.images = images;
     }
     /** Whether token references are being looked up at all. */
     get resolves() {
@@ -929,6 +941,34 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const id = alias && typeof alias === "object" ? alias.id : void 0;
     return typeof id === "string" ? id : void 0;
   }
+  const MAX_GRADIENT_STOPS = 32;
+  function matrix2x3(v) {
+    if (!Array.isArray(v) || v.length !== 2) return void 0;
+    const rows = v.map(
+      (row) => Array.isArray(row) && row.length === 3 && row.every((x) => typeof x === "number" && Number.isFinite(x)) ? row.map((x) => Math.round(x * 1e4) / 1e4) : void 0
+    );
+    return rows.every((r) => r) ? rows : void 0;
+  }
+  function readImage(p) {
+    const hash = str(p, "imageHash");
+    if (!hash) return void 0;
+    const image = {
+      hash,
+      scaleMode: oneOf(read(p, "scaleMode"), ["FILL", "FIT", "CROP", "TILE"], "FILL")
+    };
+    const rotation = num(p, "rotation");
+    if (rotation) image.rotation = round2(rotation);
+    const scale = num(p, "scalingFactor");
+    if (image.scaleMode === "TILE" && scale !== void 0) image.scalingFactor = round3(scale);
+    const transform = read(p, "imageTransform");
+    if (image.scaleMode === "CROP" && Array.isArray(transform)) {
+      const rows = transform.map(
+        (row) => Array.isArray(row) ? row.map((v) => typeof v === "number" ? round3(v) : 0) : []
+      );
+      if (rows.length === 2 && rows.every((r) => r.length === 3)) image.imageTransform = rows;
+    }
+    return image;
+  }
   function readPaints(paints, styleId, layerId, t) {
     if (!Array.isArray(paints)) return void 0;
     return paints.map((p) => {
@@ -955,9 +995,29 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         const stops = read(p, "gradientStops");
         const count = Array.isArray(stops) ? stops.length : 0;
         paint.description = `${type.slice(9).toLowerCase()} gradient, ${count} stops`;
+        const readStops = [];
+        if (Array.isArray(stops)) {
+          for (const stop of stops.slice(0, MAX_GRADIENT_STOPS)) {
+            const color = rgba(read(stop, "color"));
+            const position = num(stop, "position");
+            if (color && position !== void 0)
+              readStops.push({ position: round3(position), color });
+          }
+        }
+        if (readStops.length > 0) paint.stops = readStops;
+        const transform = matrix2x3(read(p, "gradientTransform"));
+        if (transform) paint.transform = transform;
+        const opacity = num(p, "opacity");
+        if (opacity !== void 0 && opacity !== 1) paint.alpha = round3(opacity);
       } else if (type === "IMAGE") {
         paint.description = `image, scale mode ${str(p, "scaleMode") ?? "unknown"}`;
+        const image = t.images ? readImage(p) : void 0;
+        if (image) paint.image = image;
+        const opacity = num(p, "opacity");
+        if (opacity !== void 0 && opacity !== 1) paint.alpha = round3(opacity);
       }
+      const blend = str(p, "blendMode");
+      if (blend && blend !== "NORMAL") paint.blendMode = blend;
       const token = t.token("variable", boundVariableId(p, "color"), layerId) ?? t.token("style", styleId, layerId);
       if (token) paint.token = token;
       return paint;
@@ -995,19 +1055,40 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (Array.isArray(raw) && raw.length === 0) return { paints: [], weight: 0, align: "INSIDE" };
     const paints = readPaints(raw, str(n, "strokeStyleId"), layerId, t);
     if (!paints) return void 0;
-    return {
+    const sides = {
+      top: num(n, "strokeTopWeight"),
+      right: num(n, "strokeRightWeight"),
+      bottom: num(n, "strokeBottomWeight"),
+      left: num(n, "strokeLeftWeight")
+    };
+    const sideValues = Object.values(sides).map((v) => v ?? 0);
+    const strokes = {
       paints,
       // strokeWeight is figma.mixed when sides differ; use the largest side then.
-      weight: round2(
-        num(n, "strokeWeight") ?? Math.max(
-          0,
-          ...["strokeTopWeight", "strokeRightWeight", "strokeBottomWeight", "strokeLeftWeight"].map(
-            (k) => num(n, k) ?? 0
-          )
-        )
-      ),
+      weight: round2(num(n, "strokeWeight") ?? Math.max(0, ...sideValues)),
       align: oneOf(read(n, "strokeAlign"), ["INSIDE", "CENTER", "OUTSIDE"], "INSIDE")
     };
+    if (paints.length > 0 && Object.values(sides).every((v) => v !== void 0) && new Set(sideValues).size > 1) {
+      strokes.sides = {
+        top: round2(sides.top),
+        right: round2(sides.right),
+        bottom: round2(sides.bottom),
+        left: round2(sides.left)
+      };
+    }
+    if (paints.length > 0) {
+      const dashes = read(n, "dashPattern");
+      if (Array.isArray(dashes) && dashes.length > 0 && dashes.every((d) => typeof d === "number")) {
+        strokes.dash = dashes.map(round2);
+      }
+      const cap = str(n, "strokeCap");
+      if (cap && cap !== "NONE") strokes.cap = cap;
+      const join = str(n, "strokeJoin");
+      if (join && join !== "MITER") strokes.join = join;
+      const miter = num(n, "strokeMiterLimit");
+      if (join === "MITER" && miter !== void 0 && miter !== 4) strokes.miterLimit = round2(miter);
+    }
+    return strokes;
   }
   function readRadius(n) {
     const uniform = num(n, "cornerRadius");
@@ -1045,8 +1126,98 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       ),
       sizingH: oneOf(read(n, "layoutSizingHorizontal"), ["FIXED", "HUG", "FILL"], "FIXED"),
       sizingV: oneOf(read(n, "layoutSizingVertical"), ["FIXED", "HUG", "FILL"], "FIXED"),
-      wrap: read(n, "layoutWrap") === "WRAP"
+      wrap: read(n, "layoutWrap") === "WRAP",
+      ...layoutExtras(n)
     };
+  }
+  function layoutExtras(n) {
+    const out = {};
+    if (read(n, "layoutWrap") === "WRAP") {
+      const gap = num(n, "counterAxisSpacing");
+      if (gap !== void 0) out.counterGap = round2(gap);
+      const content = read(n, "counterAxisAlignContent");
+      if (content === "AUTO" || content === "SPACE_BETWEEN") out.counterAlignContent = content;
+    }
+    if (read(n, "itemReverseZIndex") === true) out.reverseZIndex = true;
+    if (read(n, "strokesIncludedInLayout") === true) out.strokesIncludedInLayout = true;
+    return out;
+  }
+  const AUTO_LAYOUT_MODES = ["HORIZONTAL", "VERTICAL"];
+  const isAutoLayout = (n) => AUTO_LAYOUT_MODES.includes(read(n, "layoutMode"));
+  function readPlacement(n) {
+    return {
+      positioning: read(n, "layoutPositioning") === "ABSOLUTE" ? "ABSOLUTE" : "AUTO",
+      grow: num(n, "layoutGrow") ?? 0,
+      align: oneOf(
+        read(n, "layoutAlign"),
+        ["INHERIT", "STRETCH", "MIN", "CENTER", "MAX"],
+        "INHERIT"
+      ),
+      sizingH: oneOf(read(n, "layoutSizingHorizontal"), ["FIXED", "HUG", "FILL"], "FIXED"),
+      sizingV: oneOf(read(n, "layoutSizingVertical"), ["FIXED", "HUG", "FILL"], "FIXED")
+    };
+  }
+  function readConstraints(n) {
+    const c = read(n, "constraints");
+    const kinds = ["MIN", "CENTER", "MAX", "STRETCH", "SCALE"];
+    const h = read(c, "horizontal");
+    const v = read(c, "vertical");
+    if (!kinds.includes(h) || !kinds.includes(v)) return void 0;
+    return {
+      horizontal: h,
+      vertical: v
+    };
+  }
+  function readSizeLimits(n) {
+    const out = {};
+    for (const key of ["minWidth", "maxWidth", "minHeight", "maxHeight"]) {
+      const v = num(n, key);
+      if (v !== void 0) out[key] = round2(v);
+    }
+    return Object.keys(out).length > 0 ? out : void 0;
+  }
+  function readGrids(n) {
+    const raw = read(n, "layoutGrids");
+    if (!Array.isArray(raw) || raw.length === 0) return void 0;
+    return raw.flatMap((g) => {
+      const pattern = read(g, "pattern");
+      if (pattern !== "GRID" && pattern !== "COLUMNS" && pattern !== "ROWS") return [];
+      const grid = { pattern, visible: read(g, "visible") !== false };
+      const section = num(g, "sectionSize");
+      if (section !== void 0) grid.sectionSize = round2(section);
+      const count = num(g, "count");
+      if (count !== void 0 && count > 0 && count < 1e6) grid.count = count;
+      const gutter = num(g, "gutterSize");
+      if (gutter !== void 0) grid.gutterSize = round2(gutter);
+      const offset = num(g, "offset");
+      if (offset !== void 0) grid.offset = round2(offset);
+      const alignment = read(g, "alignment");
+      if (alignment === "MIN" || alignment === "CENTER" || alignment === "MAX" || alignment === "STRETCH") {
+        grid.alignment = alignment;
+      }
+      return [grid];
+    });
+  }
+  const NON_NUMERIC_BINDINGS = /* @__PURE__ */ new Set([
+    "fills",
+    "strokes",
+    "effects",
+    "textRangeFills",
+    "componentProperties"
+  ]);
+  function readBindings(n, layerId, t) {
+    if (!t.resolves) return void 0;
+    const bound = read(n, "boundVariables");
+    if (!bound || typeof bound !== "object") return void 0;
+    const out = {};
+    for (const field of Object.keys(bound).sort()) {
+      if (NON_NUMERIC_BINDINGS.has(field)) continue;
+      const alias = bound[field];
+      const id = typeof alias === "object" && alias !== null && !Array.isArray(alias) ? alias.id : void 0;
+      const token = typeof id === "string" ? t.token("variable", id, layerId) : void 0;
+      if (token) out[field] = token;
+    }
+    return Object.keys(out).length > 0 ? out : void 0;
   }
   function unitValue(v) {
     const unit = read(v, "unit");
@@ -1082,6 +1253,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         "NONE"
       )
     };
+    if (/italic|oblique/i.test(str(fontName, "style") ?? "")) fields.italic = true;
     const styleId = str(src, styleIdKey);
     if (styleId) {
       const token = t.token("style", styleId, layerId);
@@ -1102,18 +1274,59 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     "letterSpacing",
     "textCase",
     "textDecoration",
-    "textStyleId"
+    "textStyleId",
+    "fills",
+    "hyperlink",
+    "listOptions"
   ];
-  function readText(n, layerId, includeText, t) {
+  function hyperlinkOf(v) {
+    return read(v, "type") === "URL" ? str(v, "value") : void 0;
+  }
+  function listTypeOf(v) {
+    const type = read(v, "type");
+    return type === "ORDERED" || type === "UNORDERED" ? type : void 0;
+  }
+  function textBox(n, includeText) {
+    const out = {};
+    const auto = read(n, "textAutoResize");
+    if (auto === "NONE" || auto === "WIDTH_AND_HEIGHT" || auto === "HEIGHT" || auto === "TRUNCATE") {
+      out.autoResize = auto;
+    }
+    if (read(n, "textTruncation") === "ENDING") out.truncation = "ENDING";
+    const maxLines = num(n, "maxLines");
+    if (maxLines !== void 0 && maxLines > 0) out.maxLines = maxLines;
+    const vertical = read(n, "textAlignVertical");
+    if (vertical === "CENTER" || vertical === "BOTTOM") out.alignVertical = vertical;
+    const spacing = num(n, "paragraphSpacing");
+    if (spacing) out.paragraphSpacing = round2(spacing);
+    const indent = num(n, "paragraphIndent");
+    if (indent) out.paragraphIndent = round2(indent);
+    const link = hyperlinkOf(read(n, "hyperlink"));
+    if (link) out.hyperlink = link;
+    if (includeText) {
+      const length = (str(n, "characters") ?? "").length;
+      const getter = read(n, "getRangeListOptions");
+      if (length > 0 && typeof getter === "function") {
+        try {
+          const list = listTypeOf(getter.call(n, 0, length));
+          if (list) out.listType = list;
+        } catch {
+        }
+      }
+    }
+    return out;
+  }
+  function readText(n, layerId, includeText, t, fillsMixed) {
     const align = oneOf(
       read(n, "textAlignHorizontal"),
       ["LEFT", "CENTER", "RIGHT", "JUSTIFIED"],
       "LEFT"
     );
     const characters = includeText ? str(n, "characters") : void 0;
-    const whole = textFields(n, layerId, t, "textStyleId");
+    const box = textBox(n, includeText);
+    const whole = fillsMixed ? void 0 : textFields(n, layerId, t, "textStyleId");
     if (whole) {
-      const text2 = { ...whole, align };
+      const text2 = { ...whole, align, ...box };
       if (characters !== void 0) text2.characters = characters;
       return text2;
     }
@@ -1130,8 +1343,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const runs = [];
     for (const seg of segments) {
       const fields = textFields(seg, layerId, t, "textStyleId");
-      if (fields)
-        runs.push({ ...fields, characters: includeText ? str(seg, "characters") ?? "" : "" });
+      if (!fields) continue;
+      const run = {
+        ...fields,
+        characters: includeText ? str(seg, "characters") ?? "" : ""
+      };
+      const fills = readPaints(read(seg, "fills"), void 0, layerId, t);
+      if (fills) run.fills = fills;
+      const link = hyperlinkOf(read(seg, "hyperlink"));
+      if (link) run.hyperlink = link;
+      const list = listTypeOf(read(seg, "listOptions"));
+      if (list) run.listType = list;
+      runs.push(run);
     }
     if (runs.length === 0) {
       return {
@@ -1143,12 +1366,13 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         textCase: "ORIGINAL",
         textDecoration: "NONE",
         align,
+        ...box,
         mixed: true,
         runs: []
       };
     }
-    const { characters: _first, ...first } = runs[0];
-    const text = { ...first, align, mixed: true, runs };
+    const { characters: _c, fills: _f, hyperlink: _h, listType: _l, ...first } = runs[0];
+    const text = { ...first, align, ...box, mixed: true, runs };
     if (characters !== void 0) text.characters = characters;
     return text;
   }
@@ -1175,7 +1399,84 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     if (!componentId) return void 0;
     const parent = read(main, "parent");
     const componentName = read(parent, "type") === "COMPONENT_SET" ? str(parent, "name") ?? "" : str(main, "name") ?? "";
-    return { componentId, componentName };
+    const instance = { componentId, componentName };
+    const properties = readInstanceProperties(n);
+    if (properties) instance.properties = properties;
+    return instance;
+  }
+  function readPaths(n, key) {
+    const raw = read(n, key);
+    if (!Array.isArray(raw)) return void 0;
+    const out = [];
+    for (const p of raw) {
+      const data = str(p, "data");
+      if (data)
+        out.push({
+          windingRule: oneOf(
+            read(p, "windingRule"),
+            ["NONZERO", "EVENODD", "NONE"],
+            "NONZERO"
+          ),
+          data
+        });
+    }
+    return out;
+  }
+  function readVector(n, layer, t) {
+    var _a;
+    const fill = hasItems(layer.fills) ? readPaths(n, "fillGeometry") : [];
+    const stroke = hasItems((_a = layer.strokes) == null ? void 0 : _a.paints) ? readPaths(n, "strokeGeometry") : [];
+    if (!fill || !stroke) return void 0;
+    const size = [...fill, ...stroke].reduce((sum, p) => sum + p.data.length, 0);
+    if (size === 0) return void 0;
+    if (size > MAX_VECTOR_CHARS) {
+      t.warnings.push({
+        code: "VECTOR_OMITTED",
+        message: `The shape of "${layer.name}" is ${Math.round(size / 1024)} KB of path data (limit ${Math.round(MAX_VECTOR_CHARS / 1024)} KB), so it is left out.`,
+        layerId: layer.id
+      });
+      return void 0;
+    }
+    return { fill, stroke };
+  }
+  function attributeOfField(field) {
+    if (field === "visible") return "visible";
+    if (field === "opacity") return "opacity";
+    if (field === "mainComponent" || field === "componentProperties") return "instanceOf";
+    if (/^(characters|font|lineHeight|letterSpacing|text)/.test(field)) return "text";
+    if (/^(fills|fillStyleId)/.test(field)) return "fills";
+    if (/^(strokes|strokeStyleId|strokeWeight|stroke(Top|Right|Bottom|Left)Weight|strokeAlign)/.test(
+      field
+    ))
+      return "strokes";
+    if (/^(effects|effectStyleId)/.test(field)) return "effects";
+    if (/Radius$|^cornerRadius$/.test(field)) return "radius";
+    if (/^(width|height|size)$/.test(field)) return "size";
+    if (field === "x" || field === "y" || field === "relativeTransform") return "position";
+    if (field === "rotation") return "rotation";
+    if (/^(layoutPositioning|layoutGrow|layoutAlign|layoutSizing)/.test(field)) return "placement";
+    if (field === "constraints") return "constraints";
+    if (field === "clipsContent") return "clipsContent";
+    if (field === "blendMode") return "blendMode";
+    if (/^(layoutMode|layoutWrap|padding|itemSpacing|primaryAxis|counterAxis|itemReverse|strokesIncluded)/.test(
+      field
+    ))
+      return "layout";
+    return void 0;
+  }
+  function readInstanceProperties(n) {
+    const props = read(n, "componentProperties");
+    if (!props || typeof props !== "object") return void 0;
+    const out = {};
+    for (const key of Object.keys(props).sort()) {
+      const entry = props[key];
+      const type = read(entry, "type");
+      const value = read(entry, "value");
+      if ((type === "BOOLEAN" || type === "TEXT" || type === "INSTANCE_SWAP" || type === "VARIANT") && (typeof value === "string" || typeof value === "boolean")) {
+        out[key] = { type, value };
+      }
+    }
+    return Object.keys(out).length > 0 ? out : void 0;
   }
   function childrenOf(n) {
     const kids = read(n, "children");
@@ -1185,14 +1486,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const includeText = options.includeText !== false;
     const maxLayers = options.maxLayers ?? MAX_LAYERS;
     const maxDepth = options.maxDepth ?? MAX_DEPTH;
-    const t = new Tracker(options.resolveToken);
+    const t = new Tracker(options.resolveToken, !!options.resolveImage);
     let count = 0;
     let truncated = false;
-    const visit = async (n, depth, insideInstance) => {
-      var _a;
-      count++;
-      if (options.yieldIfDue) await options.yieldIfDue();
-      if (options.stats) options.stats.layers++;
+    const imageOmissions = /* @__PURE__ */ new Set();
+    const readAttributes = async (n, insideBoolean, parent) => {
       const id = str(n, "id") ?? "";
       const type = str(n, "type") ?? "UNKNOWN";
       const layer = {
@@ -1213,6 +1511,34 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (radius !== void 0) layer.radius = radius;
       const opacity = num(n, "opacity");
       if (opacity !== void 0) layer.opacity = round3(opacity);
+      const placement = (parent == null ? void 0 : parent.auto) ? readPlacement(n) : void 0;
+      if (placement) layer.placement = placement;
+      if (parent && (!parent.auto || (placement == null ? void 0 : placement.positioning) === "ABSOLUTE")) {
+        const x = num(n, "x");
+        const y = num(n, "y");
+        if (x !== void 0 && y !== void 0) layer.position = { x: round2(x), y: round2(y) };
+        const constraints = readConstraints(n);
+        if (constraints) layer.constraints = constraints;
+      }
+      const rotation = num(n, "rotation");
+      if (rotation) layer.rotation = round2(rotation);
+      if (layout || placement) {
+        const limits = readSizeLimits(n);
+        if (limits) layer.sizeLimits = limits;
+      }
+      if (CLIPPING_TYPES.has(type)) {
+        const clips = read(n, "clipsContent");
+        if (typeof clips === "boolean") layer.clipsContent = clips;
+        const grids = readGrids(n);
+        if (grids) layer.layoutGrids = grids;
+      }
+      if (read(n, "isMask") === true) layer.isMask = true;
+      const blend = str(n, "blendMode");
+      if (blend && blend !== "NORMAL" && blend !== "PASS_THROUGH") layer.blendMode = blend;
+      const smoothing = num(n, "cornerSmoothing");
+      if (smoothing) layer.cornerSmoothing = round3(smoothing);
+      const bindings = readBindings(n, id, t);
+      if (bindings) layer.bindings = bindings;
       const rawFills = read(n, "fills");
       const fills = readPaints(
         rawFills,
@@ -1220,7 +1546,27 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         id,
         t
       );
-      if (fills) layer.fills = fills;
+      if (fills) {
+        layer.fills = fills;
+        if (options.resolveImage) {
+          for (const paint of fills) {
+            if (!paint.image) continue;
+            const found = await options.resolveImage(paint.image.hash);
+            if ("file" in found) {
+              paint.image.file = found.file;
+              if (found.width !== void 0) paint.image.width = found.width;
+              if (found.height !== void 0) paint.image.height = found.height;
+            } else if (!imageOmissions.has(paint.image.hash)) {
+              imageOmissions.add(paint.image.hash);
+              t.warnings.push({
+                code: "IMAGE_OMITTED",
+                message: `The picture used by "${layer.name}" was not exported: ${found.omitted}`,
+                layerId: id
+              });
+            }
+          }
+        }
+      }
       const strokes = readStrokes(n, id, t);
       if (strokes) layer.strokes = strokes;
       const rawEffects = read(n, "effects");
@@ -1231,7 +1577,71 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         t
       );
       if (effects) layer.effects = effects;
-      if (type === "TEXT") layer.text = readText(n, id, includeText, t);
+      if (type === "TEXT") layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills));
+      if (options.includeVectorShapes && VECTOR_TYPES$1.has(type) && !insideBoolean) {
+        const vector = readVector(n, layer, t);
+        if (vector) layer.vector = vector;
+      }
+      return layer;
+    };
+    const readOverrides = async (instance, instanceId) => {
+      var _a;
+      const lookup = options.getNodeById;
+      const list = read(instance, "overrides");
+      if (!lookup || !Array.isArray(list)) return void 0;
+      const overrides = [];
+      let truncated2 = false;
+      for (const entry of list) {
+        const layerId = str(entry, "id");
+        const fields = read(entry, "overriddenFields");
+        if (!layerId || layerId === instanceId || !Array.isArray(fields)) continue;
+        const wanted = /* @__PURE__ */ new Set();
+        for (const f of fields) {
+          const attribute = typeof f === "string" ? attributeOfField(f) : void 0;
+          if (attribute) wanted.add(attribute);
+        }
+        if (wanted.size === 0) continue;
+        if (overrides.length >= (options.maxOverrides ?? MAX_OVERRIDES)) {
+          truncated2 = true;
+          break;
+        }
+        if ((_a = options.shouldStop) == null ? void 0 : _a.call(options)) {
+          truncated2 = true;
+          break;
+        }
+        if (options.yieldIfDue) await options.yieldIfDue();
+        let node;
+        try {
+          node = await lookup(layerId);
+        } catch {
+          node = void 0;
+        }
+        if (!node) continue;
+        const layer = await readAttributes(node, true, {
+          auto: isAutoLayout(read(node, "parent"))
+        });
+        const changes = {};
+        for (const attribute of wanted) {
+          if (attribute === "instanceOf") {
+            const inst = await readInstance(node);
+            if (inst) changes.instanceOf = inst;
+          } else if (layer[attribute] !== void 0) {
+            changes[attribute] = layer[attribute];
+          }
+        }
+        if (Object.keys(changes).length > 0) {
+          overrides.push({ layerId, name: layer.name, changes });
+        }
+      }
+      return overrides.length > 0 || truncated2 ? { overrides, truncated: truncated2 } : void 0;
+    };
+    const visit = async (n, depth, insideInstance, insideBoolean = false, parent) => {
+      var _a;
+      count++;
+      if (options.yieldIfDue) await options.yieldIfDue();
+      if (options.stats) options.stats.layers++;
+      const layer = await readAttributes(n, insideBoolean, parent);
+      const { id, type } = layer;
       const stats = options.stats;
       const lookupStart = stats ? Date.now() : 0;
       const instanceOf = await readInstance(n);
@@ -1239,7 +1649,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         stats.instanceLookups++;
         stats.instanceMs += Date.now() - lookupStart;
       }
-      if (instanceOf) layer.instanceOf = instanceOf;
+      if (instanceOf) {
+        if (options.includeInstanceInternals === false) {
+          const found = await readOverrides(n, id);
+          if (found) {
+            if (found.overrides.length > 0) instanceOf.overrides = found.overrides;
+            if (found.truncated) instanceOf.overridesTruncated = true;
+          }
+        }
+        layer.instanceOf = instanceOf;
+      }
       const propertyRefs = insideInstance ? void 0 : readPropertyRefs(n);
       if (propertyRefs) layer.propertyRefs = propertyRefs;
       const kids = type === "INSTANCE" && options.includeInstanceInternals === false ? [] : childrenOf(n);
@@ -1252,7 +1671,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
               truncated = true;
               break;
             }
-            layer.children.push(await visit(child, depth + 1, insideInstance || type === "INSTANCE"));
+            layer.children.push(
+              await visit(
+                child,
+                depth + 1,
+                insideInstance || type === "INSTANCE",
+                insideBoolean || type === "BOOLEAN_OPERATION",
+                { auto: !!layer.layout }
+              )
+            );
           }
         }
       }
@@ -1274,6 +1701,65 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       usedVariableIds: Array.from(t.variables),
       usedStyleIds: Array.from(t.styles),
       warnings
+    };
+  }
+  const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+  const MAX_TOTAL_IMAGE_BYTES = 96 * 1024 * 1024;
+  const IMAGE_DIR = "assets/images";
+  function sniffImageExtension(bytes) {
+    const at = (i) => bytes[i] ?? 0;
+    if (at(0) === 137 && at(1) === 80 && at(2) === 78 && at(3) === 71) return "png";
+    if (at(0) === 255 && at(1) === 216) return "jpg";
+    if (at(0) === 71 && at(1) === 73 && at(2) === 70) return "gif";
+    if (at(0) === 82 && at(1) === 73 && at(2) === 70 && at(3) === 70 && at(8) === 87 && at(9) === 69 && at(10) === 66 && at(11) === 80) {
+      return "webp";
+    }
+    return "bin";
+  }
+  function createImageResolver(send, api = figma, limits = {}) {
+    const perImage = limits.perImage ?? MAX_IMAGE_BYTES;
+    const total = limits.total ?? MAX_TOTAL_IMAGE_BYTES;
+    const done = /* @__PURE__ */ new Map();
+    let used = 0;
+    const load = async (hash) => {
+      try {
+        const image = api.getImageByHash(hash);
+        if (!image)
+          return { omitted: "Figma has no picture for this fill (it may come from a library)." };
+        const bytes = await image.getBytesAsync();
+        if (bytes.length > perImage) {
+          return {
+            omitted: `it is ${(bytes.length / 1048576).toFixed(1)} MB (limit ${(perImage / 1048576).toFixed(0)} MB per picture).`
+          };
+        }
+        if (used + bytes.length > total) {
+          return {
+            omitted: `the pictures already exported reached the total limit of ${(total / 1048576).toFixed(0)} MB.`
+          };
+        }
+        used += bytes.length;
+        const file = `${IMAGE_DIR}/${hash}.${sniffImageExtension(bytes)}`;
+        send(file, bytes);
+        let size;
+        try {
+          size = await image.getSizeAsync();
+        } catch {
+          size = void 0;
+        }
+        return size ? { file, width: size.width, height: size.height } : { file };
+      } catch (err) {
+        return {
+          omitted: `it could not be read (${err instanceof Error ? err.message : String(err)}).`
+        };
+      }
+    };
+    return (hash) => {
+      let pending = done.get(hash);
+      if (!pending) {
+        pending = load(hash);
+        done.set(hash, pending);
+      }
+      return pending;
     };
   }
   const ICON_MAX_SIZE = 64;
@@ -1360,6 +1846,17 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const ATTRIBUTES = [
     "visible",
     "size",
+    "position",
+    "rotation",
+    "constraints",
+    "placement",
+    "sizeLimits",
+    "clipsContent",
+    "isMask",
+    "blendMode",
+    "cornerSmoothing",
+    "layoutGrids",
+    "bindings",
     "layout",
     "radius",
     "opacity",
@@ -1367,6 +1864,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     "strokes",
     "effects",
     "text",
+    "vector",
     "instanceOf",
     "propertyRefs"
   ];
@@ -1497,6 +1995,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       includeText: options.includeText,
       resolveToken: options.resolveToken,
       includeInstanceInternals: options.includeInstanceInternals === true,
+      includeVectorShapes: options.includeVectorShapes === true,
+      resolveImage: options.resolveImage,
+      getNodeById: options.getNodeById ?? (typeof figma !== "undefined" ? (id) => figma.getNodeByIdAsync(id) : void 0),
       shouldStop,
       stats: options.stats,
       yieldIfDue: options.yieldIfDue ?? createTimeSlicer()
@@ -3367,7 +3868,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     [...styles.text, ...styles.color, ...styles.effect, ...styles.grid].forEach(claim);
     return { renamed };
   }
-  const PLUGIN_VERSION = "1.1.0";
+  const PLUGIN_VERSION = "1.2.0";
   function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
     const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
@@ -3651,6 +4152,8 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
             includeText: message.includeText,
             includeVariantDiffs: message.includeVariantDiffs,
             includeInstanceInternals: message.includeInstanceInternals,
+            includeVectorShapes: message.includeVectorShapes,
+            resolveImage: message.includeImages ? createImageResolver((path, bytes) => post({ type: "image", path, bytes })) : void 0,
             resolveToken: tokenResolver(designSystem),
             stats
           },

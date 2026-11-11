@@ -478,6 +478,8 @@ describe('generateComponentsJson', () => {
       includeText: true,
       includeVariantDiffs: true,
       includeInstanceInternals: false,
+      includeVectorShapes: false,
+      includeImages: false,
     });
     const off = generateOutputs(
       ds,
@@ -494,7 +496,9 @@ describe('generateComponentsJson', () => {
     expect(parse(off[0].content)).toEqual({
       includeText: false,
       includeVariantDiffs: false,
-      includeInstanceInternals: false,
+      includeInstanceInternals: true,
+      includeVectorShapes: true,
+      includeImages: false,
     });
     const withInternals = generateOutputs(
       ds,
@@ -550,6 +554,30 @@ describe('splitting a large components.json', () => {
     const files = generateComponentsJsonFiles(ds, structures);
     expect(files.map((f) => f.path)).toEqual(['components.json']);
     expect(files[0].content).toBe(generateComponentsJson(ds, structures).content);
+  });
+
+  it('splits whatever the size when the threshold is 0, and says it was chosen', async () => {
+    const { ds, structures } = await setup();
+    const files = generateComponentsJsonFiles(ds, structures, { splitThresholdBytes: 0 });
+    expect(files.map((f) => f.path)).toEqual([
+      'components.json',
+      'components/Button.json',
+      'components/IconArrow.json',
+    ]);
+    const main = JSON.parse(files[0].content) as ComponentsFileV1;
+    const codes = main.warnings.map((w) => w.code);
+    expect(codes).toContain('OUTPUT_SPLIT');
+    expect(codes).not.toContain('OUTPUT_TOO_LARGE');
+    expect(validate(main)).toBe(true);
+    files.slice(1).forEach((f) => expect(validate(JSON.parse(f.content))).toBe(true));
+  });
+
+  it('does not split an export with no components, even when set to always', async () => {
+    const { ds, structures } = await setup();
+    const files = generateComponentsJsonFiles({ ...ds, components: [] }, structures, {
+      splitThresholdBytes: 0,
+    });
+    expect(files.map((f) => f.path)).toEqual(['components.json']);
   });
 
   it('splits into an index file plus one valid file per component above the threshold', async () => {

@@ -24,6 +24,16 @@ describe('buildZip', () => {
     expect(buffer.byteLength).toBeLessThan(raw / 5);
   });
 
+  it('stores a binary file by its bytes, unchanged', async () => {
+    const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0, 255, 128, 7]);
+    const zip = await JSZip.loadAsync(
+      await buildZip([{ path: 'assets/images/a.png', content: '', bytes }]),
+    );
+    expect(Array.from(await zip.file('assets/images/a.png')!.async('uint8array'))).toEqual(
+      Array.from(bytes),
+    );
+  });
+
   it('round-trips every file exactly, including non-ASCII text', async () => {
     const files = [
       { path: 'design.md', content: '# Titel ✓ héllo 😀\n' },

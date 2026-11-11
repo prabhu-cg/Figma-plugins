@@ -52,10 +52,13 @@ export function generateOutputsDetailed(
   if (options.componentsJson) {
     run('components.json', () =>
       generateComponentsJsonFiles(ds, extras.structures ?? new Map(), {
-        splitThresholdBytes: extras.splitThresholdBytes,
+        splitThresholdBytes:
+          options.splitComponentsJson === 'always' ? 0 : extras.splitThresholdBytes,
         includeText: options.includeText,
         includeVariantDiffs: options.includeVariantDiffs,
         includeInstanceInternals: options.includeInstanceInternals,
+        includeVectorShapes: options.includeVectorShapes,
+        includeImages: options.includeImages,
       }),
     );
   }

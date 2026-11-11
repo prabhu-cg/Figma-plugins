@@ -68,6 +68,7 @@ export class GenerationRun {
   private pluginFiles: GeneratedFile[] | null = null;
   private pluginFailures: OutputFailure[] = [];
   private structures = new Map<string, StructureResult>();
+  private images = new Map<string, Uint8Array>();
   private structuresFinished = false;
   private cancelled = false;
 
@@ -85,6 +86,10 @@ export class GenerationRun {
 
   addStructures(items: ReadonlyArray<[string, StructureResult]>): void {
     for (const [id, result] of items) this.structures.set(id, result);
+  }
+
+  addImage(path: string, bytes: Uint8Array): void {
+    this.images.set(path, bytes);
   }
 
   structuresDone(cancelled: boolean): void {
@@ -133,6 +138,10 @@ export class GenerationRun {
         { structures: this.structures },
       );
       files.push(...built.files);
+      // Pictures go in sorted by path so the export is the same every time.
+      for (const path of [...this.images.keys()].sort()) {
+        files.push({ path, content: '', bytes: this.images.get(path) });
+      }
       failures.push(...built.failures);
       return {
         files,

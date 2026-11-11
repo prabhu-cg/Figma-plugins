@@ -46,6 +46,10 @@ entry has a `file` (for example `components/Button.json`) and that file's `conte
 inside any component is visible without opening it. Each per-component file is a complete, valid
 `designmd.components/v1` file with a single component and only the tokens it uses.
 
+**Split into one file per component** (a setting under components.json) can be **Only above 20 MB**
+(the default) or **Always**. With Always the output is split whatever its size, and `components.json`
+has an `OUTPUT_SPLIT` warning instead of `OUTPUT_TOO_LARGE`. An export with no components is never split.
+
 If a run is cancelled, components that were not read are still listed, with an empty `tree`,
 `treeTruncated: true` and a `SCAN_CANCELLED` warning.
 
@@ -58,16 +62,91 @@ the token link is left out, and an `UNRESOLVED_REFERENCE` warning says so.
 
 ## Nested instances
 
-By default the layers inside a nested instance are not read: the instance layer is listed with
-`instanceOf`, and its insides are in the file of the component it points at. With
-**Include layers inside nested instances** on, they are read too, which is slower and makes a larger
-file. `metadata.options.includeInstanceInternals` records which.
+With **Include layers inside nested instances** on (the default), the layers inside a nested instance
+are read too, so a button inside a card arrives complete. It is slower and makes a larger file. With it
+off, the instance layer is listed with `instanceOf` and its insides are in the file of the component it
+points at. `metadata.options.includeInstanceInternals` records which.
+
+An instance always says how this use of the component differs from the library version, so a consumer
+that fills the insides in from the component it points at can apply the changes:
+
+- `instanceOf.properties` is every component property with the value this use gives it, keyed by
+  property key (`{ "label#1:0": { "type": "TEXT", "value": "Save" } }`). For `INSTANCE_SWAP` the value
+  is the id of the component swapped in. Written in both modes.
+- `instanceOf.overrides` lists the layers inside the instance that this use changed, such as a
+  different label or a hidden layer. Each entry has `layerId`, `name` and `changes`, which uses the
+  same shapes as a layer (`text`, `visible`, `fills`, ...) and holds only the attributes that were
+  changed. `layerId` is the id inside the instance (for example `I12:3;45:6`); the part after the last
+  `;` is the id of the same layer in the main component. Written only when the insides are not read,
+  because otherwise they carry their own values. At most 100 per instance; `overridesTruncated` is
+  true when there were more.
+
+## Placement, position and appearance
+
+Enough to rebuild a layer's box and paint without guessing:
+
+- **Auto-layout children.** `placement` is on every child of an auto-layout frame, text and shapes
+  included: `sizingH`/`sizingV` (FIXED, HUG, FILL), `grow`, `align` (STRETCH or the parent's
+  counter-axis alignment) and `positioning`. `layout.sizingH` on a frame describes the same
+  thing for the frame itself.
+- **Everything else.** `position` (`x`, `y` from the parent's top-left corner) and `constraints` are
+  written for children of a frame that is not auto layout, and for absolute layers inside one that
+  is. Children of a group are measured from the nearest ancestor that is not a group. `rotation` is in
+  degrees, counter-clockwise; `size` is the unrotated size.
+- **Limits and clipping.** `sizeLimits` (min/max width and height), `clipsContent` (overflow hidden),
+  `isMask`, `blendMode`, `cornerSmoothing`, and `layoutGrids` on frames. Auto layout also has
+  `counterGap`/`counterAlignContent` for wrapping, `reverseZIndex` and `strokesIncludedInLayout`.
+- **Gradients.** A gradient paint has `stops` (position and colour with alpha), `transform` (Figma's
+  `gradientTransform`, a 2x3 matrix; invert it to get the start and end points) and `alpha`. Any paint
+  may have a `blendMode`.
+- **Strokes.** `strokes.sides` holds each side's weight when they differ (`weight` is then the largest),
+  with `dash`, `cap`, `join` and `miterLimit`. A missing `cap` is flat, a missing `join` is MITER.
+- **Text.** `italic`, `autoResize` (fixed, hug or truncate), `truncation` and `maxLines`,
+  `alignVertical`, `paragraphSpacing`, `paragraphIndent`, `listType` and `hyperlink`. When the colours
+  of the text differ, the layer has no `fills` and each run has its own `fills`.
+- **Bound variables.** `bindings` maps fields such as `paddingLeft`, `itemSpacing`, `topLeftRadius`,
+  `fontSize` or `width` to the token the layer uses, so generated code can write `var(--space-4)`
+  instead of `16px`. Colour bindings are on the paints.
+- Variant diffs compare all of the above.
+
+Not captured: OpenType features, and variable bindings that do not resolve to a token in the file.
+
+## Vector shapes
+
+With **Include vector shapes** on (the default), a `VECTOR`, `BOOLEAN_OPERATION`, `STAR`, `POLYGON` or
+`LINE` layer has `vector: { fill, stroke }`, enough to draw an icon. Each entry is
+`{ windingRule, data }` with SVG path data in the layer's own coordinates (0,0 is its top-left corner),
+at the layer's `size`.
+
+- `fill` is painted with the layer's `fills`. `stroke` is the _outline_ of the stroke, also a filled
+  shape, so paint it with the stroke colour, not as a line. Both are read only when the layer has a
+  fill or a stroke.
+- The parts of a boolean shape have no `vector` of their own: the shape already holds the merged path.
+- A layer with more than 60,000 characters of path data gets no `vector` and a `VECTOR_OMITTED` warning.
+- Rectangles and ellipses are not listed: `size` and `radius` describe them.
+- Variant diffs compare `vector` like any other attribute.
+
+## Images
+
+With **Export pictures behind image fills** on, each image fill gets `image` and its picture is saved
+next to `components.json` as `assets/images/<hash>.<png|jpg|gif|webp>`. The same picture in many layers
+is one file. Off (the default), image fills have no `image` and no bytes are exported.
+
+- `image.hash`, `scaleMode`, and where they apply `rotation`, `scalingFactor` (TILE) and
+  `imageTransform` (CROP, a 2x3 matrix as Figma reports it) say how the picture is placed.
+- `image.file` is the path from the export root, `width` and `height` the picture's pixel size. In a
+  split export (below) the path is still relative to the root, not to the component file.
+- A picture over 8 MB, one that would pass the 96 MB total, or one Figma cannot provide keeps its
+  `hash` but has no `file`, and an `IMAGE_OMITTED` warning says why.
+- Pictures are not scanned for content; they are the original files from the Figma file.
 
 ## What was left out
 
 `metadata.options` says which options the file was made with. `includeVariantDiffs: false` means every
 `variantDiffs` is `[]` because nothing was compared, not because the variants are identical.
-`includeText: false` means `text.characters` is absent everywhere.
+`includeText: false` means `text.characters` is absent everywhere. `includeVectorShapes` and
+`includeImages` are absent in files from before 1.2.0, which have neither; `false` means no `vector`
+or `image` was written.
 
 ## Content hash
 

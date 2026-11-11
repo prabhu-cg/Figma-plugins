@@ -46,6 +46,9 @@ const GENERATION_KEYS: Array<keyof Omit<ExportOptions, 'zip'>> = [
   'includeText',
   'includeVariantDiffs',
   'includeInstanceInternals',
+  'includeVectorShapes',
+  'includeImages',
+  'splitComponentsJson',
 ];
 
 function countSelectedOutputs(options: ExportOptions): number {
@@ -190,6 +193,9 @@ export default function App() {
         completeIfReady();
         break;
       }
+      case 'image':
+        run.current?.addImage(message.path, message.bytes);
+        break;
       case 'structures':
         run.current?.addStructures(message.items);
         break;
@@ -294,6 +300,8 @@ export default function App() {
         includeText: options.includeText,
         includeVariantDiffs: options.includeVariantDiffs,
         includeInstanceInternals: options.includeInstanceInternals,
+        includeVectorShapes: options.includeVectorShapes,
+        includeImages: options.includeImages,
       });
     }
   }, [options, excludedPages, contrastPairs, designSystem]);
