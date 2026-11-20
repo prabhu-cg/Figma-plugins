@@ -1,0 +1,59 @@
+name: DesignMD — bug or feedback
+description: Report a problem or share feedback about the DesignMD Figma plugin
+labels: ["designmd"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve DesignMD. Please don't paste private design content or personal details.
+  - type: dropdown
+    id: type
+    attributes:
+      label: What is this about?
+      options:
+        - Bug (something doesn't work)
+        - Feature request
+        - Question
+    validations:
+      required: true
+  - type: dropdown
+    id: output
+    attributes:
+      label: Which part were you using?
+      options:
+        - Scan (whole file or selection)
+        - design.md
+        - Component docs
+        - tokens.json
+        - tokens.css
+        - components.json
+        - Contrast pairs
+        - Download / ZIP
+        - Not sure
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. Include any message or warning the plugin showed.
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: Roughly how big is the file?
+      placeholder: "e.g. 300 components, 5 variable collections"
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      placeholder: "1.3.0"
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Figma plan
+      options:
+        - Free (Starter)
+        - Professional
+        - Organization
+        - Enterprise
+        - Not sure
