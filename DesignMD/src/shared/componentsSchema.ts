@@ -618,8 +618,9 @@ export interface LayerDiff {
   path: string;
   /**
    * Id of the layer this entry changes in the default variant. Match layers across variants by it
-   * rather than by `path`, which is a guess when same-named siblings differ in number (see
-   * AMBIGUOUS_SIBLINGS). Absent in files from before 1.3.0.
+   * rather than by `path`. Left out when same-named siblings differ in number between the variants
+   * (see AMBIGUOUS_SIBLINGS), because the match by position is then a guess; use `path` for those.
+   * Absent in files from before 1.3.0.
    */
   layerId?: string;
   /** Only the attributes that differ from the default variant. */

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.3.1
+
+Fixes from a review of the source. No change to the schema version (`designmd.components/v1`).
+
+### Fixed
+
+- **A variant that makes a layer fully opaque again is now reported.** `effectiveOpacity` is only written
+  below 1, so a variant that removed a parent's dimming left its children without a diff entry and a
+  reader kept drawing them dimmed. The diff now says `effectiveOpacity: 1`.
+- **`layerId` is only written where the match is real.** Where same-named siblings differ in number
+  between a variant and the default variant, the layers are paired by position, which is a guess, and the
+  id of the default layer was a guess too. Changes to those layers (and to layers inside them) now have no
+  `layerId`; where `layerId` is present it can be trusted.
+- **Warnings are no longer repeated or lost across variants.** `AMBIGUOUS_SIBLINGS` is written once per
+  component instead of once per variant. `UNSUPPORTED_GRADIENT`, `IMAGE_OMITTED` and `VECTOR_OMITTED`
+  raised by a variant (not by the default variant) are now kept, once each.
+- **Gradients on a run of text** now get their CSS `angle`, or `center` and `radii`, like every other gradient.
+- **Split `components/<name>.json` files list only their own fonts** in `metadata.fonts`. The index file
+  keeps the full list.
+- **The reference check covers `layout.token`** (gap, counter gap, padding sides), so a missing token is
+  reported.
+- **Export pictures is on for settings saved before 1.3.1.** The 1.2.1 default could not reach anyone who had
+  saved settings, because every option is saved together. Saved settings now carry a version; an older
+  `includeImages: false` is read as the new default once, and a choice made from now on is kept.
+- **Generate can no longer leave the panel stuck on "Generating"** if it is pressed before a scan has
+  finished.
+
 ## 1.3.0
 
 Exact-fidelity fields, all additive within

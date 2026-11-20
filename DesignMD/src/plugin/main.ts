@@ -3,6 +3,7 @@ import type { ExtractionScope } from '@shared/types';
 import {
   sanitizeFileSettings,
   sanitizeSavedSettings,
+  SETTINGS_VERSION,
   type FileSettings,
   type PluginToUIMessage,
   type SavedSettings,
@@ -59,7 +60,7 @@ async function saveFileSettings(fileSettings: FileSettings): Promise<void> {
 
 async function saveSettings(settings: SavedSettings): Promise<void> {
   try {
-    await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
+    await figma.clientStorage.setAsync(SETTINGS_KEY, { ...settings, version: SETTINGS_VERSION });
   } catch {
     // Not being able to remember settings must never get in the user's way.
   }

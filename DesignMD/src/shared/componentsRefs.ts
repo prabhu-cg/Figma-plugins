@@ -45,6 +45,12 @@ export function findBrokenRefs(
       layer.fills?.forEach((p) => checkToken(p.token, at));
       layer.strokes?.paints.forEach((p) => checkToken(p.token, at));
       layer.effects?.forEach((e) => checkToken(e.token, at));
+      const lt = layer.layout?.token;
+      if (lt) {
+        checkToken(lt.gap, at);
+        checkToken(lt.counterGap, at);
+        Object.values(lt.padding ?? {}).forEach((ref) => checkToken(ref, at));
+      }
       checkToken(layer.text?.token, at);
       layer.text?.runs?.forEach((r) => checkToken(r.token, at));
       if (layer.text?.styleId && !(layer.text.styleId in file.tokens))

@@ -66,7 +66,16 @@ export interface GeneratedFile {
 /** Settings remembered between sessions (figma.clientStorage). */
 export interface SavedSettings {
   options: ExportOptions;
+  /**
+   * Which version of the settings this is. Settings saved before 1.3.1 have none. Before 1.3.1, a
+   * saved `includeImages: false` was only the old default (every option is saved whole), so it is
+   * read as the new default (on) once; a choice made from 1.3.1 on is kept.
+   */
+  version?: number;
 }
+
+/** The current version of saved settings (see SavedSettings.version). */
+export const SETTINGS_VERSION = 2;
 
 /**
  * Validates stored settings of unknown shape (older versions, hand-edited storage). Unknown or
@@ -86,7 +95,9 @@ export function sanitizeSavedSettings(value: unknown): SavedSettings | null {
   }
   const split = (stored as Record<string, unknown>).splitComponentsJson;
   if (split === 'auto' || split === 'always') options.splitComponentsJson = split;
-  return { options };
+  const version = (value as { version?: unknown }).version;
+  if (typeof version !== 'number' || version < 2) options.includeImages = true;
+  return { options, version: SETTINGS_VERSION };
 }
 
 /** Settings that belong to one Figma file (keyed by file name), remembered between sessions. */

@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "sf pro display",
+        "createdAt": "2026-11-20T20:15:05.079Z",
+        "reason": "user confirmed: test fixture in tests/unit/codeOutputs.test.ts uses a spaced font name to check CSS quoting; not a UI font choice"
+      }
+    ]
+  }
+}

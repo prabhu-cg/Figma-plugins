@@ -83,6 +83,21 @@ function indexTree(
   return out;
 }
 
+/** Names shared by several siblings in one of the two lists, where the number of them differs. */
+function unsureNames(baseKids: Layer[], variantKids: Layer[]): string[] {
+  const count = (kids: Layer[]) => {
+    const m = new Map<string, number>();
+    for (const k of kids) m.set(k.name, (m.get(k.name) ?? 0) + 1);
+    return m;
+  };
+  const a = count(baseKids);
+  const b = count(variantKids);
+  return [...new Set([...a.keys(), ...b.keys()])].filter(
+    (name) =>
+      (a.get(name) ?? 0) !== (b.get(name) ?? 0) && Math.max(a.get(name) ?? 0, b.get(name) ?? 0) > 1,
+  );
+}
+
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 function changesBetween(base: Layer, other: Layer): LayerChanges {
@@ -94,6 +109,8 @@ function changesBetween(base: Layer, other: Layer): LayerChanges {
       // A missing radius means square corners, so losing it is a change. For the other attributes
       // a missing value means "not applicable" in this variant, which v1 cannot express as a change.
       if (key === 'radius' && before !== undefined) changes.radius = 0;
+      // `effectiveOpacity` is only written below 1, so losing it means "fully opaque again".
+      if (key === 'effectiveOpacity' && before !== undefined) changes.effectiveOpacity = 1;
       continue;
     }
     if (!same(before, after)) changes[key] = after;
@@ -124,6 +141,18 @@ export function diffVariant(
   const removed: string[] = [];
   const reordered: ReorderedChildren[] = [];
 
+  // Same-named siblings that differ in number between the two variants are matched by position,
+  // which is a guess. A layer inside one of them has no trustworthy base id, so it gets no layerId.
+  const guessedPrefixes: string[] = [];
+  for (const [path, entry] of variantIndex) {
+    const baseEntry = baseIndex.get(path);
+    if (!baseEntry || baseEntry.layer.type !== entry.layer.type) continue;
+    for (const name of unsureNames(baseEntry.layer.children, entry.layer.children)) {
+      guessedPrefixes.push(`${path}/${name}[`);
+    }
+  }
+  const isGuessed = (path: string) => guessedPrefixes.some((prefix) => path.startsWith(prefix));
+
   const isMatch = (path: string) => {
     const a = baseIndex.get(path);
     const b = variantIndex.get(path);
@@ -134,7 +163,11 @@ export function diffVariant(
     if (isMatch(path)) {
       const changes = changesBetween(baseIndex.get(path)!.layer, entry.layer);
       if (Object.keys(changes).length > 0) {
-        layers.push({ path, layerId: baseIndex.get(path)!.layer.id, changes });
+        layers.push({
+          path,
+          ...(isGuessed(path) ? {} : { layerId: baseIndex.get(path)!.layer.id }),
+          changes,
+        });
       }
     } else if (entry.parentPath === undefined || isMatch(entry.parentPath)) {
       added.push({
@@ -178,22 +211,11 @@ export function diffVariant(
       reordered.push({ parentPath: path, order: variantPaths });
     }
 
-    const count = (kids: Layer[]) => {
-      const m = new Map<string, number>();
-      for (const k of kids) m.set(k.name, (m.get(k.name) ?? 0) + 1);
-      return m;
-    };
-    const a = count(baseKids);
-    const b = count(variantKids);
-    const unsure = [...new Set([...a.keys(), ...b.keys()])].filter(
-      (name) =>
-        (a.get(name) ?? 0) !== (b.get(name) ?? 0) &&
-        Math.max(a.get(name) ?? 0, b.get(name) ?? 0) > 1,
-    );
+    const unsure = unsureNames(baseKids, variantKids);
     if (unsure.length > 0) {
       warnings.push({
         code: 'AMBIGUOUS_SIBLINGS',
-        message: `Inside "${path}" the default variant and this variant have a different number of layers named ${unsure.map((n) => `"${n}"`).join(', ')}, so matching them by position is a guess. Use layerId.`,
+        message: `Inside "${path}" the default variant and this variant have a different number of layers named ${unsure.map((n) => `"${n}"`).join(', ')}, so matching them by position is a guess and the changes to them carry no layerId.`,
         ...(info.componentId ? { componentId: info.componentId } : {}),
         variantId: info.variantId,
         layerId: baseIndex.get(path)!.layer.id,

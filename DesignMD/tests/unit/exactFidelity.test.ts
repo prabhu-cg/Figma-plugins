@@ -251,13 +251,15 @@ describe('exact fidelity: tool tip golden export', () => {
     const flag3 = component.variants.find((v) => v.name.endsWith('Flag3'))!;
     const diff = component.variantDiffs.find((d) => d.variantId === flag3.id)!;
     const defaultFlag = component.tree.children.find((c) => c.name === 'Flag')!;
-    for (const entry of diff.layers) expect(entry.layerId).toEqual(expect.any(String));
-    expect(diff.layers.find((l) => l.path === 'Tool tip/Flag/Vector[1]')?.layerId).toBe(
-      defaultFlag.children[1].id,
-    );
+    // Inside the Flag, the Vectors are matched by position, which is a guess: no layerId there.
+    for (const entry of diff.layers) {
+      if (entry.path.startsWith('Tool tip/Flag/Vector[')) expect(entry.layerId).toBeUndefined();
+      else expect(entry.layerId).toEqual(expect.any(String));
+    }
+    expect(defaultFlag.children.length).toBeGreaterThan(1);
     const ambiguous = file.warnings.filter((w) => w.code === 'AMBIGUOUS_SIBLINGS');
     expect(ambiguous).toHaveLength(1);
-    expect(ambiguous[0]).toMatchObject({ variantId: flag3.id, componentId: component.id });
+    expect(ambiguous[0]).toMatchObject({ componentId: component.id });
     expect(ambiguous[0].message).toContain('"Tool tip/Flag"');
   });
 

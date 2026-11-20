@@ -138,9 +138,9 @@ alpha, and variants carry theirs through the diffs.
 - **`layers[].layerId`** is the id of the layer the entry changes **in the default variant**. Match
   layers across variants by it, not by `path`: when two variants have different numbers of layers
   with the same name (a flag made of several layers called `Vector`), the `[n]` in a path points at
-  different layers. Where that happens inside a parent, the plugin also writes an
-  `AMBIGUOUS_SIBLINGS` warning (with `componentId`, `variantId` and the parent's `layerId`), because the
-  match by position is a guess.
+  different layers. Where that happens inside a parent, the match by position is a guess, so the plugin
+  leaves `layerId` off the changes to those layers (and to everything inside them) and writes an
+  `AMBIGUOUS_SIBLINGS` warning for the component. When `layerId` is present, it can be trusted.
 - **`added[].index`** is the position of an added layer among its parent's children in that variant. To
   build the variant, take the default variant's children, drop `removed`, then insert each added layer
   at its `index`, lowest first.

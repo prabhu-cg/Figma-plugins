@@ -289,9 +289,7 @@ export function buildComponentsFile(
         includeVectorShapes: chosen.includeVectorShapes === true,
         includeImages: chosen.includeImages === true,
       },
-      fonts: [...fonts.values()].sort(
-        (a, b) => a.family.localeCompare(b.family) || a.style.localeCompare(b.style),
-      ),
+      fonts: sortedFonts(fonts.values()),
       contentHash: '',
     },
     index: {
@@ -355,6 +353,18 @@ export const COMPONENTS_JSON_SPLIT_BYTES = 20 * 1024 * 1024;
 
 const mb = (bytes: number) => (bytes / 1048576).toFixed(1);
 
+function fontsOf(structure: StructureResult | undefined): FontUse[] {
+  return structure && !('error' in structure) ? (structure.usedFonts ?? []) : [];
+}
+
+function sortedFonts(fonts: Iterable<FontUse>): FontUse[] {
+  const unique = new Map<string, FontUse>();
+  for (const f of fonts) unique.set(`${f.family}\u0000${f.style}`, f);
+  return [...unique.values()].sort(
+    (a, b) => a.family.localeCompare(b.family) || a.style.localeCompare(b.style),
+  );
+}
+
 /**
  * components.json, split into `components.json` (index and tokens) plus one `components/<name>.json`
  * per component when the single file would pass `splitThresholdBytes` (0 splits always). Each per-component file is
@@ -388,6 +398,11 @@ export function generateComponentsJsonFiles(
         usedTokenIds.filter((id) => id in file.tokens).map((id) => [id, file.tokens[id]]),
       ),
       components: [component],
+      metadata: {
+        ...file.metadata,
+        // Only the fonts this component uses, so a tool that loads one file loads just those.
+        fonts: sortedFonts(fontsOf(structures.get(component.id))),
+      },
       warnings: file.warnings.filter((w) => w.componentId === component.id),
     };
     const { content, contentHash } = hashAndSerialize(part);

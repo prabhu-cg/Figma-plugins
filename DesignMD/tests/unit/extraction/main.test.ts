@@ -358,7 +358,7 @@ describe('plugin controller (main.ts)', () => {
     expect(ofType(h, 'settings')).toEqual([
       {
         type: 'settings',
-        settings: { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true } },
+        settings: { options: { ...DEFAULT_EXPORT_OPTIONS, tokensJson: true }, version: 2 },
         fileSettings: { excludedPages: [], contrastPairs: [] },
       },
     ]);
@@ -378,7 +378,7 @@ describe('plugin controller (main.ts)', () => {
     const h = await bootPlugin(richFile());
     const settings = { options: { ...DEFAULT_EXPORT_OPTIONS, cssFile: true } };
     await h.send({ type: 'save-settings', settings });
-    expect(h.storage['designmd.settings.v1']).toEqual(settings);
+    expect(h.storage['designmd.settings.v1']).toEqual({ ...settings, version: 2 });
 
     const broken = await bootPlugin({ ...richFile(), failures: { storageWrite: true } });
     await expect(broken.send({ type: 'save-settings', settings })).resolves.toBeUndefined();

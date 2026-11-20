@@ -17,6 +17,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     splitComponentsJson: "auto",
     zip: true
   };
+  const SETTINGS_VERSION = 2;
   function sanitizeSavedSettings(value) {
     if (typeof value !== "object" || value === null) return null;
     const stored = value.options;
@@ -30,7 +31,9 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     const split = stored.splitComponentsJson;
     if (split === "auto" || split === "always") options.splitComponentsJson = split;
-    return { options };
+    const version = value.version;
+    if (typeof version !== "number" || version < 2) options.includeImages = true;
+    return { options, version: SETTINGS_VERSION };
   }
   const EMPTY_FILE_SETTINGS = { excludedPages: [], contrastPairs: [] };
   const isString = (v) => typeof v === "string";
@@ -1393,7 +1396,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     }
     return out;
   }
-  function readText(n, layerId, includeText, t, fillsMixed) {
+  function readText(n, layerId, includeText, t, fillsMixed, size) {
     const align = oneOf(
       read(n, "textAlignHorizontal"),
       ["LEFT", "CENTER", "RIGHT", "JUSTIFIED"],
@@ -1426,7 +1429,10 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         characters: includeText ? str(seg, "characters") ?? "" : ""
       };
       const fills = readPaints(read(seg, "fills"), void 0, layerId, t);
-      if (fills) run.fills = fills;
+      if (fills) {
+        describeGradients(fills, size);
+        run.fills = fills;
+      }
       const link = hyperlinkOf(read(seg, "hyperlink"));
       if (link) run.hyperlink = link;
       const list = listTypeOf(read(seg, "listOptions"));
@@ -1682,7 +1688,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         t
       );
       if (effects) layer.effects = effects;
-      if (type === "TEXT") layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills));
+      if (type === "TEXT")
+        layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills), layer.size);
       if (options.includeVectorShapes && VECTOR_TYPES$1.has(type) && !insideBoolean) {
         const vector = readVector(n, layer, t);
         if (vector) layer.vector = vector;
@@ -2003,6 +2010,18 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     visit(root, root.name, void 0, 0);
     return out;
   }
+  function unsureNames(baseKids, variantKids) {
+    const count = (kids) => {
+      const m = /* @__PURE__ */ new Map();
+      for (const k of kids) m.set(k.name, (m.get(k.name) ?? 0) + 1);
+      return m;
+    };
+    const a = count(baseKids);
+    const b = count(variantKids);
+    return [.../* @__PURE__ */ new Set([...a.keys(), ...b.keys()])].filter(
+      (name) => (a.get(name) ?? 0) !== (b.get(name) ?? 0) && Math.max(a.get(name) ?? 0, b.get(name) ?? 0) > 1
+    );
+  }
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   function changesBetween(base, other) {
     const changes = {};
@@ -2011,6 +2030,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       const after = other[key];
       if (after === void 0) {
         if (key === "radius" && before !== void 0) changes.radius = 0;
+        if (key === "effectiveOpacity" && before !== void 0) changes.effectiveOpacity = 1;
         continue;
       }
       if (!same(before, after)) changes[key] = after;
@@ -2025,6 +2045,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const added = [];
     const removed = [];
     const reordered = [];
+    const guessedPrefixes = [];
+    for (const [path, entry] of variantIndex) {
+      const baseEntry = baseIndex.get(path);
+      if (!baseEntry || baseEntry.layer.type !== entry.layer.type) continue;
+      for (const name of unsureNames(baseEntry.layer.children, entry.layer.children)) {
+        guessedPrefixes.push(`${path}/${name}[`);
+      }
+    }
+    const isGuessed = (path) => guessedPrefixes.some((prefix) => path.startsWith(prefix));
     const isMatch = (path) => {
       const a = baseIndex.get(path);
       const b = variantIndex.get(path);
@@ -2034,7 +2063,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (isMatch(path)) {
         const changes = changesBetween(baseIndex.get(path).layer, entry.layer);
         if (Object.keys(changes).length > 0) {
-          layers.push({ path, layerId: baseIndex.get(path).layer.id, changes });
+          layers.push({
+            path,
+            ...isGuessed(path) ? {} : { layerId: baseIndex.get(path).layer.id },
+            changes
+          });
         }
       } else if (entry.parentPath === void 0 || isMatch(entry.parentPath)) {
         added.push({
@@ -2073,20 +2106,11 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       if (commonBase.some((p, i) => p !== commonVariant[i])) {
         reordered.push({ parentPath: path, order: variantPaths });
       }
-      const count = (kids) => {
-        const m = /* @__PURE__ */ new Map();
-        for (const k of kids) m.set(k.name, (m.get(k.name) ?? 0) + 1);
-        return m;
-      };
-      const a = count(baseKids);
-      const b = count(variantKids);
-      const unsure = [.../* @__PURE__ */ new Set([...a.keys(), ...b.keys()])].filter(
-        (name) => (a.get(name) ?? 0) !== (b.get(name) ?? 0) && Math.max(a.get(name) ?? 0, b.get(name) ?? 0) > 1
-      );
+      const unsure = unsureNames(baseKids, variantKids);
       if (unsure.length > 0) {
         warnings.push({
           code: "AMBIGUOUS_SIBLINGS",
-          message: `Inside "${path}" the default variant and this variant have a different number of layers named ${unsure.map((n) => `"${n}"`).join(", ")}, so matching them by position is a guess. Use layerId.`,
+          message: `Inside "${path}" the default variant and this variant have a different number of layers named ${unsure.map((n) => `"${n}"`).join(", ")}, so matching them by position is a guess and the changes to them carry no layerId.`,
           ...info.componentId ? { componentId: info.componentId } : {},
           variantId: info.variantId,
           layerId: baseIndex.get(path).layer.id
@@ -2109,6 +2133,12 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
   const COMPONENT_TIME_BUDGET_MS = 2e4;
   const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1e3;
   const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
+  const VARIANT_WARNING_CODES = /* @__PURE__ */ new Set([
+    "UNSUPPORTED_GRADIENT",
+    "IMAGE_OMITTED",
+    "VECTOR_OMITTED"
+  ]);
+  const warningKey = (w) => w.message.replace(/\(first on layer [^)]*\)/, "");
   const BATCH_SIZE = 4;
   async function nodeById(id) {
     var _a;
@@ -2177,6 +2207,7 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
     const fonts = new Map(base.usedFonts.map((f) => [`${f.family}\0${f.style}`, f]));
     const diffs = [];
     const duplicateGroups = /* @__PURE__ */ new Map();
+    const ambiguousGroups = /* @__PURE__ */ new Map();
     const others = members.filter((m) => m.id !== defaultNode.id);
     const wantDiffs = options.includeVariantDiffs !== false && others.length > 0;
     if (wantDiffs && members.length > MAX_VARIANTS_FOR_DIFFS) {
@@ -2238,11 +2269,16 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
         diffs.push(diff);
         for (const w of diffWarnings) {
           if (w.code === "DUPLICATE_SIBLING_NAME" && w.layerId) duplicateGroups.set(w.layerId, w);
-          else warnings.push(w);
+          else if (w.code === "AMBIGUOUS_SIBLINGS" && w.layerId) {
+            if (!ambiguousGroups.has(w.layerId)) ambiguousGroups.set(w.layerId, w);
+          } else warnings.push(w);
         }
         for (const w of read2.warnings) {
           if (w.code === "UNRESOLVED_REFERENCE") {
             if (!warnings.some((x) => x.message === w.message)) warnings.push(w);
+          } else if (VARIANT_WARNING_CODES.has(w.code)) {
+            const key = warningKey(w);
+            if (!warnings.some((x) => x.code === w.code && warningKey(x) === key)) warnings.push(w);
           }
         }
       }
@@ -2252,6 +2288,15 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
       warnings.push({
         code: "DUPLICATE_SIBLING_NAME",
         message: `${duplicateGroups.size} group${duplicateGroups.size === 1 ? "" : "s"} of sibling layers in "${node.name}" share a name, so variant differences tell them apart by index (for example: ${first.message}).`,
+        componentId: node.id,
+        layerId: first.layerId
+      });
+    }
+    if (ambiguousGroups.size > 0) {
+      const first = [...ambiguousGroups.values()][0];
+      warnings.push({
+        code: "AMBIGUOUS_SIBLINGS",
+        message: `${ambiguousGroups.size} parent layer${ambiguousGroups.size === 1 ? "" : "s"} in "${node.name}" have a different number of same-named layers in some variants, so those layers are matched by position, which is a guess, and their changes carry no layerId (for example: ${first.message}).`,
         componentId: node.id,
         layerId: first.layerId
       });
@@ -4032,7 +4077,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
     [...styles.text, ...styles.color, ...styles.effect, ...styles.grid].forEach(claim);
     return { renamed };
   }
-  const PLUGIN_VERSION = "1.3.0";
+  const PLUGIN_VERSION = "1.3.1";
   function transformToDesignSystem(raw, fileName, scope = "file") {
     const allCollections = transformVariableCollections(raw.collections);
     const collectionsById = new Map(raw.collections.map((c) => [c.id, c]));
@@ -4163,7 +4208,7 @@ ${block(':root:not([data-theme="light"])', vars, "  ")}
   }
   async function saveSettings(settings) {
     try {
-      await figma.clientStorage.setAsync(SETTINGS_KEY, settings);
+      await figma.clientStorage.setAsync(SETTINGS_KEY, { ...settings, version: SETTINGS_VERSION });
     } catch {
     }
   }

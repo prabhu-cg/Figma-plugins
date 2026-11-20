@@ -280,6 +280,7 @@ export default function App() {
   }, []);
 
   const handleGenerate = useCallback(() => {
+    if (!designSystem) return;
     // The progress bar sits at the top of the panel; bring it into view if the list was scrolled.
     contentRef.current?.scrollTo?.({ top: 0 });
     setError(null);
@@ -288,7 +289,6 @@ export default function App() {
     setOutdated(false);
     const pages = Array.from(excludedPages);
     const plan = planRun(options);
-    if (!designSystem) return;
     run.current = new GenerationRun(plan, designSystem, pages, options);
     if (plan.needPlugin) {
       postToPlugin({ type: 'generate', options, excludedPages: pages, contrastPairs });

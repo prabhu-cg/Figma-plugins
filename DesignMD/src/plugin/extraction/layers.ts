@@ -764,6 +764,8 @@ function readText(
   t: Tracker,
   /** True when the text colours differ between runs, so the layer has no single fill. */
   fillsMixed: boolean,
+  /** The text layer's box, which a gradient on one of its runs is measured against. */
+  size?: { width: number; height: number },
 ): LayerText {
   const align = oneOf(
     read(n, 'textAlignHorizontal'),
@@ -799,7 +801,10 @@ function readText(
       characters: includeText ? (str(seg, 'characters') ?? '') : '',
     };
     const fills = readPaints(read(seg, 'fills'), undefined, layerId, t);
-    if (fills) run.fills = fills;
+    if (fills) {
+      describeGradients(fills, size);
+      run.fills = fills;
+    }
     const link = hyperlinkOf(read(seg, 'hyperlink'));
     if (link) run.hyperlink = link;
     const list = listTypeOf(read(seg, 'listOptions'));
@@ -1118,7 +1123,8 @@ export async function readLayerTree(
     );
     if (effects) layer.effects = effects;
 
-    if (type === 'TEXT') layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills));
+    if (type === 'TEXT')
+      layer.text = readText(n, id, includeText, t, !Array.isArray(rawFills), layer.size);
     // The parts of a boolean shape are already merged into its own path; drawing them again would
     // double the size for nothing.
     if (options.includeVectorShapes && VECTOR_TYPES.has(type) && !insideBoolean) {

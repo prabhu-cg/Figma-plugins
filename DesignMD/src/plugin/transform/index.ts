@@ -18,7 +18,7 @@ import { computeStyleUsage, computeVariableUsage, mergeStyleBoundVariables } fro
 import { buildSummary } from './summary';
 import { makeCssNamesUnique } from './uniqueNames';
 
-const PLUGIN_VERSION = '1.3.0';
+const PLUGIN_VERSION = '1.3.1';
 
 export function transformToDesignSystem(
   raw: ExtractionResult,

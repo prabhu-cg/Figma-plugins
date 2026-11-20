@@ -169,6 +169,51 @@ describe('diffVariant', () => {
     });
   });
 
+  it('reports a layer that is fully opaque again, since effectiveOpacity is only written below 1', () => {
+    const dim = L('Card', { effectiveOpacity: 0.5 }, [L('Label', { effectiveOpacity: 0.5 })]);
+    const bright = L('Card', {}, [L('Label', {})]);
+    const { diff } = diffVariant(dim, bright, info);
+    expect(diff.layers.map((l) => [l.path, l.changes])).toEqual([
+      ['Card', { effectiveOpacity: 1 }],
+      ['Card/Label', { effectiveOpacity: 1 }],
+    ]);
+  });
+
+  describe('layerId where siblings are ambiguous', () => {
+    const row = (dots: number, extra = false) =>
+      L('Row', {}, [
+        L('Title', { visible: !extra }),
+        ...Array.from({ length: dots }, () => L('Dot', { fills: fill('#000000') })),
+      ]);
+
+    it('leaves layerId off layers matched by a guess, and keeps it on the others', () => {
+      const base = row(2);
+      const variant = row(3, true);
+      variant.children[1].fills = fill('#ffffff');
+      const { diff } = diffVariant(base, variant, info);
+      const title = diff.layers.find((l) => l.path === 'Row/Title')!;
+      const dot = diff.layers.find((l) => l.path === 'Row/Dot[0]')!;
+      expect(title.layerId).toBe(base.children[0].id);
+      expect(dot.layerId).toBeUndefined();
+    });
+
+    it('also leaves it off layers inside a guessed sibling', () => {
+      const inner = (n: number) =>
+        L(
+          'Row',
+          {},
+          Array.from({ length: n }, () =>
+            L('Dot', { type: 'FRAME' }, [L('Mark', { fills: fill('#000000') })]),
+          ),
+        );
+      const variant = inner(3);
+      variant.children[0].children[0].fills = fill('#ffffff');
+      const { diff } = diffVariant(inner(2), variant, info);
+      const mark = diff.layers.find((l) => l.path === 'Row/Dot[0]/Mark')!;
+      expect(mark.layerId).toBeUndefined();
+    });
+  });
+
   describe('ambiguous siblings', () => {
     const flag = (vectors: number) =>
       L(

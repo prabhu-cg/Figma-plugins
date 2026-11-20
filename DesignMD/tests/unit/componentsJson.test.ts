@@ -535,6 +535,53 @@ describe('generateComponentsJson', () => {
   });
 });
 
+describe('findBrokenRefs and layout tokens', () => {
+  const ref = (id: string) => ({ variableId: id, cssName: '--space-4' });
+  const fileWith = (token: object): ComponentsFileV1 => {
+    const file = {
+      components: [
+        {
+          id: 'c1',
+          name: 'Card',
+          boundVariableIds: [],
+          styleIds: [],
+          properties: [],
+          variants: [{ id: 'v1' }],
+          defaultVariantId: 'v1',
+          tree: {
+            id: 't',
+            name: 'Card',
+            type: 'FRAME',
+            visible: true,
+            layout: { token },
+            children: [],
+          },
+        },
+      ],
+      tokens: { 'var:ok': { cssName: '--space-4' } },
+    };
+    return file as unknown as ComponentsFileV1;
+  };
+
+  it('accepts gap and padding tokens that exist', () => {
+    const file = fileWith({ gap: ref('var:ok'), padding: { top: ref('var:ok') } });
+    expect(findBrokenRefs(file, { checkInstances: false })).toEqual([]);
+  });
+
+  it('reports gap, counterGap and padding tokens that are missing from tokens', () => {
+    const file = fileWith({
+      gap: ref('var:gone1'),
+      counterGap: ref('var:gone2'),
+      padding: { left: ref('var:gone3') },
+    });
+    expect(findBrokenRefs(file, { checkInstances: false }).map((b) => b.target)).toEqual([
+      'var:gone1',
+      'var:gone2',
+      'var:gone3',
+    ]);
+  });
+});
+
 describe('splitting a large components.json', () => {
   async function setup() {
     const { root } = buildFile();
@@ -620,6 +667,28 @@ describe('splitting a large components.json', () => {
       expect(json.metadata.contentHash).toBe(hashOf(part.content));
     });
     expect(hashOf(files[0].content)).toBe(main.metadata.contentHash);
+  });
+
+  it('lists in each part only the fonts that component uses, and all of them in the index', async () => {
+    const { ds, structures } = await setup();
+    const withFonts = new Map(structures);
+    const ids = ds.components.map((c) => c.id);
+    const fonts = [
+      [{ family: 'Inter', style: 'Bold', weight: 700, italic: false }],
+      [{ family: 'Lora', style: 'Italic', weight: 400, italic: true }],
+    ];
+    ids.forEach((id, i) => {
+      const s = structures.get(id)!;
+      if (!('error' in s)) withFonts.set(id, { ...s, usedFonts: fonts[i] });
+    });
+    const files = generateComponentsJsonFiles(ds, withFonts, { splitThresholdBytes: 500 });
+    const main = JSON.parse(files[0].content) as ComponentsFileV1;
+    const parts = files.slice(1).map((f) => JSON.parse(f.content) as ComponentsFileV1);
+    expect(main.metadata.fonts?.map((f) => f.family)).toEqual(['Inter', 'Lora']);
+    expect(parts.map((p) => p.metadata.fonts?.map((f) => f.family))).toEqual([['Inter'], ['Lora']]);
+    parts.forEach((part, i) =>
+      expect(hashOf(files[i + 1].content)).toBe(part.metadata.contentHash),
+    );
   });
 
   it('keeps each component with only the tokens and warnings it uses', async () => {

@@ -31,6 +31,16 @@ export const COMPONENT_TIME_BUDGET_MS = 20_000;
 export const TOTAL_TIME_BUDGET_MS = 10 * 60 * 1000;
 /** Budget for the serialized variant diffs of one component. Keeps one huge set from dominating memory. */
 export const COMPONENT_MEMORY_BUDGET_BYTES = 4 * 1024 * 1024;
+
+/** Warnings from reading a variant's layers that are kept, as they say something the default variant's read cannot. */
+const VARIANT_WARNING_CODES = new Set<string>([
+  'UNSUPPORTED_GRADIENT',
+  'IMAGE_OMITTED',
+  'VECTOR_OMITTED',
+]);
+
+/** A warning's text without the node id that differs per variant, so repeats can be told apart. */
+const warningKey = (w: ComponentsWarning) => w.message.replace(/\(first on layer [^)]*\)/, '');
 /** Small: a batch runs its components side by side, and Figma's API calls are not parallel anyway. */
 const BATCH_SIZE = 4;
 
@@ -158,6 +168,7 @@ export async function extractComponentStructure(
 
   const diffs: VariantDiff[] = [];
   const duplicateGroups = new Map<string, ComponentsWarning>();
+  const ambiguousGroups = new Map<string, ComponentsWarning>();
   const others = members.filter((m) => m.id !== defaultNode.id);
   const wantDiffs = options.includeVariantDiffs !== false && others.length > 0;
   if (wantDiffs && members.length > MAX_VARIANTS_FOR_DIFFS) {
@@ -219,13 +230,22 @@ export async function extractComponentStructure(
       diffs.push(diff);
       // Duplicate names are common and repeat for every variant, so they are counted per
       // component (one warning below) instead of one warning per group of layers.
+      // Ambiguous siblings repeat the same way (one per variant that differs), so they are
+      // counted per parent layer and written once per component.
       for (const w of diffWarnings) {
         if (w.code === 'DUPLICATE_SIBLING_NAME' && w.layerId) duplicateGroups.set(w.layerId, w);
-        else warnings.push(w);
+        else if (w.code === 'AMBIGUOUS_SIBLINGS' && w.layerId) {
+          if (!ambiguousGroups.has(w.layerId)) ambiguousGroups.set(w.layerId, w);
+        } else warnings.push(w);
       }
+      // What a variant's own read reported, such as a gradient with no CSS equivalent that only
+      // this variant uses. Each kind is written once per component, whichever variant it came from.
       for (const w of read.warnings) {
         if (w.code === 'UNRESOLVED_REFERENCE') {
           if (!warnings.some((x) => x.message === w.message)) warnings.push(w);
+        } else if (VARIANT_WARNING_CODES.has(w.code)) {
+          const key = warningKey(w);
+          if (!warnings.some((x) => x.code === w.code && warningKey(x) === key)) warnings.push(w);
         }
       }
     }
@@ -236,6 +256,16 @@ export async function extractComponentStructure(
     warnings.push({
       code: 'DUPLICATE_SIBLING_NAME',
       message: `${duplicateGroups.size} group${duplicateGroups.size === 1 ? '' : 's'} of sibling layers in "${node.name}" share a name, so variant differences tell them apart by index (for example: ${first.message}).`,
+      componentId: node.id,
+      layerId: first.layerId,
+    });
+  }
+
+  if (ambiguousGroups.size > 0) {
+    const first = [...ambiguousGroups.values()][0];
+    warnings.push({
+      code: 'AMBIGUOUS_SIBLINGS',
+      message: `${ambiguousGroups.size} parent layer${ambiguousGroups.size === 1 ? '' : 's'} in "${node.name}" have a different number of same-named layers in some variants, so those layers are matched by position, which is a guess, and their changes carry no layerId (for example: ${first.message}).`,
       componentId: node.id,
       layerId: first.layerId,
     });

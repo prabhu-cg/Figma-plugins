@@ -583,6 +583,49 @@ describe('text', () => {
     // The layer-level fields describe the first run but do not copy its colour or link.
     expect(tree.text).not.toHaveProperty('fills');
   });
+
+  it('works out the CSS angle of a linear gradient on one run, from the text layer box', async () => {
+    const gradientFill = {
+      type: 'GRADIENT_LINEAR',
+      visible: true,
+      opacity: 1,
+      gradientStops: [
+        { position: 0, color: { r: 1, g: 0, b: 0, a: 1 } },
+        { position: 1, color: { r: 0, g: 0, b: 1, a: 1 } },
+      ],
+      gradientTransform: [
+        [1, 0, 0],
+        [0, 1, 0],
+      ],
+    };
+    const segment = (characters: string, fills: object[]) => ({
+      characters,
+      fills,
+      hyperlink: null,
+      listOptions: { type: 'NONE' },
+      fontName: { family: 'Inter', style: 'Regular' },
+      fontWeight: 400,
+      fontSize: 14,
+      lineHeight: { unit: 'AUTO' },
+      letterSpacing: { unit: 'PIXELS', value: 0 },
+      textCase: 'ORIGINAL',
+      textDecoration: 'NONE',
+      textStyleId: '',
+    });
+    const t = textNode('Mixed', {
+      fills: MIXED,
+      width: 100,
+      height: 20,
+      getStyledTextSegments: () => [
+        segment('Plain ', [solid(0, 0, 0)]),
+        segment('fancy', [gradientFill]),
+      ],
+    });
+    const { tree } = await readLayerTree(t);
+    const fancy = tree.text!.runs![1].fills![0];
+    expect(fancy).toMatchObject({ type: 'GRADIENT_LINEAR' });
+    expect(fancy.angle).toBe(90);
+  });
 });
 
 describe('box and drawn opacity', () => {

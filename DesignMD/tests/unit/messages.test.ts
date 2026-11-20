@@ -66,6 +66,20 @@ describe('new components.json options', () => {
   });
 });
 
+describe('saved settings version', () => {
+  it('reads a saved includeImages: false from before 1.3.1 as the new default, once', () => {
+    const old = sanitizeSavedSettings({ options: { includeImages: false, cssFile: true } });
+    expect(old?.options.includeImages).toBe(true);
+    expect(old?.options.cssFile).toBe(true);
+    expect(old?.version).toBe(2);
+  });
+
+  it('keeps a choice made after that', () => {
+    const next = sanitizeSavedSettings({ options: { includeImages: false }, version: 2 });
+    expect(next?.options.includeImages).toBe(false);
+  });
+});
+
 describe('sanitizeFileSettings', () => {
   it('falls back to empty settings for anything malformed', () => {
     expect(sanitizeFileSettings(undefined)).toEqual(EMPTY_FILE_SETTINGS);
