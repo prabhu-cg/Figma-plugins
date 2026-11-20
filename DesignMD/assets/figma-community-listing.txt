@@ -1,0 +1,210 @@
+================================================================================
+DESIGNMD — FIGMA COMMUNITY LISTING
+================================================================================
+
+Where each section goes in Figma's publish form (Plugins > Manage plugins in
+development > Publish):
+  Step 1  Name, Tagline, Description (SHORT + FULL below), Category
+  Step 2  Icon: assets/icon.png (128 x 128)
+          Thumbnail: assets/thumbnail.png (1920 x 960)
+          Gallery: assets/screenshot-1.png to screenshot-5.png (1920 x 960)
+  Step 3  Data security: optional, see DATA SECURITY below
+  Step 4  Support contact: see SUPPORT below. Network access is read from the
+          manifest ("No access to network").
+Tags are listed in TAGS (Figma allows a handful; use the first five).
+
+
+NAME
+----
+DesignMD
+
+
+TAGLINE (keep to 100 characters)
+--------------------------------
+Turn your design system into developer-ready docs and tokens, offline.  [69 chars]
+
+
+SHORT DESCRIPTION
+-----------------
+Document your Variables, Styles and Components as design.md, component docs,
+tokens.json, tokens.css and components.json. No AI, no servers, no account.
+
+
+FULL DESCRIPTION
+----------------
+DesignMD turns a Figma file's Variables, Styles and Components into developer-
+ready documentation and token files, automatically, deterministically and
+entirely offline. No AI. No servers. No account. Nothing leaves your machine.
+
+WHAT GETS GENERATED:
+
+design.md
+  - One Markdown file covering your variable collections, color, typography,
+    spacing, effect and grid tokens, a component index, token and style usage,
+    naming conventions, and accessibility notes with WCAG contrast checked for
+    every color mode (Light, Dark, ...)
+
+Component docs
+  - One Markdown file per component or component set: variants, sizes, states,
+    layout (size, auto layout, gap, padding, radius), properties, token
+    references and related components
+
+tokens.json
+  - Nested, W3C-style design tokens (color, dimension, typography, shadow, ...)
+    with modes and usage, ready for design-token pipelines
+
+tokens.css
+  - CSS custom properties (--color-primary-500, --spacing-md, ...) with a
+    [data-theme] block per mode and automatic dark-mode support
+
+components.json
+  - For code generators and AI tools: each component's layer tree (auto layout,
+    fills, strokes, effects, text, instances, token bindings), how every
+    variant differs from the default, full property details and the tokens it
+    uses
+  - Optional: the drawn shape of icons, and the pictures behind image fills
+    saved as files
+  - Very large results are split into one file per component automatically
+
+Bundle everything into a single ZIP you can drop into a Git repository, or
+preview and copy any file inside the plugin first.
+
+MADE FOR REAL WORKFLOWS:
+
+  - Scan the whole file or just your selection, to document one section of a big
+    system without waiting for the rest
+  - Contrast pairs you choose: add the text and background combinations you care
+    about and see ratios in every mode, plus automatic checks inferred from token
+    names
+  - Skip what you don't want documented: leave out draft pages. Anything hidden
+    from publishing is ignored automatically
+  - Find dead weight: see which variables and styles no component uses
+  - It remembers: your outputs, excluded pages and contrast pairs are restored
+    next time
+
+WHY IT IS USEFUL:
+
+  - Developer handoff: stop writing token references and component specs by hand
+  - AI-assisted coding: feed design.md, tokens.json and components.json to an
+    LLM as grounded context about your design system
+  - Design system documentation: keep docs in sync with the source of truth
+    instead of a wiki that drifts out of date
+  - Version control: a snapshot of your system you can commit and diff
+
+HOW IT WORKS:
+
+Variables are the primary source of truth. If a token category has no variables
+(for example no color variables), DesignMD falls back to the equivalent Styles
+(Paint, Text, Effect, Grid) and says so in the output.
+
+Everything is generated from one normalized internal model, so every output
+stays consistent with the others. Extraction is batched and yields to Figma so
+the editor stays responsive; it was run on a community file with 2,370
+components and sets (6,527 with variants). A problem with one style or
+component (a missing reference, a corrupted node) is recorded as a warning and
+skipped instead of stopping the whole run, and you can cancel a long scan.
+
+
+HOW TO USE
+----------
+1. Open a file with Variables, Styles or Components and run Plugins > DesignMD.
+
+2. Choose Whole file or Selection and press Scan Design System (or Scan
+   Selection). The Summary tab shows what was found and any warnings. Under
+   Include pages, untick drafts or playgrounds you don't want documented.
+
+3. On Contrast, add the foreground and background colors you want checked. The
+   tab appears when the file has at least two color tokens.
+
+4. On Export, name the export and choose the outputs. design.md and Component
+   docs are on by default; tokens.json, tokens.css and components.json are
+   opt-in. components.json has options for text, variant differences, nested
+   instances, vector shapes and pictures.
+
+5. Press Generate. The Files tab lists every file with its size, previews the
+   first 300 lines of the selected one, and has a Copy button.
+
+6. Press Download. Files come as one ZIP, or individually if you turn the ZIP
+   option off.
+
+TIP: Changing outputs, excluded pages or contrast pairs after generating clears
+the Files tab and asks you to generate again, so what you download always
+matches your settings.
+
+
+LIMITATIONS
+-----------
+- The plugin only reads your file; it never changes it.
+
+- Selection scans cover components inside the selection (a selected variant
+  stands for its whole set). Variables and styles are always file-wide.
+
+- Components, variables and collections hidden from publishing (or whose name
+  starts with ".") are skipped, and aliases to hidden variables are replaced by
+  their values.
+
+- components.json reads each component's layers inside a budget (2,000 layers
+  and 16 levels deep, with time limits). A component that goes over is written
+  with treeTruncated and a warning, never skipped silently. Sets with more than
+  512 variants get no variant differences.
+
+- Pictures behind image fills are limited to 8 MB each and 96 MB in total.
+  Anything left out is reported as a warning.
+
+- Angular and diamond gradients are flagged as unsupported in components.json.
+
+- In very large systems, automatic contrast pairs are inferred within a group
+  only, and the 500 worst pairs are listed (with exact totals). Pairs you add
+  yourself are always checked.
+
+- Files larger than the ones tested (see above) have not been measured.
+
+- The plugin makes no network requests and sends no data anywhere.
+
+
+TAGS (use the first five; the rest are spare)
+---------------------------------------------
+design system, documentation, design tokens, developer handoff, variables
+
+Spare: design.md, tokens.json, css variables, wcag, contrast checker, handoff,
+component docs, llm, ai context, style guide
+
+
+CATEGORY
+--------
+Design tools
+
+
+SUPPORT
+-------
+Support contact (required): https://github.com/prabhu-cg/Figma-plugins/issues
+Documentation: https://github.com/prabhu-cg/Figma-plugins/tree/main/DesignMD
+(Replace with an email address instead if you prefer; either is accepted.)
+
+
+DATA SECURITY AND PRIVACY (optional form, answers for reference)
+----------------------------------------------------------------
+- The plugin makes no network requests (manifest networkAccess is "none").
+- It collects, sends and shares no personal data and has no analytics.
+- It stores two small things on your own machine with figma.clientStorage: your
+  export choices, and, per file name, the pages you excluded and the contrast
+  pairs you added. They never leave your machine. It uses no setPluginData and
+  no localStorage. On the form, question 4 is "stores data locally".
+- It reads Variables, Styles, components and their layers in the current file.
+  components.json includes layer names, text content and design values from
+  your file; turn off "Include text content" to leave the text out. The files
+  are only saved where you download them.
+- It never writes to or edits your file.
+- No third-party services, accounts or payments are involved.
+
+
+RELEASE NOTES (version 1.3.0)
+-----------------------------
+First public release. Generate design.md, per-component docs, tokens.json,
+tokens.css and components.json from your Variables, Styles and Components, with
+WCAG contrast checked in every color mode. Scan the whole file or a selection,
+leave out draft pages, add your own contrast pairs, preview and copy files, and
+download one ZIP. Runs fully offline with no AI.
+
+
+================================================================================

@@ -2,7 +2,7 @@
 
 ## 1.3.0
 
-Exact-fidelity fields, from docs/designmd-exact-fidelity.md in Aemora. All additive within
+Exact-fidelity fields, all additive within
 `designmd.components/v1`.
 
 ### Added
@@ -36,7 +36,7 @@ Exact-fidelity fields, from docs/designmd-exact-fidelity.md in Aemora. All addit
 
 On the synthetic 1,000-component stress file (every layer with a transform): 1.2.1 takes 8.3 s and writes
 40.5 MB; 1.3.0 takes 8.7 s (+5%) and writes 37.6 MB (-7%), with peak heap growth rising from about 180 MB
-to 330 MB (limit 600). The real numbers on the Rayna file need a run in Figma; see the README.
+to 330 MB (limit 600). The real numbers on a large community file need a run in Figma; see the README.
 
 ## 1.2.1
 

@@ -61,7 +61,7 @@ layer by layer against the design; an instance lists the property values and cha
 
 ## Using the plugin
 
-Run the plugin, choose a scope, and press **Scan**. After a scan the panel has four tabs:
+Run the plugin, choose a scope, and press **Scan Design System** (or **Scan Selection**). After a scan the panel has four tabs:
 
 | Tab          | What's in it                                                                                                                                    |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -118,8 +118,8 @@ exceeds it, since its token usage may then be under-reported.
 stops, text details and `metadata.fonts` together were measured on the synthetic 1,000-component test
 file (`tests/unit/stress.test.ts`, every layer with a transform): 8.3 s and 40.5 MB for 1.2.1, 8.7 s
 (+5%) and 37.6 MB (-7%) for 1.3.0, because small flat objects are now written on one line. Peak heap
-growth went from about 180 MB to 330 MB. A synthetic file is not Rayna: to record the real numbers,
-export the Rayna UI file with 1.2.1 and with 1.3.0 and compare the plugin console's time line
+growth went from about 180 MB to 330 MB. A synthetic file is not a real design system: to record the real numbers,
+export a large community UI file with 1.2.1 and with 1.3.0 and compare the plugin console's time line
 (`[DesignMD] read ... layers in ...s`) and the size of `components.json` (or the sum of
 `components/*.json` when split).
 
@@ -157,15 +157,15 @@ and none of them can take the plugin down:
 | File                                                                                                       | Components | Time                                                                                      | Heap growth  | `components.json`                                                     |
 | ---------------------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------- |
 | Synthetic (40 sets x 100 variants, 960 standalone, deep and wide)                                          | 1,000      | ~5 s                                                                                      | ~130 MB      | 37.6 MB (unsplit)                                                     |
-| Rayna UI community file (500 components and sets, 2,581 with variants), variant differences on             | 2,581      | layers read in 12 s (2,581 trees, 21,687 layers); Figma stayed responsive                 | not measured | 16.9 MB, one file (under the 20 MB split limit)                       |
+| Large UI community file (500 components and sets, 2,581 with variants), variant differences on             | 2,581      | layers read in 12 s (2,581 trees, 21,687 layers); Figma stayed responsive                 | not measured | 16.9 MB, one file (under the 20 MB split limit)                       |
 | Bootstrap 5 UI kit community file (2,370 components and sets, 6,527 with variants), variant differences on | 6,527      | scan 12-14.5 s; layers read in 34 s (6,527 trees, 32,521 layers); Figma stayed responsive | not measured | about 35 MB, split into 2,371 files; ZIP about 3.5 MB when compressed |
 
 The synthetic file runs against the fake Figma API in `tests/unit/stress.test.ts` (limits: 30 s,
-600 MB heap). The Rayna UI and Bootstrap rows are manual runs in Figma with `components.json`
+600 MB heap). The large UI file and Bootstrap rows are manual runs in Figma with `components.json`
 selected, on this version. In both, Figma stayed responsive, and the generated files were checked:
 the component counts in `design.md`, `components.json` and `components/` agree, and every custom
-property `components.json` refers to is declared in `tokens.css`. The Rayna UI file has one
-`TREE_TRUNCATED` warning, for a component with more than 500 layers. An earlier Rayna UI run, made
+property `components.json` refers to is declared in `tokens.css`. The large UI file has one
+`TREE_TRUNCATED` warning, for a component with more than 500 layers. An earlier run on the large UI file, made
 before layer reading was time-sliced and before `components.json` was assembled in the UI, froze
 Figma for 3 min 36 s; that is fixed. Heap growth and total generate time were not recorded for the
 manual runs. After a generate, the plugin console (Plugins > Development > Open console) prints how
