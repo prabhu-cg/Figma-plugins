@@ -269,6 +269,10 @@ DATA SECURITY AND PRIVACY (optional form, answers for reference)
 ----------------------------------------------------------------
 - The plugin makes no network requests (manifest networkAccess is "none").
 - It collects, stores and sends no personal data and has no analytics.
+- The only thing it stores is a single marker flag on the optional foundation
+  frame (node.setPluginData), so a later regenerate can find and replace that
+  frame. It never leaves the file. It uses no localStorage or clientStorage.
+  On the form, question 4 is "stores data locally (eg. node.setPluginData)".
 - It reads and writes only local variables, styles and, if you choose the
   canvas option, one frame in the current file. It never reads your designs.
 - No third-party services, accounts or payments are involved.
