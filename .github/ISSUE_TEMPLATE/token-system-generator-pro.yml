@@ -1,0 +1,51 @@
+name: Token System Generator Pro — bug or feedback
+description: Report a problem or share feedback about the Token System Generator Pro Figma plugin
+labels: ["token-system-generator-pro"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Token System Generator Pro. Please don't paste private design content or personal details.
+  - type: dropdown
+    id: type
+    attributes:
+      label: What is this about?
+      options:
+        - Bug (something doesn't work)
+        - Feature request
+        - Question
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which approach were you using?
+      options:
+        - From Scratch
+        - Starter System
+        - Smart Convert
+        - JSON export
+        - Contrast checker
+        - Not sure
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. Include any message the plugin showed.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      placeholder: "1.0.0"
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Figma plan
+      options:
+        - Free (Starter)
+        - Professional
+        - Organization
+        - Enterprise
+        - Not sure
