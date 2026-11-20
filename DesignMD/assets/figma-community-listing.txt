@@ -179,6 +179,7 @@ SUPPORT
 -------
 Support contact (required): https://github.com/prabhu-cg/Figma-plugins/issues
 Documentation: https://github.com/prabhu-cg/Figma-plugins/tree/main/DesignMD
+Community page: https://www.figma.com/community/plugin/1705708956959019465/designmd
 (Replace with an email address instead if you prefer; either is accepted.)
 
 

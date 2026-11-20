@@ -1,5 +1,7 @@
 # DesignMD
 
+**[Install DesignMD from Figma Community](https://www.figma.com/community/plugin/1705708956959019465/designmd)**
+
 A Figma plugin that deterministically extracts a design system — Variables, Styles, and
 Components — into developer-ready documentation and token files. No AI, no backend, no
 network access: everything runs locally inside the Figma plugin sandbox, and it's free
