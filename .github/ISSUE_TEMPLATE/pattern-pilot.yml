@@ -1,0 +1,51 @@
+name: Pattern Pilot — bug or feedback
+description: Report a problem or share feedback about the Pattern Pilot Figma plugin
+labels: ["pattern-pilot"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Pattern Pilot. Please don't paste private design content or personal details.
+  - type: dropdown
+    id: type
+    attributes:
+      label: What is this about?
+      options:
+        - Bug (something doesn't work)
+        - Feature request
+        - Pattern request (a section or variant you'd like added)
+        - Question
+    validations:
+      required: true
+  - type: input
+    id: pattern
+    attributes:
+      label: Which section and variant?
+      description: The section and variant name shown in the plugin.
+      placeholder: "e.g. Sign In → Minimal"
+  - type: dropdown
+    id: width
+    attributes:
+      label: Which width did you insert?
+      options:
+        - Desktop (1440)
+        - Tablet (768)
+        - Mobile (375)
+        - Not sure
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what you saw instead. Include any message the plugin showed (for example "Build failed").
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: Figma plan
+      options:
+        - Free (Starter)
+        - Professional
+        - Organization
+        - Enterprise
+        - Not sure

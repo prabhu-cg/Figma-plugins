@@ -196,10 +196,37 @@ body{
   border:1px solid var(--border2);
   border-radius:var(--radius-sm);
   box-shadow:var(--shadow);
-  z-index:100;max-height:240px;overflow-y:auto;
-  padding:4px 0;
+  z-index:100;max-height:280px;overflow-y:auto;
+  padding:0;
 }
-.dropdown-list.open{display:block;}
+.dropdown-list.open{display:flex;flex-direction:column;}
+
+/* Search input inside dropdown */
+.dropdown-search-wrap{
+  position:sticky;top:0;z-index:1;
+  padding:8px 8px 6px;
+  background:var(--surface2);
+  border-bottom:1px solid var(--border);
+  flex-shrink:0;
+}
+.dropdown-search{
+  width:100%;padding:6px 10px 6px 28px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-xs);
+  background:var(--surface);
+  font-size:12px;color:var(--text);
+  outline:none;transition:border-color .15s;
+}
+.dropdown-search:focus{border-color:var(--accent);}
+.dropdown-search-icon{
+  position:absolute;left:16px;top:50%;transform:translateY(-50%);
+  font-size:11px;color:var(--muted);pointer-events:none;
+}
+.dropdown-search-wrap{position:sticky;top:0;}
+.dropdown-options{overflow-y:auto;padding:4px 0;flex:1;}
+.no-results{
+  padding:16px 12px;font-size:12px;color:var(--muted);text-align:center;
+}
 
 .group-header{
   padding:8px 12px 4px;
@@ -495,7 +522,13 @@ body{
           </span>
           <span class="chevron">▾</span>
         </button>
-        <div class="dropdown-list" id="dropdown-list"></div>
+        <div class="dropdown-list" id="dropdown-list">
+          <div class="dropdown-search-wrap">
+            <span class="dropdown-search-icon">⌕</span>
+            <input class="dropdown-search" id="dropdown-search" type="text" placeholder="Search patterns…" autocomplete="off" oninput="filterDropdown(this.value)"/>
+          </div>
+          <div class="dropdown-options" id="dropdown-options"></div>
+        </div>
       </div>
 
       <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>
@@ -503,7 +536,7 @@ body{
         <div class="spinner"></div>
         <span id="gen-label">Generate</span>
       </button>
-      <div class="gen-meta">Pattern Pilot v2.0 · 30+ section types · 6 variations each</div>
+      <div class="gen-meta">Pattern Pilot · 25 section types · 6 variations each</div>
 
     </div>
 
@@ -584,6 +617,12 @@ const GROUPS = [
     {id:"contact",       name:"Contact Form",     icon:"📬"},
     {id:"newsletter",    name:"Newsletter",       icon:"✉️"},
   ]},
+  { label:"Utility", icon:"🔧", items:[
+    {id:"cookie-banner",     name:"Cookie Banner",     icon:"🍪"},
+    {id:"announcement-bar",  name:"Announcement Bar",  icon:"📢"},
+    {id:"breadcrumb",        name:"Breadcrumb",        icon:"›"},
+    {id:"toast",             name:"Toast",             icon:"🔔"},
+  ]},
 ];
 
 // Variant definitions: each section gets 6 named variants
@@ -609,7 +648,11 @@ const VARIANTS = {
   "vertical-nav": [{n:"Dark Rail",s:"vnav-2"},{n:"Grouped Sections",s:"vnav-3"},{n:"Icon Only",s:"vnav-5"},{n:"Minimal List",s:"vnav-6"},{n:"With Search",s:"vnav-4"},{n:"Clean Light",s:"vnav-1"}],
   "signin":  [{n:"Light Card",s:"signin-1"},{n:"Dark Panel",s:"signin-2"},{n:"Split Brand",s:"signin-3"},{n:"Minimal",s:"signin-4"},{n:"Violet Accent",s:"signin-5"},{n:"Image Split",s:"signin-6"}],
   "signup":  [{n:"Light Card",s:"signup-1"},{n:"Dark Panel",s:"signup-2"},{n:"Social First",s:"signup-3"},{n:"Minimal",s:"signup-4"},{n:"Two Column",s:"signup-5"},{n:"Branded",s:"signup-6"}],
-  "contact": [{n:"Info + Form",s:"contact-1"},{n:"Centered",s:"contact-2"},{n:"Dark Theme",s:"contact-3"},{n:"Card Header",s:"contact-4"},{n:"Minimal",s:"contact-5"},{n:"Map Split",s:"contact-6"}],
+  "contact":          [{n:"Info + Form",s:"contact-1"},{n:"Centered",s:"contact-2"},{n:"Dark Theme",s:"contact-3"},{n:"Card Header",s:"contact-4"},{n:"Minimal",s:"contact-5"},{n:"Map Split",s:"contact-6"}],
+  "cookie-banner":    [{n:"Branded Accent",s:"cookie-4"},{n:"Card Style",s:"cookie-3"},{n:"Category Detail",s:"cookie-6"},{n:"Dark Bar",s:"cookie-2"},{n:"Light Bar",s:"cookie-1"},{n:"Minimal",s:"cookie-5"}],
+  "announcement-bar": [{n:"Branded",s:"ann-4"},{n:"Dark",s:"ann-2"},{n:"Dismissible",s:"ann-6"},{n:"Launch",s:"ann-5"},{n:"Light",s:"ann-1"},{n:"Sale",s:"ann-3"}],
+  "breadcrumb":       [{n:"Accent Active",s:"bread-5"},{n:"Card Border",s:"bread-6"},{n:"Chevron Light",s:"bread-1"},{n:"Dark",s:"bread-3"},{n:"Pills",s:"bread-4"},{n:"Slash",s:"bread-2"}],
+  "toast":            [{n:"Action",s:"toast-6"},{n:"Dark",s:"toast-5"},{n:"Error",s:"toast-2"},{n:"Info",s:"toast-4"},{n:"Success",s:"toast-1"},{n:"Warning",s:"toast-3"}],
 };
 
 function getVariants(id) {
@@ -2571,6 +2614,341 @@ const MOCKUPS = {
         <div style="width:110px;height:34px;background:#f97316;border-radius:8px"></div>
       </div>
     </div>`,
+
+  // ── ANNOUNCEMENT BAR ──────────────────────────────────────
+  "ann-1": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#f9fafb;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;padding:14px 48px;display:flex;justify-content:center;align-items:center">
+        <div style="height:10px;background:#6b7280;border-radius:3px;width:380px;opacity:.7"></div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.25">
+        <div style="height:18px;background:#111;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  "ann-2": ()=>`
+    <div class="m-bg" style="background:#18181b"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#09090b;padding:14px 48px;display:flex;justify-content:center;align-items:center;gap:16px">
+        <div style="flex:1;height:10px;background:#e4e4e7;border-radius:3px;opacity:.8;max-width:400px"></div>
+        <div style="width:14px;height:14px;color:#71717a;font-size:11px;opacity:.7;flex-shrink:0">✕</div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.15">
+        <div style="height:18px;background:#fff;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#52525b;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  "ann-3": ()=>`
+    <div class="m-bg" style="background:#fff7ed"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#f97316;padding:14px 48px;display:flex;justify-content:center;align-items:center;gap:14px">
+        <div style="background:#fff;border-radius:99px;padding:3px 10px;height:20px;display:flex;align-items:center">
+          <div style="height:8px;background:#f97316;border-radius:2px;width:36px"></div>
+        </div>
+        <div style="flex:1;height:10px;background:#fff;border-radius:3px;opacity:.9;max-width:340px"></div>
+        <div style="height:28px;background:#fff;border-radius:4px;width:90px;opacity:.95"></div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.25">
+        <div style="height:18px;background:#111;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#fed7aa;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  "ann-4": ()=>`
+    <div class="m-bg" style="background:#eff6ff"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#1d4ed8;padding:14px 48px;display:flex;justify-content:center;align-items:center;gap:14px">
+        <div style="background:#3b82f6;border-radius:99px;padding:3px 10px;height:20px;display:flex;align-items:center">
+          <div style="height:8px;background:#fff;border-radius:2px;width:28px"></div>
+        </div>
+        <div style="flex:1;height:10px;background:#bfdbfe;border-radius:3px;opacity:.85;max-width:360px"></div>
+        <div style="height:10px;background:#fff;border-radius:3px;width:70px;opacity:.9"></div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.25">
+        <div style="height:18px;background:#111;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#bfdbfe;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  "ann-5": ()=>`
+    <div class="m-bg" style="background:#1e1b4b"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#1d1b4b;border-bottom:1px solid #312e81;padding:14px 48px;display:flex;justify-content:center;align-items:center;gap:16px">
+        <div style="flex:1;height:10px;background:#c7d2fe;border-radius:3px;opacity:.8;max-width:380px"></div>
+        <div style="height:28px;background:#6366f1;border-radius:4px;width:100px"></div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.15">
+        <div style="height:18px;background:#c7d2fe;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#4338ca;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  "ann-6": ()=>`
+    <div class="m-bg" style="background:#f0fdf4"></div>
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:stretch">
+      <div style="background:#ecfdf5;border-top:1px solid #d1fae5;border-bottom:1px solid #d1fae5;padding:14px 48px;display:flex;justify-content:space-between;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:16px;height:16px;color:#16a34a;font-size:13px;font-weight:700">✓</div>
+          <div style="height:10px;background:#15803d;border-radius:3px;width:320px;opacity:.8"></div>
+        </div>
+        <div style="width:24px;height:24px;background:#d1fae5;border-radius:4px"></div>
+      </div>
+      <div style="flex:1;padding:32px 48px;display:flex;flex-direction:column;gap:12px;opacity:.25">
+        <div style="height:18px;background:#111;border-radius:3px;width:55%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:70%"></div>
+      </div>
+    </div>`,
+
+  // ── TOAST ─────────────────────────────────────────────────
+  "toast-1": ()=>`
+    <div class="m-bg" style="background:#f0fdf4"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#22c55e;border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;width:100%;max-width:440px">
+        <div style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:11px;color:#fff;font-weight:700">✓</div>
+        <div style="flex:1;height:10px;background:rgba(255,255,255,.8);border-radius:3px"></div>
+        <div style="color:rgba(255,255,255,.7);font-size:12px;flex-shrink:0">✕</div>
+      </div>
+    </div>`,
+
+  "toast-2": ()=>`
+    <div class="m-bg" style="background:#fff1f2"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#ef4444;border-radius:8px;display:flex;align-items:stretch;width:100%;max-width:480px;overflow:hidden">
+        <div style="flex:1;padding:16px;display:flex;align-items:center">
+          <div style="height:10px;background:rgba(255,255,255,.85);border-radius:3px;width:100%"></div>
+        </div>
+        <div style="border-left:1px solid rgba(255,255,255,.3);padding:16px;display:flex;align-items:center">
+          <div style="height:10px;background:#fff;border-radius:3px;width:36px;font-size:11px"></div>
+        </div>
+        <div style="border-left:1px solid rgba(255,255,255,.3);padding:16px;display:flex;align-items:center">
+          <div style="color:rgba(255,255,255,.8);font-size:12px">✕</div>
+        </div>
+      </div>
+    </div>`,
+
+  "toast-3": ()=>`
+    <div class="m-bg" style="background:#fffbeb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#f59e0b;border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;width:100%;max-width:420px">
+        <div style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px;color:#fff;font-weight:700">!</div>
+        <div style="flex:1;height:10px;background:rgba(255,255,255,.8);border-radius:3px"></div>
+        <div style="color:rgba(255,255,255,.7);font-size:12px;flex-shrink:0">✕</div>
+      </div>
+    </div>`,
+
+  "toast-4": ()=>`
+    <div class="m-bg" style="background:#eff6ff"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#3b82f6;border-radius:10px;padding:16px;display:flex;align-items:center;gap:12px;width:100%;max-width:440px">
+        <div style="width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;font-style:italic;font-weight:700">i</div>
+        <div style="flex:1;height:10px;background:rgba(255,255,255,.8);border-radius:3px"></div>
+        <div style="color:rgba(255,255,255,.7);font-size:12px;flex-shrink:0">✕</div>
+      </div>
+    </div>`,
+
+  "toast-5": ()=>`
+    <div class="m-bg" style="background:#f4f5f7"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#18181b;border-radius:9999px;padding:14px 20px 14px 16px;display:flex;align-items:center;gap:12px;max-width:360px">
+        <div style="width:20px;height:20px;border-radius:50%;background:#22c55e;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:#fff;font-weight:700">✓</div>
+        <div style="flex:1;height:10px;background:rgba(255,255,255,.85);border-radius:3px"></div>
+      </div>
+    </div>`,
+
+  "toast-6": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:48px">
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;display:flex;align-items:flex-start;gap:12px;width:100%;max-width:380px">
+        <div style="width:22px;height:22px;border-radius:50%;border:1.5px solid #16a34a;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;font-size:10px;color:#16a34a;font-weight:700">✓</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:6px">
+          <div style="height:11px;background:#15803d;border-radius:3px;width:120px"></div>
+          <div style="height:8px;background:#d1d5db;border-radius:2px;width:100%"></div>
+          <div style="height:8px;background:#d1d5db;border-radius:2px;width:85%"></div>
+        </div>
+        <div style="color:#9ca3af;font-size:12px;flex-shrink:0;margin-top:1px">✕</div>
+      </div>
+    </div>`,
+
+  // ── BREADCRUMB ────────────────────────────────────────────
+  "bread-1": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;gap:6px">
+        ${["Home","Products","Electronics","Laptops"].map((l,i)=>`
+          ${i>0?'<span style="color:#9ca3af;font-size:12px">›</span>':''}
+          <span style="font-size:11px;color:${i===3?'#111827':'#6b7280'};font-weight:${i===3?'600':'400'}">${l}</span>`).join('')}
+      </div>
+      <div style="padding:32px 48px;display:flex;flex-direction:column;gap:10px;opacity:.2">
+        <div style="height:20px;background:#111;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:70%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:55%"></div>
+      </div>
+    </div>`,
+
+  "bread-2": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;background:#f9fafb;display:flex;align-items:center;gap:8px">
+        ${["Home","Blog","Design Systems","Tokens"].map((l,i)=>`
+          ${i>0?'<span style="color:#d1d5db;font-size:12px">/</span>':''}
+          <span style="font-size:11px;color:${i===3?'#374151':'#9ca3af'};font-weight:${i===3?'500':'400'}">${l}</span>`).join('')}
+      </div>
+      <div style="padding:32px 48px;display:flex;flex-direction:column;gap:10px;opacity:.2">
+        <div style="height:20px;background:#111;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:65%"></div>
+      </div>
+    </div>`,
+
+  "bread-3": ()=>`
+    <div class="m-bg" style="background:#0f172a"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;background:#0f172a;border-top:1px solid #1e293b;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px">
+        ${["Home","Docs","API Reference","Authentication"].map((l,i)=>`
+          ${i>0?'<span style="color:#334155;font-size:12px">›</span>':''}
+          <span style="font-size:11px;color:${i===3?'#f1f5f9':'#64748b'};font-weight:${i===3?'500':'400'}">${l}</span>`).join('')}
+      </div>
+      <div style="padding:32px 48px;display:flex;flex-direction:column;gap:10px;opacity:.15">
+        <div style="height:20px;background:#f1f5f9;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#334155;border-radius:2px;width:65%"></div>
+      </div>
+    </div>`,
+
+  "bread-4": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;background:#fff;display:flex;align-items:center;gap:6px">
+        ${["Home","Settings","Account"].map((l,i)=>`
+          ${i>0?'<span style="color:#d1d5db;font-size:11px">›</span>':''}
+          <span style="font-size:10px;padding:3px 8px;background:${i===2?'#f1f5f9':'transparent'};border:${i===2?'1px solid #e2e8f0':'none'};border-radius:5px;color:${i===2?'#111827':'#6b7280'};font-weight:${i===2?'600':'400'}">${l}</span>`).join('')}
+      </div>
+      <div style="padding:32px 48px;display:flex;flex-direction:column;gap:10px;opacity:.2">
+        <div style="height:20px;background:#111;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:65%"></div>
+      </div>
+    </div>`,
+
+  "bread-5": ()=>`
+    <div class="m-bg" style="background:#fff"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;background:#fff;display:flex;align-items:center;gap:6px">
+        <span style="color:#9ca3af;font-size:13px">⌂</span>
+        ${["Pricing","Enterprise","Contact"].map((l,i)=>`
+          <span style="color:#9ca3af;font-size:12px">›</span>
+          <span style="font-size:11px;color:${i===2?'#6366f1':'#6b7280'};font-weight:${i===2?'600':'400'}">${l}</span>`).join('')}
+      </div>
+      <div style="padding:32px 48px;display:flex;flex-direction:column;gap:10px;opacity:.2">
+        <div style="height:20px;background:#111;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:65%"></div>
+      </div>
+    </div>`,
+
+  "bread-6": ()=>`
+    <div class="m-bg" style="background:#f9fafb"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center">
+      <div style="padding:12px 48px;background:#f9fafb">
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 16px;display:inline-flex;align-items:center;gap:8px">
+          ${["Home","Resources","Case Studies","Stripe"].map((l,i)=>`
+            ${i>0?'<span style="color:#d1d5db;font-size:12px">›</span>':''}
+            <span style="font-size:11px;color:${i===3?'#111827':'#9ca3af'};font-weight:${i===3?'600':'400'}">${l}</span>`).join('')}
+        </div>
+      </div>
+      <div style="padding:24px 48px;display:flex;flex-direction:column;gap:10px;opacity:.2">
+        <div style="height:20px;background:#111;border-radius:3px;width:50%"></div>
+        <div style="height:10px;background:#9ca3af;border-radius:2px;width:65%"></div>
+      </div>
+    </div>`,
+
+  // ── COOKIE BANNER ─────────────────────────────────────────
+  "cookie-1": ()=>`
+    <div class="m-bg" style="background:#fff;border:1px solid #e5e7eb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;padding:48px;gap:32px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="height:14px;background:#111;border-radius:3px;width:180px"></div>
+        <div style="height:9px;background:#d1d5db;border-radius:2px;width:100%"></div>
+        <div style="height:9px;background:#d1d5db;border-radius:2px;width:80%"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="height:34px;width:90px;border:1.5px solid #d1d5db;border-radius:6px"></div>
+        <div style="height:34px;width:100px;background:#111;border-radius:6px"></div>
+      </div>
+    </div>`,
+
+  "cookie-2": ()=>`
+    <div class="m-bg" style="background:#09090b;border:1px solid #27272a"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;padding:48px;gap:32px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="height:14px;background:#fff;border-radius:3px;width:180px"></div>
+        <div style="height:9px;background:#3f3f46;border-radius:2px;width:100%"></div>
+        <div style="height:9px;background:#3f3f46;border-radius:2px;width:75%"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="height:34px;width:80px;border:1.5px solid #52525b;border-radius:6px"></div>
+        <div style="height:34px;width:100px;background:#fff;border-radius:6px"></div>
+      </div>
+    </div>`,
+
+  "cookie-3": ()=>`
+    <div class="m-bg" style="background:#f4f5f7"></div>
+    <div style="position:absolute;inset:48px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;display:flex;align-items:center;padding:32px;gap:28px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="height:14px;background:#111;border-radius:3px;width:160px"></div>
+        <div style="height:9px;background:#d1d5db;border-radius:2px;width:100%"></div>
+        <div style="height:9px;background:#d1d5db;border-radius:2px;width:85%"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="height:34px;width:80px;border:1.5px solid #d1d5db;border-radius:6px"></div>
+        <div style="height:34px;width:90px;background:#111;border-radius:6px"></div>
+      </div>
+    </div>`,
+
+  "cookie-4": ()=>`
+    <div class="m-bg" style="background:#1d4ed8"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;padding:48px;gap:32px">
+      <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+        <div style="height:13px;background:#fff;border-radius:3px;width:240px"></div>
+        <div style="height:9px;background:#3b82f6;border-radius:2px;width:160px"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-shrink:0">
+        <div style="height:32px;width:100px;border:1.5px solid #93c5fd;border-radius:4px"></div>
+        <div style="height:32px;width:70px;background:#fff;border-radius:4px"></div>
+      </div>
+    </div>`,
+
+  "cookie-5": ()=>`
+    <div class="m-bg" style="background:#fafafa;border:1px solid #e5e7eb"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;padding:48px;gap:32px">
+      <div style="flex:1;height:10px;background:#d1d5db;border-radius:2px"></div>
+      <div style="display:flex;align-items:center;gap:14px;flex-shrink:0">
+        <div style="height:10px;width:80px;background:#6366f1;border-radius:2px;opacity:.7"></div>
+        <div style="height:32px;width:50px;background:#111;border-radius:4px"></div>
+      </div>
+    </div>`,
+
+  "cookie-6": ()=>`
+    <div class="m-bg" style="background:#fff;border:1px solid #e5e7eb"></div>
+    <div style="position:absolute;inset:0;display:flex;flex-direction:column;padding:40px;gap:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="height:14px;background:#111;border-radius:3px;width:140px"></div>
+        <div style="width:24px;height:24px;background:#f3f4f6;border-radius:6px"></div>
+      </div>
+      <div style="height:9px;background:#e5e7eb;border-radius:2px;width:100%"></div>
+      <div style="height:9px;background:#e5e7eb;border-radius:2px;width:88%"></div>
+      ${[{on:true},{on:false},{on:false}].map(c=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid #f3f4f6">
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="height:10px;background:#111;border-radius:2px;width:120px"></div>
+            <div style="height:8px;background:#e5e7eb;border-radius:2px;width:180px"></div>
+          </div>
+          <div style="width:36px;height:20px;background:${c.on?"#4ade80":"#d1d5db"};border-radius:99px"></div>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:4px">
+        <div style="height:32px;width:130px;border:1.5px solid #d1d5db;border-radius:6px"></div>
+        <div style="height:32px;width:100px;background:#111;border-radius:6px"></div>
+      </div>
+    </div>`,
 };
 
 function mockupGeneric(key) {
@@ -2611,22 +2989,57 @@ let isGenerating    = false;
 // BUILD DROPDOWN
 // ══════════════════════════════════════════════════════════
 (function buildDropdown() {
-  const list = document.getElementById('dropdown-list');
+  const container = document.getElementById('dropdown-options');
   GROUPS.forEach(group => {
     const hdr = document.createElement('div');
     hdr.className = 'group-header';
     hdr.textContent = group.label;
-    list.appendChild(hdr);
+    hdr.dataset.group = group.label;
+    container.appendChild(hdr);
     group.items.forEach(item => {
       const opt = document.createElement('div');
       opt.className = 'option';
       opt.dataset.id = item.id;
+      opt.dataset.group = group.label;
+      opt.dataset.name = item.name.toLowerCase();
       opt.innerHTML = `<span class="option-icon">${item.icon}</span><span class="option-name">${item.name}</span>`;
       opt.onclick = () => selectSection(item, opt);
-      list.appendChild(opt);
+      container.appendChild(opt);
     });
   });
 })();
+
+function filterDropdown(query) {
+  const q = query.trim().toLowerCase();
+  const container = document.getElementById('dropdown-options');
+  const options = container.querySelectorAll('.option');
+  const headers = container.querySelectorAll('.group-header');
+
+  options.forEach(opt => {
+    const match = !q || opt.dataset.name.includes(q) || opt.dataset.group.toLowerCase().includes(q);
+    opt.style.display = match ? '' : 'none';
+  });
+
+  headers.forEach(hdr => {
+    const groupName = hdr.dataset.group;
+    const hasVisible = [...options].some(o => o.dataset.group === groupName && o.style.display !== 'none');
+    hdr.style.display = hasVisible ? '' : 'none';
+  });
+
+  let noResults = container.querySelector('.no-results');
+  const anyVisible = [...options].some(o => o.style.display !== 'none');
+  if (!anyVisible) {
+    if (!noResults) {
+      noResults = document.createElement('div');
+      noResults.className = 'no-results';
+      container.appendChild(noResults);
+    }
+    noResults.textContent = `No patterns found for "${query}"`;
+    noResults.style.display = '';
+  } else if (noResults) {
+    noResults.style.display = 'none';
+  }
+}
 
 // ══════════════════════════════════════════════════════════
 // INTERACTIONS
@@ -2637,6 +3050,12 @@ function toggleDropdown() {
   dropdownOpen = !dropdownOpen;
   document.getElementById('trigger').classList.toggle('open', dropdownOpen);
   document.getElementById('dropdown-list').classList.toggle('open', dropdownOpen);
+  if (dropdownOpen) {
+    const search = document.getElementById('dropdown-search');
+    search.value = '';
+    filterDropdown('');
+    setTimeout(() => search.focus(), 0);
+  }
 }
 
 document.addEventListener('click', e => {
@@ -2646,6 +3065,12 @@ document.addEventListener('click', e => {
     document.getElementById('dropdown-list').classList.remove('open');
   }
 });
+
+function closeDropdown() {
+  dropdownOpen = false;
+  document.getElementById('trigger').classList.remove('open');
+  document.getElementById('dropdown-list').classList.remove('open');
+}
 
 function selectSection(item, optEl) {
   selectedSection = item;
@@ -2660,10 +3085,7 @@ function selectSection(item, optEl) {
   const btn = document.getElementById('gen-btn');
   btn.classList.add('enabled');
   btn.disabled = false;
-  // Close
-  dropdownOpen = false;
-  document.getElementById('trigger').classList.remove('open');
-  document.getElementById('dropdown-list').classList.remove('open');
+  closeDropdown();
   // Clear old previews
   document.getElementById('preview-section').classList.remove('visible');
 }

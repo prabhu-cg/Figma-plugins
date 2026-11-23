@@ -92,13 +92,12 @@ function rect(w, h, hex, radius, alpha) {
 // Image placeholder
 function imgBlock(name, bg) {
   const f = alFrame({name:name||"Image Placeholder", bg:bg||"#E2E8F0", dir:"VERTICAL", main:"CENTER", cross:"CENTER"});
-  try { f.layoutSizingHorizontal = "FILL"; } catch(e) {}
-  try { f.layoutSizingVertical   = "FILL"; } catch(e) {}
+  // Sizing (fill/fixed) is applied by each caller AFTER appendChild.
   const em = txt("🖼", 24, "Regular", bg||"#CBD5E1");
   em.name = "Placeholder Icon";
   em.textAlignHorizontal = "CENTER";
-  try { em.layoutSizingHorizontal = "FILL"; } catch(e) {}
   f.appendChild(em);
+  fill(em);
   return f;
 }
 
@@ -330,11 +329,11 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const top = alFrame({name:"Top",dir:W<=480?"VERTICAL":"HORIZONTAL",gap:W<=480?24:48,pl:0,pr:0,pt:0,pb:0,main:W<=480?"MIN":"SPACE_BETWEEN"});
     const brand = alFrame({name:"Brand",dir:"VERTICAL",gap:12,pl:0,pr:0,pt:0,pb:0});
-    const brandTitle=txt("Brand",18,"Bold","#FFFFFF"); fill(brandTitle); brand.appendChild(brandTitle);
-    const brandSub=txt("Build better, ship faster.",14,"Regular","#6B7280"); fill(brandSub); brand.appendChild(brandSub);
+    const brandTitle=txt("Brand",18,"Bold","#FFFFFF"); brand.appendChild(brandTitle); fill(brandTitle);
+    const brandSub=txt("Build better, ship faster.",14,"Regular","#6B7280"); brand.appendChild(brandSub); fill(brandSub);
     const tags = alFrame({name:"Tags",dir:"HORIZONTAL",gap:6,pl:0,pr:0,pt:0,pb:0});
     ["#product","#design","#dev"].forEach(t=>tags.appendChild(pillNode(t,"#1F2937","#6B7280")));
-    fill(tags); brand.appendChild(tags);
+    brand.appendChild(tags); fill(tags);
     top.appendChild(brand); fill(brand);
     const cols = alFrame({name:"Cols",dir:"HORIZONTAL",gap:36,pl:0,pr:0,pt:0,pb:0});
     [["Product",["Features","Pricing","Changelog","Integrations"]],
@@ -1775,7 +1774,7 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const mobile=W<=480;
     f.appendChild(pillNode("New release","#18181B","#FFFFFF"));
-    const h=txt("Build at the\nSpeed of Thought",52,"Bold","#FFFFFF",{lineHeight:60}); f.appendChild(h); if(mobile){fill(h); h.textAlignHorizontal="CENTER";}
+    const h=txt("Build at the\nSpeed of Thought",52,"Bold","#FFFFFF",{lineHeight:60}); f.appendChild(h); fill(h); h.textAlignHorizontal="CENTER";
     const vf=alFrame({name:"Video Frame",dir:"VERTICAL",bg:"#18181B",main:"CENTER",cross:"CENTER",radius:12,gap:12,pl:0,pr:0,pt:0,pb:0});
     vf.strokes=[{type:"SOLID",color:rgb("#27272A")}]; vf.strokeWeight=1;
     f.appendChild(vf);
@@ -2264,7 +2263,7 @@ const BUILDERS = {
     f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1;
     const logo=alFrame({name:"Logo",dir:"HORIZONTAL",bg:"#FFFFFF",gap:10,pl:0,pr:0,pt:0,pb:16,cross:"CENTER"});
     const badge=rect(28,28,"#6366F1",8); logo.appendChild(badge); logo.appendChild(txt("Brand",16,"Bold","#111827")); f.appendChild(logo); fill(logo);
-    const div=figma.createRectangle(); div.resize(228,1); div.fills=solid("#F3F4F6"); try{div.layoutSizingHorizontal="FILL";}catch(e){} f.appendChild(div);
+    const div=figma.createRectangle(); div.resize(228,1); div.fills=solid("#F3F4F6"); f.appendChild(div); fill(div);
     const nav=alFrame({name:"Nav Items",dir:"VERTICAL",bg:"#FFFFFF",gap:2,pl:0,pr:0,pt:12,pb:12});
     [["🏠","Home",true],["📊","Analytics",false],["👥","Users",false],["📁","Projects",false],["⚙️","Settings",false]].forEach(([icon,lbl,active])=>{
       const item=alFrame({name:"Nav: "+lbl,dir:"HORIZONTAL",bg:active?"#EEF2FF":"#FFFFFF",pl:12,pr:12,pt:10,pb:10,gap:10,cross:"CENTER",radius:8});
@@ -2277,7 +2276,7 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const logo=alFrame({name:"Logo",dir:"HORIZONTAL",bg:"#111827",gap:10,pl:0,pr:0,pt:0,pb:16,cross:"CENTER"});
     const badge=rect(28,28,"#6366F1",8); logo.appendChild(badge); logo.appendChild(txt("Brand",16,"Bold","#FFFFFF")); f.appendChild(logo); fill(logo);
-    const div=figma.createRectangle(); div.resize(228,1); div.fills=solid("#1F2937"); try{div.layoutSizingHorizontal="FILL";}catch(e){} f.appendChild(div);
+    const div=figma.createRectangle(); div.resize(228,1); div.fills=solid("#1F2937"); f.appendChild(div); fill(div);
     const nav=alFrame({name:"Nav Items",dir:"VERTICAL",bg:"#111827",gap:2,pl:0,pr:0,pt:12,pb:12});
     [["🏠","Dashboard",true],["📊","Analytics",false],["👥","Team",false],["🔔","Notifications",false],["⚙️","Settings",false]].forEach(([icon,lbl,active])=>{
       const item=alFrame({name:"Nav: "+lbl,dir:"HORIZONTAL",bg:active?"#1F2937":"transparent",pl:12,pr:12,pt:10,pb:10,gap:10,cross:"CENTER",radius:8});
@@ -2332,7 +2331,7 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const logo=alFrame({name:"Logo",dir:"HORIZONTAL",bg:"#6366F1",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:8}); logo.resize(40,40); logo.primaryAxisSizingMode="FIXED"; logo.counterAxisSizingMode="FIXED";
     logo.appendChild(txt("◈",18,"Regular","#FFFFFF")); f.appendChild(logo);
-    const div=figma.createRectangle(); div.resize(40,1); div.fills=solid("#27272A"); try{div.layoutSizingHorizontal="FILL";}catch(e){} f.appendChild(div);
+    const div=figma.createRectangle(); div.resize(40,1); div.fills=solid("#27272A"); f.appendChild(div); fill(div);
     const nav=alFrame({name:"Nav",dir:"VERTICAL",bg:"#18181B",gap:4,pl:0,pr:0,pt:8,pb:8});
     [["🏠",true],["📊",false],["👥",false],["📁",false],["🔔",false]].forEach(([icon,active])=>{
       const item=alFrame({name:"Nav Icon",dir:"HORIZONTAL",bg:active?"#3F3F46":"transparent",pl:0,pr:0,pt:10,pb:10,main:"CENTER",cross:"CENTER",radius:8});
@@ -2352,7 +2351,7 @@ const BUILDERS = {
     const header=alFrame({name:"Header",dir:"HORIZONTAL",bg:"#FFFFFF",pl:20,pr:20,pt:20,pb:16,gap:10,cross:"CENTER",main:"SPACE_BETWEEN"});
     header.appendChild(txt("Navigation",14,"SemiBold","#111827"));
     header.appendChild(txt("✕",12,"Regular","#9CA3AF")); f.appendChild(header); fill(header);
-    const div=figma.createRectangle(); div.resize(240,1); div.fills=solid("#F3F4F6"); try{div.layoutSizingHorizontal="FILL";}catch(e){} f.appendChild(div);
+    const div=figma.createRectangle(); div.resize(240,1); div.fills=solid("#F3F4F6"); f.appendChild(div); fill(div);
     const nav=alFrame({name:"Nav",dir:"VERTICAL",bg:"#FFFFFF",gap:0,pl:0,pr:0,pt:8,pb:8});
     [["Home",true],["Products",false],["Pricing",false],["About",false],["Blog",false],["Contact",false]].forEach(([lbl,active])=>{
       const item=alFrame({name:"Nav: "+lbl,dir:"HORIZONTAL",bg:"#FFFFFF",pl:20,pr:20,pt:12,pb:12,main:"SPACE_BETWEEN",cross:"CENTER"});
@@ -2369,7 +2368,7 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const mobile=W<=480;
     const ey=txt("✦  Featured  ✦",12,"Regular","#52525B",{align:"CENTER"}); f.appendChild(ey); fill(ey);
-    const h=txt("The Art of Building\nGreat Products",54,"Bold","#FFFFFF",{lineHeight:62}); f.appendChild(h); if(mobile){fill(h); h.textAlignHorizontal="CENTER";}
+    const h=txt("The Art of Building\nGreat Products",54,"Bold","#FFFFFF",{lineHeight:62}); f.appendChild(h); fill(h); h.textAlignHorizontal="CENTER";
     const vf=alFrame({name:"Video Frame",dir:"VERTICAL",bg:"#18181B",main:"CENTER",cross:"CENTER",radius:16,gap:12,pl:0,pr:0,pt:0,pb:0});
     vf.strokes=[{type:"SOLID",color:rgb("#27272A")}]; vf.strokeWeight=1;
     f.appendChild(vf);
@@ -2391,9 +2390,9 @@ const BUILDERS = {
     card.resize(cardW,1); card.primaryAxisSizingMode="AUTO"; card.counterAxisSizingMode="FIXED"; f.appendChild(card);
     const logo=alFrame({name:"Logo",dir:"HORIZONTAL",bg:"#111827",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:10});
     logo.resize(40,40); logo.primaryAxisSizingMode="FIXED"; logo.counterAxisSizingMode="FIXED"; card.appendChild(logo);
-    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); hGrp.primaryAxisSizingMode="AUTO"; fill(hGrp); card.appendChild(hGrp);
+    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); hGrp.primaryAxisSizingMode="AUTO"; card.appendChild(hGrp); fill(hGrp);
     hGrp.appendChild(txt("Welcome back",26,"Bold","#111827",{align:"CENTER"}));
-    const hs=txt("Sign in to your account to continue.",14,"Regular","#6B7280",{align:"CENTER",lineHeight:22}); fill(hs); hGrp.appendChild(hs);
+    const hs=txt("Sign in to your account to continue.",14,"Regular","#6B7280",{align:"CENTER",lineHeight:22}); hGrp.appendChild(hs); fill(hs);
     const form=alFrame({name:"Form",dir:"VERTICAL",gap:12,pl:0,pr:0,pt:0,pb:0}); card.appendChild(form); fill(form);
     ["Email address","Password"].forEach(ph=>{
       const inp=alFrame({name:ph,dir:"HORIZONTAL",bg:"#F9FAFB",pl:14,pr:14,pt:12,pb:12,cross:"CENTER",radius:8});
@@ -2416,9 +2415,9 @@ const BUILDERS = {
     card.resize(cardW,1); card.primaryAxisSizingMode="AUTO"; card.counterAxisSizingMode="FIXED"; f.appendChild(card);
     const logo=alFrame({name:"Logo",dir:"HORIZONTAL",bg:"#6366F1",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:10});
     logo.resize(40,40); logo.primaryAxisSizingMode="FIXED"; logo.counterAxisSizingMode="FIXED"; card.appendChild(logo);
-    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); hGrp.primaryAxisSizingMode="AUTO"; fill(hGrp); card.appendChild(hGrp);
+    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); hGrp.primaryAxisSizingMode="AUTO"; card.appendChild(hGrp); fill(hGrp);
     hGrp.appendChild(txt("Welcome back",26,"Bold","#F1F5F9",{align:"CENTER"}));
-    const hs=txt("Sign in to continue to your workspace.",14,"Regular","#94A3B8",{align:"CENTER",lineHeight:22}); fill(hs); hGrp.appendChild(hs);
+    const hs=txt("Sign in to continue to your workspace.",14,"Regular","#94A3B8",{align:"CENTER",lineHeight:22}); hGrp.appendChild(hs); fill(hs);
     const form=alFrame({name:"Form",dir:"VERTICAL",gap:12,pl:0,pr:0,pt:0,pb:0}); card.appendChild(form); fill(form);
     ["Email address","Password"].forEach(ph=>{
       const inp=alFrame({name:ph,dir:"HORIZONTAL",bg:"#0F172A",pl:14,pr:14,pt:12,pb:12,cross:"CENTER",radius:8});
@@ -2439,8 +2438,8 @@ const BUILDERS = {
     brand.primaryAxisSizingMode="AUTO"; f.appendChild(brand); fill(brand); if(!mobile) fillV(brand);
     const lbx=alFrame({name:"Logo",dir:"HORIZONTAL",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:10});
     lbx.fills=solid("#FFFFFF",0.25); lbx.resize(48,48); lbx.primaryAxisSizingMode="FIXED"; lbx.counterAxisSizingMode="FIXED"; brand.appendChild(lbx);
-    const bh=txt("Brand Name",22,"Bold","#FFFFFF",{align:"CENTER"}); fill(bh); brand.appendChild(bh);
-    const bs=txt("Your all-in-one workspace for modern teams.",14,"Regular","#FEDDB3",{align:"CENTER",lineHeight:22}); fill(bs); brand.appendChild(bs);
+    const bh=txt("Brand Name",22,"Bold","#FFFFFF",{align:"CENTER"}); brand.appendChild(bh); fill(bh);
+    const bs=txt("Your all-in-one workspace for modern teams.",14,"Regular","#FEDDB3",{align:"CENTER",lineHeight:22}); brand.appendChild(bs); fill(bs);
     const formSide=alFrame({name:"Form Side",dir:"VERTICAL",bg:"#FFFFFF",pt:40,pb:40,pl:40,pr:40,gap:24,main:"CENTER",cross:"CENTER"});
     formSide.primaryAxisSizingMode="AUTO"; f.appendChild(formSide); if(W<=768) fill(formSide); if(!mobile) fillV(formSide);
     const inner=alFrame({name:"Inner",dir:"VERTICAL",bg:"#FFFFFF",pt:0,pb:0,pl:0,pr:0,gap:24,cross:"CENTER"});
@@ -2466,9 +2465,9 @@ const BUILDERS = {
     f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
     const inner=alFrame({name:"Inner",dir:"VERTICAL",bg:"#FFFFFF",pt:0,pb:0,pl:0,pr:0,gap:20});
     inner.resize(mobile?W-80:Math.min(400,W-80),1); inner.primaryAxisSizingMode="AUTO"; inner.counterAxisSizingMode="FIXED"; f.appendChild(inner);
-    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0}); hGrp.primaryAxisSizingMode="AUTO"; fill(hGrp); inner.appendChild(hGrp);
+    const hGrp=alFrame({name:"Heading",dir:"VERTICAL",gap:8,pl:0,pr:0,pt:0,pb:0}); hGrp.primaryAxisSizingMode="AUTO"; inner.appendChild(hGrp); fill(hGrp);
     hGrp.appendChild(txt("Sign in",30,"Bold","#111827"));
-    const hs=txt("Good to see you again.",15,"Regular","#6B7280",{lineHeight:22}); fill(hs); hGrp.appendChild(hs);
+    const hs=txt("Good to see you again.",15,"Regular","#6B7280",{lineHeight:22}); hGrp.appendChild(hs); fill(hs);
     const form=alFrame({name:"Form",dir:"VERTICAL",gap:16,pl:0,pr:0,pt:0,pb:0}); inner.appendChild(form); fill(form);
     [["Email","Email address"],["Password","Password"]].forEach(([lbl,ph])=>{
       const field=alFrame({name:lbl,dir:"VERTICAL",gap:6,pl:0,pr:0,pt:0,pb:0}); form.appendChild(field); fill(field);
@@ -2477,9 +2476,9 @@ const BUILDERS = {
       inp.strokes=[{type:"SOLID",color:rgb("#D1D5DB")}]; inp.strokeWeight=1;
       const p=txt(ph,14,"Regular","#9CA3AF"); inp.appendChild(p); fill(p); field.appendChild(inp); fill(inp);
     });
-    const divL=alFrame({name:"Divider",dir:"HORIZONTAL",bg:"#E5E7EB",pt:0,pb:0,pl:0,pr:0}); fill(divL); divL.resize(1,1); inner.appendChild(divL);
-    const btn=btnNode("Sign in","#111827","#FFFFFF",16,13,8); fill(btn); inner.appendChild(btn);
-    const foot=txt("New here?  Create an account \u2192",13,"Regular","#6B7280"); fill(foot); inner.appendChild(foot);
+    const divL=alFrame({name:"Divider",dir:"HORIZONTAL",bg:"#E5E7EB",pt:0,pb:0,pl:0,pr:0}); divL.resize(1,1); inner.appendChild(divL); fill(divL);
+    const btn=btnNode("Sign in","#111827","#FFFFFF",16,13,8); inner.appendChild(btn); fill(btn);
+    const foot=txt("New here?  Create an account \u2192",13,"Regular","#6B7280"); inner.appendChild(foot); fill(foot);
     return f;
   },
 
@@ -2494,7 +2493,7 @@ const BUILDERS = {
     const strip=alFrame({name:"Header Strip",dir:"VERTICAL",bg:"#7C3AED",pt:24,pb:24,pl:40,pr:40,gap:8,cross:"CENTER"});
     strip.primaryAxisSizingMode="AUTO"; card.appendChild(strip); fill(strip);
     strip.appendChild(txt("Sign in to your account",18,"Bold","#FFFFFF",{align:"CENTER"}));
-    const ss=txt("Enter your credentials to continue.",13,"Regular","#C4B5FD",{align:"CENTER",lineHeight:20}); fill(ss); strip.appendChild(ss);
+    const ss=txt("Enter your credentials to continue.",13,"Regular","#C4B5FD",{align:"CENTER",lineHeight:20}); strip.appendChild(ss); fill(ss);
     const body=alFrame({name:"Body",dir:"VERTICAL",bg:"#FFFFFF",pt:32,pb:32,pl:40,pr:40,gap:16,cross:"CENTER"});
     body.primaryAxisSizingMode="AUTO"; card.appendChild(body); fill(body);
     const form=alFrame({name:"Form",dir:"VERTICAL",gap:12,pl:0,pr:0,pt:0,pb:0}); body.appendChild(form); fill(form);
@@ -2978,6 +2977,307 @@ const BUILDERS = {
     formSide.appendChild(btnNode("Send message","#F97316","#FFFFFF",20,13,8));
     return f;
   },
+  // ── COOKIE BANNER ──────────────────────────────────────────────────────────
+  "cookie-1": W => {
+    const mobile=W<=480;
+    const dir=mobile?"VERTICAL":"HORIZONTAL";
+    const f=alFrame({name:"Cookie Banner — Light Bar",dir,bg:"#FFFFFF",w:W,pl:40,pr:40,pt:40,pb:40,gap:24,cross:"CENTER",main:mobile?"MIN":"SPACE_BETWEEN"});
+    if(mobile){ f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED"; }
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const copy=alFrame({name:"Copy",dir:"VERTICAL",gap:6,pl:0,pr:0,pt:0,pb:0}); f.appendChild(copy); fill(copy);
+    copy.appendChild(txt("We use cookies 🍪",15,"Bold","#111827"));
+    const desc=txt("We use cookies to improve your experience. By clicking Accept, you agree to our cookie policy.",13,"Regular","#6B7280",{lineHeight:20}); copy.appendChild(desc); fill(desc);
+    const btns=alFrame({name:"Actions",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(btns);
+    if(mobile) fill(btns);
+    btns.appendChild(btnNode("Reject all","none","#374151",16,9,6));
+    btns.appendChild(btnNode("Accept all","#111827","#FFFFFF",16,9,6));
+    return f;
+  },
+  "cookie-2": W => {
+    const mobile=W<=480;
+    const dir=mobile?"VERTICAL":"HORIZONTAL";
+    const f=alFrame({name:"Cookie Banner — Dark Bar",dir,bg:"#09090B",w:W,pl:40,pr:40,pt:40,pb:40,gap:24,cross:"CENTER",main:mobile?"MIN":"SPACE_BETWEEN"});
+    if(mobile){ f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED"; }
+    f.strokes=[{type:"SOLID",color:rgb("#27272A")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const copy=alFrame({name:"Copy",dir:"VERTICAL",gap:6,pl:0,pr:0,pt:0,pb:0}); f.appendChild(copy); fill(copy);
+    copy.appendChild(txt("Cookie Preferences",15,"Bold","#FFFFFF"));
+    const desc=txt("We use cookies to improve your experience and analyse site traffic. See our cookie policy for more details.",13,"Regular","#71717A",{lineHeight:20}); copy.appendChild(desc); fill(desc);
+    const btns=alFrame({name:"Actions",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(btns);
+    if(mobile) fill(btns);
+    btns.appendChild(btnNode("Manage","none","#A1A1AA",16,9,6));
+    btns.appendChild(btnNode("Accept all","#FFFFFF","#09090B",16,9,6));
+    return f;
+  },
+  "cookie-3": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Cookie Banner — Card",dir:"VERTICAL",bg:"#F4F5F7",w:W,pl:40,pr:40,pt:40,pb:40,gap:0,cross:"CENTER"});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    const cardDir=mobile?"VERTICAL":"HORIZONTAL";
+    const card=alFrame({name:"Card",dir:cardDir,bg:"#FFFFFF",pl:28,pr:28,pt:24,pb:24,gap:24,cross:"CENTER",main:mobile?"MIN":"SPACE_BETWEEN",radius:12});
+    card.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; card.strokeWeight=1;
+    if(mobile){ card.primaryAxisSizingMode="AUTO"; card.counterAxisSizingMode="FIXED"; }
+    f.appendChild(card); fill(card);
+    const copy=alFrame({name:"Copy",dir:"VERTICAL",gap:6,pl:0,pr:0,pt:0,pb:0}); card.appendChild(copy); fill(copy);
+    copy.appendChild(txt("🍪  Cookie Notice",15,"Bold","#111827"));
+    const desc=txt("This site uses cookies to personalize content and ads, to provide social media features, and to analyse our traffic.",13,"Regular","#6B7280",{lineHeight:20}); copy.appendChild(desc); fill(desc);
+    const btns=alFrame({name:"Actions",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); card.appendChild(btns);
+    if(mobile) fill(btns);
+    btns.appendChild(btnNode("Decline","none","#374151",16,9,6));
+    btns.appendChild(btnNode("Accept","#111827","#FFFFFF",16,9,6));
+    return f;
+  },
+  "cookie-4": W => {
+    const mobile=W<=480;
+    const dir=mobile?"VERTICAL":"HORIZONTAL";
+    const f=alFrame({name:"Cookie Banner — Branded",dir,bg:"#1D4ED8",w:W,pl:40,pr:40,pt:40,pb:40,gap:24,cross:"CENTER",main:mobile?"MIN":"SPACE_BETWEEN"});
+    if(mobile){ f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED"; }
+    const copy=alFrame({name:"Copy",dir:"VERTICAL",gap:4,pl:0,pr:0,pt:0,pb:0}); f.appendChild(copy); fill(copy);
+    copy.appendChild(txt("We use cookies to enhance your experience.",14,"SemiBold","#FFFFFF"));
+    const desc=txt("See our Privacy Policy for more details.",13,"Regular","#BFDBFE"); copy.appendChild(desc); fill(desc);
+    const btns=alFrame({name:"Actions",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(btns);
+    if(mobile) fill(btns);
+    btns.appendChild(btnNode("Learn more","none","#BFDBFE",16,9,4));
+    btns.appendChild(btnNode("Got it","#FFFFFF","#1D4ED8",16,9,4));
+    return f;
+  },
+  "cookie-5": W => {
+    const mobile=W<=480;
+    const dir=mobile?"VERTICAL":"HORIZONTAL";
+    const f=alFrame({name:"Cookie Banner — Minimal",dir,bg:"#FAFAFA",w:W,pl:40,pr:40,pt:40,pb:40,gap:24,cross:"CENTER",main:mobile?"MIN":"SPACE_BETWEEN"});
+    if(mobile){ f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED"; }
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const msg=txt("This website uses cookies to improve your browsing experience.",13,"Regular","#374151",{lineHeight:20}); f.appendChild(msg); fill(msg);
+    const row=alFrame({name:"Actions",dir:"HORIZONTAL",gap:10,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    if(mobile) fill(row);
+    row.appendChild(txt("Cookie Policy",13,"Medium","#6366F1"));
+    row.appendChild(btnNode("OK","#111827","#FFFFFF",16,9,4));
+    return f;
+  },
+  "cookie-6": W => {
+    const f=alFrame({name:"Cookie Banner — Preferences",dir:"VERTICAL",bg:"#FFFFFF",w:W,pl:40,pr:40,pt:40,pb:40,gap:20});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const hdr=alFrame({name:"Header",dir:"HORIZONTAL",gap:12,pl:0,pr:0,pt:0,pb:0,main:"SPACE_BETWEEN",cross:"CENTER"}); f.appendChild(hdr); fill(hdr);
+    hdr.appendChild(txt("Cookie Settings",18,"Bold","#111827"));
+    const close=alFrame({name:"Close",dir:"HORIZONTAL",bg:"#F3F4F6",pl:8,pr:8,pt:6,pb:6,radius:6,main:"CENTER",cross:"CENTER"}); close.appendChild(txt("✕",12,"Regular","#6B7280")); hdr.appendChild(close);
+    const desc=txt("We use cookies to personalise content and ads, provide social media features and analyse our traffic. Choose which cookies to allow.",13,"Regular","#6B7280",{lineHeight:20}); f.appendChild(desc); fill(desc);
+    [{name:"Strictly Necessary",desc:"Required for the website to function",on:true},{name:"Analytics",desc:"Help us understand how visitors use the site",on:false},{name:"Marketing",desc:"Used to track visitors across websites",on:false}].forEach(cat=>{
+      const row=alFrame({name:cat.name,dir:"HORIZONTAL",gap:12,pl:0,pr:0,pt:14,pb:14,cross:"CENTER",main:"SPACE_BETWEEN"}); f.appendChild(row); fill(row);
+      row.strokes=[{type:"SOLID",color:rgb("#F3F4F6")}]; row.strokeWeight=1; row.strokeAlign="INSIDE";
+      const left=alFrame({name:"Info",dir:"VERTICAL",gap:2,pl:0,pr:0,pt:0,pb:0}); row.appendChild(left); fill(left);
+      left.appendChild(txt(cat.name,13,"SemiBold","#111827"));
+      left.appendChild(txt(cat.desc,12,"Regular","#6B7280"));
+      const toggle=alFrame({name:"Toggle",dir:"HORIZONTAL",bg:cat.on?"#4ADE80":"#D1D5DB",pl:3,pr:3,pt:3,pb:3,radius:9999,main:cat.on?"MAX":"MIN",cross:"CENTER"});
+      toggle.resize(36,20); toggle.primaryAxisSizingMode="FIXED"; toggle.counterAxisSizingMode="FIXED";
+      const knob=alFrame({name:"Knob",dir:"HORIZONTAL",bg:"#FFFFFF",pl:0,pr:0,pt:0,pb:0,radius:9999}); knob.resize(14,14); knob.primaryAxisSizingMode="FIXED"; knob.counterAxisSizingMode="FIXED"; toggle.appendChild(knob);
+      row.appendChild(toggle);
+    });
+    const btns=alFrame({name:"Actions",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:4,pb:0,cross:"CENTER"}); f.appendChild(btns);
+    btns.appendChild(btnNode("Save preferences","none","#374151",18,10,6));
+    btns.appendChild(btnNode("Accept all","#111827","#FFFFFF",18,10,6));
+    return f;
+  },
+
+  // ── ANNOUNCEMENT BAR ───────────────────────────────────────────────────────
+  "ann-1": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Light",dir:"HORIZONTAL",bg:"#F9FAFB",w:W,pl:40,pr:40,pt:12,pb:12,gap:12,main:"CENTER",cross:"CENTER"});
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const msg=txt(mobile?"✦ Free shipping on orders over $50":"✦  Free shipping on all orders over $50 — limited time offer.",13,"Medium","#374151",{align:"CENTER"}); f.appendChild(msg); fill(msg);
+    return f;
+  },
+  "ann-2": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Dark",dir:"HORIZONTAL",bg:"#09090B",w:W,pl:40,pr:40,pt:12,pb:12,gap:16,main:"CENTER",cross:"CENTER"});
+    const msg=txt(mobile?"🎉  We just raised $10M — read more →":"🎉  We just raised $10M Series A — read the announcement →",13,"Medium","#E4E4E7",{align:"CENTER"}); f.appendChild(msg); fill(msg);
+    if(!mobile){ const x=txt("✕",11,"Regular","#71717A"); f.appendChild(x); }
+    return f;
+  },
+  "ann-3": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Sale",dir:"HORIZONTAL",bg:"#F97316",w:W,pl:40,pr:40,pt:12,pb:12,gap:12,main:"CENTER",cross:"CENTER"});
+    if(!mobile) f.appendChild(pillNode("SALE","#FFFFFF","#F97316"));
+    const msg=txt(mobile?"🔥  50% off everything — today only!":"🔥  50% off everything, today only! Use code LAUNCH50 at checkout.",13,"SemiBold","#FFFFFF",{align:"CENTER"}); f.appendChild(msg); fill(msg);
+    if(!mobile) f.appendChild(btnNode("Shop now →","#FFFFFF","#F97316",14,8,4));
+    return f;
+  },
+  "ann-4": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Branded",dir:"HORIZONTAL",bg:"#1D4ED8",w:W,pl:40,pr:40,pt:12,pb:12,gap:16,main:"CENTER",cross:"CENTER"});
+    if(!mobile) f.appendChild(pillNode("NEW","#3B82F6","#FFFFFF"));
+    const msg=txt(mobile?"New dashboard is live — try it!":"Our new dashboard is live. Try all the new features today — it's free.",13,"Medium","#BFDBFE",{align:"CENTER"}); f.appendChild(msg); fill(msg);
+    if(!mobile) f.appendChild(txt("Try now →",13,"SemiBold","#FFFFFF"));
+    return f;
+  },
+  "ann-5": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Launch",dir:"HORIZONTAL",bg:"#1D1B4B",w:W,pl:40,pr:40,pt:12,pb:12,gap:16,main:"CENTER",cross:"CENTER"});
+    const msg=txt(mobile?"✦ Product Hunt launch today!":"✦  We're live on Product Hunt today — support us and help spread the word!",13,"Medium","#C7D2FE",{align:"CENTER"}); f.appendChild(msg); fill(msg);
+    if(!mobile) f.appendChild(btnNode("Upvote us ▲","#6366F1","#FFFFFF",14,7,4));
+    return f;
+  },
+  "ann-6": W => {
+    const mobile=W<=480;
+    const f=alFrame({name:"Announcement Bar — Dismissible",dir:"HORIZONTAL",bg:"#ECFDF5",w:W,pl:40,pr:40,pt:12,pb:12,gap:12,main:mobile?"MIN":"SPACE_BETWEEN",cross:"CENTER"});
+    f.strokes=[{type:"SOLID",color:rgb("#D1FAE5")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const left=alFrame({name:"Message",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(left); fill(left);
+    left.appendChild(txt("✓",14,"Bold","#16A34A"));
+    left.appendChild(txt(mobile?"All systems operational.":"All systems are operational. Uptime this month: 99.98%  ·  View status →",13,"Medium","#15803D"));
+    if(!mobile){ const close=alFrame({name:"Close",dir:"HORIZONTAL",pl:8,pr:8,pt:6,pb:6,radius:4,main:"CENTER",cross:"CENTER"}); close.appendChild(txt("✕",11,"Regular","#6B7280")); f.appendChild(close); }
+    return f;
+  },
+
+  // ── BREADCRUMB ─────────────────────────────────────────────────────────────
+  "bread-1": W => {
+    const f=alFrame({name:"Breadcrumb — Chevron Light",dir:"VERTICAL",bg:"#FFFFFF",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const row=alFrame({name:"Crumbs",dir:"HORIZONTAL",gap:6,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    ["Home","Products","Electronics","Laptops"].forEach((label,i)=>{
+      if(i>0) row.appendChild(txt("›",14,"Regular","#9CA3AF"));
+      row.appendChild(txt(label,13,i===3?"SemiBold":"Regular",i===3?"#111827":"#6B7280"));
+    });
+    return f;
+  },
+  "bread-2": W => {
+    const f=alFrame({name:"Breadcrumb — Slash",dir:"VERTICAL",bg:"#F9FAFB",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    const row=alFrame({name:"Crumbs",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    ["Home","Blog","Design Systems","Tokens"].forEach((label,i)=>{
+      if(i>0) row.appendChild(txt("/",13,"Regular","#D1D5DB"));
+      row.appendChild(txt(label,13,i===3?"Medium":"Regular",i===3?"#374151":"#9CA3AF"));
+    });
+    return f;
+  },
+  "bread-3": W => {
+    const f=alFrame({name:"Breadcrumb — Dark",dir:"VERTICAL",bg:"#0F172A",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    const row=alFrame({name:"Crumbs",dir:"HORIZONTAL",gap:8,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    ["Home","Docs","API Reference","Authentication"].forEach((label,i)=>{
+      if(i>0) row.appendChild(txt("›",14,"Regular","#334155"));
+      row.appendChild(txt(label,13,i===3?"Medium":"Regular",i===3?"#F1F5F9":"#64748B"));
+    });
+    return f;
+  },
+  "bread-4": W => {
+    const f=alFrame({name:"Breadcrumb — Pills",dir:"VERTICAL",bg:"#FFFFFF",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    const row=alFrame({name:"Crumbs",dir:"HORIZONTAL",gap:6,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    ["Home","Settings","Account"].forEach((label,i)=>{
+      if(i>0) row.appendChild(txt("›",12,"Regular","#D1D5DB"));
+      const pill=alFrame({name:label,dir:"HORIZONTAL",bg:i===2?"#F1F5F9":"transparent",pl:8,pr:8,pt:4,pb:4,radius:6,main:"CENTER",cross:"CENTER"});
+      if(i===2){ pill.strokes=[{type:"SOLID",color:rgb("#E2E8F0")}]; pill.strokeWeight=1; }
+      pill.appendChild(txt(label,12,i===2?"SemiBold":"Regular",i===2?"#111827":"#6B7280"));
+      row.appendChild(pill);
+    });
+    return f;
+  },
+  "bread-5": W => {
+    const f=alFrame({name:"Breadcrumb — Accent Active",dir:"VERTICAL",bg:"#FFFFFF",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1; f.strokeAlign="INSIDE";
+    const row=alFrame({name:"Crumbs",dir:"HORIZONTAL",gap:6,pl:0,pr:0,pt:0,pb:0,cross:"CENTER"}); f.appendChild(row);
+    row.appendChild(txt("⌂",14,"Regular","#9CA3AF"));
+    ["Pricing","Enterprise","Contact"].forEach((label,i)=>{
+      row.appendChild(txt("›",14,"Regular","#9CA3AF"));
+      row.appendChild(txt(label,13,i===2?"SemiBold":"Regular",i===2?"#6366F1":"#6B7280"));
+    });
+    return f;
+  },
+  "bread-6": W => {
+    const f=alFrame({name:"Breadcrumb — Card Border",dir:"VERTICAL",bg:"#F9FAFB",w:W,pl:40,pr:40,pt:12,pb:12,gap:0});
+    f.primaryAxisSizingMode="AUTO"; f.counterAxisSizingMode="FIXED";
+    const card=alFrame({name:"Card",dir:"HORIZONTAL",bg:"#FFFFFF",pl:16,pr:16,pt:10,pb:10,gap:8,radius:8,cross:"CENTER"});
+    card.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; card.strokeWeight=1; f.appendChild(card);
+    ["Home","Resources","Case Studies","Stripe"].forEach((label,i)=>{
+      if(i>0) card.appendChild(txt("›",13,"Regular","#D1D5DB"));
+      card.appendChild(txt(label,13,i===3?"SemiBold":"Regular",i===3?"#111827":"#9CA3AF"));
+    });
+    return f;
+  },
+
+  // ── TOAST ──────────────────────────────────────────────────────────────────
+  "toast-1": W => {
+    // Success — green bg, white filled check, text, X (Image 4 style)
+    const tw=W<=480?W-32:440;
+    const f=alFrame({name:"Toast — Success",dir:"HORIZONTAL",bg:"#22C55E",w:tw,pl:16,pr:16,pt:16,pb:16,gap:12,cross:"CENTER"});
+    f.cornerRadius=10;
+    const icon=alFrame({name:"Icon",dir:"HORIZONTAL",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:9999});
+    icon.fills=solid("#FFFFFF",0.25);
+    icon.resize(22,22); icon.primaryAxisSizingMode="FIXED"; icon.counterAxisSizingMode="FIXED";
+    icon.appendChild(txt("✓",11,"Bold","#FFFFFF")); f.appendChild(icon);
+    const msg=txt("Your changes were saved successfully.",14,"Medium","#FFFFFF",{lineHeight:20}); f.appendChild(msg); fill(msg);
+    f.appendChild(txt("✕",13,"Regular","#FFFFFF"));
+    return f;
+  },
+  "toast-2": W => {
+    // Error — red bg, white text, Undo | X actions (Image 7 style)
+    const tw=W<=480?W-32:480;
+    const f=alFrame({name:"Toast — Error",dir:"HORIZONTAL",bg:"#EF4444",w:tw,pl:16,pr:0,pt:16,pb:16,gap:0,cross:"CENTER"});
+    f.cornerRadius=8;
+    const msg=txt("1 row deleted. This is your last chance to undo.",14,"Medium","#FFFFFF",{lineHeight:20}); f.appendChild(msg); fill(msg);
+    const d1=figma.createRectangle(); d1.resize(1,24); d1.fills=solid("#FFFFFF",0.3); f.appendChild(d1);
+    const undo=alFrame({name:"Undo",dir:"HORIZONTAL",bg:"transparent",pl:16,pr:16,pt:16,pb:16,main:"CENTER",cross:"CENTER"});
+    undo.appendChild(txt("Undo",14,"SemiBold","#FFFFFF")); f.appendChild(undo);
+    const d2=figma.createRectangle(); d2.resize(1,24); d2.fills=solid("#FFFFFF",0.3); f.appendChild(d2);
+    const xBtn=alFrame({name:"Close",dir:"HORIZONTAL",bg:"transparent",pl:14,pr:14,pt:16,pb:16,main:"CENTER",cross:"CENTER"});
+    xBtn.appendChild(txt("✕",13,"Regular","#FFFFFF")); f.appendChild(xBtn);
+    return f;
+  },
+  "toast-3": W => {
+    // Warning — amber bg, white ! icon, text, X
+    const tw=W<=480?W-32:420;
+    const f=alFrame({name:"Toast — Warning",dir:"HORIZONTAL",bg:"#F59E0B",w:tw,pl:16,pr:16,pt:16,pb:16,gap:12,cross:"CENTER"});
+    f.cornerRadius=10;
+    const icon=alFrame({name:"Icon",dir:"HORIZONTAL",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:9999});
+    icon.fills=solid("#FFFFFF",0.25);
+    icon.resize(22,22); icon.primaryAxisSizingMode="FIXED"; icon.counterAxisSizingMode="FIXED";
+    icon.appendChild(txt("!",12,"Bold","#FFFFFF")); f.appendChild(icon);
+    const msg=txt("Your session will expire in 5 minutes. Save your work.",14,"Medium","#FFFFFF",{lineHeight:20}); f.appendChild(msg); fill(msg);
+    f.appendChild(txt("✕",13,"Regular","#FFFFFF"));
+    return f;
+  },
+  "toast-4": W => {
+    // Info — blue bg, white i icon, text, X
+    const tw=W<=480?W-32:440;
+    const f=alFrame({name:"Toast — Info",dir:"HORIZONTAL",bg:"#3B82F6",w:tw,pl:16,pr:16,pt:16,pb:16,gap:12,cross:"CENTER"});
+    f.cornerRadius=10;
+    const icon=alFrame({name:"Icon",dir:"HORIZONTAL",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:9999});
+    icon.fills=solid("#FFFFFF",0.25);
+    icon.resize(22,22); icon.primaryAxisSizingMode="FIXED"; icon.counterAxisSizingMode="FIXED";
+    icon.appendChild(txt("i",11,"Bold","#FFFFFF")); f.appendChild(icon);
+    const msg=txt("New update available. Refresh to get the latest version.",14,"Medium","#FFFFFF",{lineHeight:20}); f.appendChild(msg); fill(msg);
+    f.appendChild(txt("✕",13,"Regular","#FFFFFF"));
+    return f;
+  },
+  "toast-5": W => {
+    // Dark — dark pill, green filled check icon, white text (Image 1 style)
+    const tw=W<=480?W-32:360;
+    const f=alFrame({name:"Toast — Dark",dir:"HORIZONTAL",bg:"#18181B",w:tw,pl:16,pr:20,pt:14,pb:14,gap:12,cross:"CENTER"});
+    f.cornerRadius=9999;
+    const icon=alFrame({name:"Icon",dir:"HORIZONTAL",bg:"#22C55E",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:9999});
+    icon.resize(20,20); icon.primaryAxisSizingMode="FIXED"; icon.counterAxisSizingMode="FIXED";
+    icon.appendChild(txt("✓",10,"Bold","#FFFFFF")); f.appendChild(icon);
+    const msg=txt("Your changes were applied.",14,"Medium","#FFFFFF"); f.appendChild(msg); fill(msg);
+    return f;
+  },
+  "toast-6": W => {
+    // Action — white bg, green outline check, bold title + gray body, X (Image 6 style)
+    const tw=W<=480?W-32:380;
+    const f=alFrame({name:"Toast — Action",dir:"HORIZONTAL",bg:"#FFFFFF",w:tw,pl:16,pr:16,pt:16,pb:16,gap:12,cross:"MIN"});
+    f.cornerRadius=12;
+    f.strokes=[{type:"SOLID",color:rgb("#E5E7EB")}]; f.strokeWeight=1;
+    const icon=alFrame({name:"Icon",dir:"HORIZONTAL",bg:"transparent",pl:0,pr:0,pt:0,pb:0,main:"CENTER",cross:"CENTER",radius:9999});
+    icon.resize(22,22); icon.primaryAxisSizingMode="FIXED"; icon.counterAxisSizingMode="FIXED";
+    icon.fills=[]; icon.strokes=[{type:"SOLID",color:rgb("#16A34A")}]; icon.strokeWeight=1.5;
+    icon.appendChild(txt("✓",10,"Bold","#16A34A")); f.appendChild(icon);
+    const content=alFrame({name:"Content",dir:"VERTICAL",gap:4,pl:0,pr:0,pt:0,pb:0}); f.appendChild(content); fill(content);
+    content.appendChild(txt("Transaction Split",14,"Bold","#15803D"));
+    const body=txt("Your Coffee transaction has been successfully split into 2 transactions.",13,"Regular","#6B7280",{lineHeight:19}); content.appendChild(body); fill(body);
+    f.appendChild(txt("✕",13,"Regular","#9CA3AF"));
+    return f;
+  },
+
 };
 
 // Generic fallback
