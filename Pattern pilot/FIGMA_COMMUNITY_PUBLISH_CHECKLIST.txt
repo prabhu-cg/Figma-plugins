@@ -1,0 +1,314 @@
+===============================================================================
+PATTERN PILOT - FIGMA COMMUNITY PUBLISH CHECKLIST
+Prepared: 2026-11-23
+Sources: Figma Help Center "Publish classic plugins to the Figma Community"
+  https://help.figma.com/hc/en-us/articles/360042293394
+Figma Help Center "Plugin and widget review guidelines"
+  https://help.figma.com/hc/en-us/articles/360039958914
+Where those pages are silent, this file says so instead of guessing.
+===============================================================================
+
+HOW TO USE: work top to bottom. Tick each box. Copy-paste text is in section 4.
+
+-------------------------------------------------------------------------------
+0. STATUS OF THE PLUGIN (already done)
+-------------------------------------------------------------------------------
+  [x] Code validated: 150 patterns x 3 widths (1440 / 768 / 375) build with no
+      errors in a mock of the Figma API (NOT real Figma - see section 2).
+  [x] Fill-order layout bugs fixed; README, UI text and counts corrected.
+  [x] manifest.json declares "networkAccess": {"allowedDomains": ["none"]}.
+  [x] Code pushed to
+      https://github.com/prabhu-cg/Figma-plugins/tree/main/Pattern%20pilot
+  [x] Issue link for support:
+      https://github.com/prabhu-cg/Figma-plugins/issues/new?template=pattern-pilot.yml
+  [x] Assets exist in publish-assets/ (see section 3).
+
+-------------------------------------------------------------------------------
+1. PREREQUISITES (from Figma's publish page)
+-------------------------------------------------------------------------------
+  [ ] Figma DESKTOP app (macOS or Windows). Publishing is only possible from
+      the desktop app, not the browser.
+  [ ] Two-factor authentication enabled on your Figma account (Figma lists
+      this as a step before publishing). Help article:
+      https://help.figma.com/hc/en-us/articles/360039817634
+  [ ] A plugin created for development (you already import it via
+      Plugins > Development > Import plugin from manifest...).
+  [ ] Plan: Starter, Professional, Education, Organization or Enterprise all
+      work. Free plan is fine for a free plugin.
+  [ ] Free plugin = no Stripe or "approved creator" status needed. (Those are
+      only for paid plugins. Pattern Pilot is free; leave "Sell this resource"
+      off.)
+  [ ] You have read: Figma Developer Terms, Creator Agreement, Licensing Terms
+      and Community Terms (the review guidelines ask you to).
+
+-------------------------------------------------------------------------------
+2. FINAL TESTING IN REAL FIGMA (not done yet - only you can do this)
+-------------------------------------------------------------------------------
+  The review guidelines reject plugins with crashes, obvious bugs, temporary
+  content, or developer-style error messages shown to users.
+  Import: Plugins > Development > Import plugin from manifest... > select
+  manifest.json in the "Pattern pilot" folder. Test in a blank Design file AND
+  a file with existing frames.
+
+  Core flow
+  [ ] Plugin opens; the footer says "25 section types - 6 variations each".
+  [ ] Width toggle (Mobile / Tablet / Desktop), Section Type dropdown,
+      Generate, hover a variant, Insert into Figma all work.
+  [ ] Insert one variant from EVERY section at all three widths (75 inserts).
+      No "Build failed" toast, no overlap, no clipped text.
+  [ ] Frames are named "[Section] Variant", selected, and zoomed into view.
+  [ ] Later inserts stack 40 px below the lowest existing frame.
+
+  Areas touched by the recent fixes (check these closely)
+  [ ] Sign In 1-5: heading and subtitle wrap; the "Sign in" button spans the
+      card (Sign In - Minimal); the divider is visible.
+  [ ] Footer - Mega: brand text and tags lay out correctly.
+  [ ] Vertical Nav 1, 2, 5, 6: divider lines show.
+  [ ] Split Image 1-6, Feature List 3 and 6, CTA Half Split, Sign In Image
+      Split, Contact Map Split: image/map panel is the right size.
+
+  Quality
+  [ ] Edit a frame by hand: resize wider/narrower; Auto Layout reflows.
+  [ ] Text is Inter with no "missing font" warning.
+  [ ] Check these glyphs look right (Inter fallback possible): check marks,
+      x marks, stars, chevrons, X logo, emoji icons. Replace any that show as
+      boxes.
+  [ ] Undo removes one insert cleanly. Double-click Insert gives two frames.
+  [ ] Works in Figma Desktop; also try the browser version.
+  [ ] Light and dark Figma themes: panel readable.
+  [ ] No ads, no hidden functionality, nothing the description does not say.
+
+-------------------------------------------------------------------------------
+3. ASSETS (all in "Pattern pilot/publish-assets/")
+-------------------------------------------------------------------------------
+  Figma's recommended sizes (from the publish page):
+    Icon       128 x 128 px
+    Thumbnail  1920 x 1080 px (image or video)
+    Carousel   optional, up to 9 images and videos
+    Playground file  optional
+  The page states no file-type, file-size or video-length limits.
+
+  [ ] ICON       -> icon-128.png            (128x128; icon-512.png is spare)
+  [ ] THUMBNAIL  -> cover-1920x1080.png     (use this; official size)
+                    cover-1920x960.png is the same art at 960 high - only use
+                    it if the form asks for it.
+  [ ] CAROUSEL   -> gallery/01-browse-variants.png
+                    gallery/02-25-sections.png
+                    gallery/03-three-breakpoints.png
+                    gallery/04-editable-free.png
+      These four show the plugin PANEL only. Strongly recommended: add 2-5 more
+      screenshots taken in real Figma of INSERTED frames, for example:
+        - a full landing page built from 6-8 patterns
+        - Desktop / Tablet / Mobile versions of one pattern side by side
+        - a pattern resized by hand to show Auto Layout
+      Order: best image first. Keep the listing honest - only show what the
+      plugin really produces (review rule: "operates as described").
+  [ ] PLAYGROUND FILE (optional): a Figma file with sample patterns already
+      inserted. Nice to have, not required.
+
+-------------------------------------------------------------------------------
+4. COPY-PASTE LISTING TEXT
+-------------------------------------------------------------------------------
+  Field limits for name/tagline/description are NOT stated by Figma's page.
+  The text below is kept short anyway.
+
+  NAME
+    Pattern Pilot
+
+  TAGLINE
+    150 editable website section patterns in one click - desktop, tablet, mobile.
+
+  CATEGORY
+    Pick the closest in the dropdown (the page names "Design tools" and
+    "Software development" as examples; the full list is shown in the form).
+    Suggested: Design tools.
+
+  DESCRIPTION  (paste everything between the lines)
+  ---------------------------------------------------------------------------
+  Pattern Pilot inserts ready-made website sections into your Figma file in one
+  click.
+
+  HOW IT WORKS
+  1. Choose a width: Mobile (375), Tablet (768) or Desktop (1440)
+  2. Pick a section from the Section Type dropdown
+  3. Click Generate to preview six style variants
+  4. Hover a variant and click Insert into Figma
+
+  WHAT'S INCLUDED - 25 sections, 6 variants each, 150 patterns
+  - Navigation: Footer, Nav Bar, Tab Horizontal, Tab Vertical, Vertical Nav
+  - Hero: Bento Grid, Gallery Grid, Split Image, Text Only, Video Hero
+  - Content: CTA Banner, FAQ, Feature List, Pricing Table, Stats, Team Grid,
+    Testimonials
+  - Forms & Auth: Sign In, Sign Up, Contact Form, Newsletter
+  - Utility: Cookie Banner, Announcement Bar, Breadcrumb, Toast
+
+  BUILT TO BE EDITED
+  - Every pattern uses Auto Layout, so you can resize and restyle it.
+  - Uses the Inter font, which is built into Figma.
+  - Images are placeholder blocks; colours are plain fills you can change.
+  - Toasts and sidebar patterns keep their natural size instead of filling the
+    chosen width.
+
+  PRIVATE AND FREE
+  - Free for personal and commercial use.
+  - No account, no network requests, no tracking.
+
+  DOCUMENTATION AND SUPPORT
+  Setup and usage: https://github.com/prabhu-cg/Figma-plugins/tree/main/Pattern%20pilot
+  Report a bug or request a pattern:
+  https://github.com/prabhu-cg/Figma-plugins/issues/new?template=pattern-pilot.yml
+  ---------------------------------------------------------------------------
+  (The review guidelines ask the listing to reference documentation on setup
+  and use and to give users a way to contact you - both are in the text above.)
+
+  TAGS
+    Figma's publish page does not mention a tags field. If the form shows one,
+    use: ui patterns, sections, wireframe, landing page, hero, pricing, footer,
+    navigation, auto layout, templates, web design
+
+  SUPPORT CONTACT  (the "Add a support contact" field; format not stated)
+    https://github.com/prabhu-cg/Figma-plugins/issues/new?template=pattern-pilot.yml
+    A web link is allowed per the guidelines ("an email address or a website
+    or help center link"). Do not paste a personal email unless you want it
+    public.
+
+  FIRST-VERSION RELEASE NOTES
+    Initial release: 150 patterns across 25 sections for desktop, tablet and
+    mobile.
+
+-------------------------------------------------------------------------------
+5. PUBLISH STEPS (Figma desktop app)
+-------------------------------------------------------------------------------
+  Menu names can shift between Figma versions; follow what the app shows.
+
+  [ ] 1. Open Figma desktop and any Design file.
+  [ ] 2. Plugins > Manage plugins (or the Resources panel > Plugins >
+         Development). Find "Pattern Pilot" under In development.
+  [ ] 3. Click the plugin's menu ("...") > Publish. The "Publish plugin" modal
+         opens.
+  [ ] 4. DESCRIBE: enter Name, Tagline, Description, Category (section 4).
+  [ ] 5. IMAGES: upload Icon (128x128), Thumbnail (1920x1080), then carousel
+         images (max 9) and an optional playground file (section 3).
+  [ ] 6. DATA SECURITY (optional page): the security disclosure form is
+         reviewed by Figma and "may take up to two weeks"; answers become
+         visible to logged-in users. Pattern Pilot has no network access and
+         collects nothing, so it is optional. Decide before submitting.
+  [ ] 7. FINAL DETAILS:
+         - Publish to: if you see "Organization" vs "Community" (only shown on
+           Organization/Enterprise plans), choose COMMUNITY.
+         - Publish as: yourself, or a team you are authorised to represent.
+         - Support contact: the issue link from section 4.
+         - Network access label: it should read "No access to network" if the
+           manifest networkAccess is picked up. If it says "Unknown network
+           access", re-check manifest.json has
+           "networkAccess": {"allowedDomains": ["none"]} and re-import.
+         - Additional contributors: none (optional).
+         - Community comments: your choice (allow or disallow).
+         - "Sell this resource on Community": LEAVE OFF (free plugin).
+           Note: Figma's page says a PAID plugin cannot later become free. It
+           does not say whether a free plugin can become paid, so decide your
+           pricing before you publish.
+  [ ] 8. Submit. The plugin moves to your Published section with an
+         "In review" badge.
+  [ ] 9. Watch the email on your Figma account: Figma sends the approval or
+         rejection there. Check spam.
+
+-------------------------------------------------------------------------------
+6. THE PLUGIN ID  (Figma's pages do not explain this - verify yourself)
+-------------------------------------------------------------------------------
+  - manifest.json currently has "id": "pattern-pilot-plugin". This is a
+    placeholder.
+  - Figma's publish page does not say where the ID is shown or how it relates
+    to manifest.json, so this is NOT confirmed by their docs.
+  - Your repo history for the DesignMD plugin has a commit "Set the Figma
+    plugin id in manifest.json", so the same step likely applies here:
+      [ ] After publishing, open the Community listing. The URL has the form
+          https://www.figma.com/community/plugin/<number>/<name>
+      [ ] Compare <number> with what Figma wrote into your local plugin
+          (re-import the manifest, or check the plugin's "..." menu).
+      [ ] If Figma gave a numeric ID, set it in manifest.json, commit, push,
+          and use it for all future updates.
+  - Do not change "id" between versions once it is set to the real value.
+
+-------------------------------------------------------------------------------
+7. WHAT FIGMA'S REVIEWERS CHECK  (from the review guidelines)
+-------------------------------------------------------------------------------
+  Tick each as you confirm it for Pattern Pilot.
+  [ ] No crashes or obvious bugs.                       (section 2)
+  [ ] No temporary content; no developer error text shown to users.
+      Note: a failed insert shows "Build failed: <technical message>" in the
+      panel. Consider friendlier wording before submitting.
+  [ ] Listing operates as described; screenshots match what you get.
+  [ ] Listing references documentation and offers support contact. (section 4)
+  [ ] Performance: no long-running background processes. Pattern Pilot only
+      runs on click.
+  [ ] Does not read or modify files without user awareness: it only adds a
+      frame on Insert and selects it.
+  [ ] Uses only official Figma Plugin APIs: yes.
+  [ ] No third-party accounts, payments or licensing: none needed.
+  [ ] No ads anywhere in the UI or files: none.
+  [ ] Not a team-only tool; not a duplicate of an existing listing of yours.
+  [ ] No Figma brand misuse: the name/icon do not use the Figma logo or name
+      as a brand.
+  [ ] Privacy policy: required only if the plugin processes user data.
+      Pattern Pilot does not, so none is needed. Keep README's "no telemetry"
+      claim true.
+  [ ] Name is not confusingly close to another plugin: a web search found no
+      "Pattern Pilot" plugin (similar: Pattern Pal, UX Pilot). Also search
+      Figma Community for "Pattern Pilot" before submitting.
+
+  Common rejection reasons Figma lists: crashes/bugs, temporary content,
+  description mismatch or hidden functionality, files changed without consent,
+  non-official APIs, undisclosed accounts/payments, objectionable content,
+  team-only tools, duplicates, ads, recreating Figma features, performance
+  problems, trademark misuse.
+
+-------------------------------------------------------------------------------
+8. AFTER SUBMITTING
+-------------------------------------------------------------------------------
+  Timing: Figma says review is "reasonably prompt" and depends on volume. No
+  fixed timeframe is given. (Any "1-7 days" figure seen elsewhere is
+  unofficial.)
+  [ ] While in review you may push updates (code changes or bug fixes), and
+      you can edit listing details at any time without publishing a new
+      version.
+  [ ] If REJECTED: read the feedback in the email, fix, and resubmit.
+  [ ] If APPROVED: a "Published" badge appears and the listing is public.
+  [ ] Install it from the public listing in a fresh file and run a short
+      subset of section 2.
+  [ ] Open the listing's Share section and copy the public URL. Add it to the
+      README and the repo.
+  [ ] Watch the GitHub issues and (if enabled) Community comments.
+
+-------------------------------------------------------------------------------
+9. PUBLISHING UPDATES LATER
+-------------------------------------------------------------------------------
+  [ ] Bump nothing in manifest.json for versioning - Figma's page does not
+      describe a version field. Use the release-notes box in the publish modal.
+  [ ] Test, then Plugins > Manage plugins > Pattern Pilot > Publish new
+      version. (Detailed steps: https://help.figma.com/hc/en-us/articles/360042293714)
+  [ ] Material changes need re-review. If core functionality changes
+      substantially, Figma says to create a NEW plugin instead of updating.
+  [ ] Keep the GitHub repo in sync (commit + push the same files).
+
+-------------------------------------------------------------------------------
+10. QUICK FINAL GATE - do not click Submit until all are ticked
+-------------------------------------------------------------------------------
+  [ ] Section 2 real-Figma test passed, with no "Build failed" in any insert.
+  [ ] Icon 128x128, thumbnail 1920x1080, 4+ carousel images uploaded.
+  [ ] Description pasted; support link works when you click it.
+  [ ] Network access label says "No access to network".
+  [ ] "Sell this resource" is OFF; publishing to COMMUNITY.
+  [ ] 2FA is on; you are in the desktop app.
+  [ ] You searched Community for name clashes.
+
+-------------------------------------------------------------------------------
+UNCONFIRMED BY FIGMA'S DOCS (verify in the publish modal)
+-------------------------------------------------------------------------------
+  - Character limits for name, tagline, description.
+  - Accepted file types and size limits for images/video.
+  - Whether a tags field exists.
+  - Support-contact format.
+  - Where the plugin ID appears and how it ties to manifest.json.
+  - Exact review time.
+===============================================================================
