@@ -467,6 +467,7 @@ body{
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .toast.success{border-color:rgba(52,211,153,.35);color:var(--green);}
+.toast.long{white-space:normal;width:max-content;max-width:400px;text-align:center;line-height:1.4;border-radius:14px;}
 
 /* ─── Mockup Primitives ───────────────────────────────────────── */
 /* These classes are used inside .mockup-inner to draw section layouts */
@@ -3183,7 +3184,7 @@ window.onmessage = function(e) {
     showToast('✓ Inserted — canvas focused', true);
   }
   if (msg.type === 'error') {
-    showToast('⚠ ' + msg.message);
+    showToast('⚠ ' + msg.message, false, 7000);
   }
 };
 
@@ -3191,12 +3192,12 @@ window.onmessage = function(e) {
 // TOAST
 // ══════════════════════════════════════════════════════════
 let toastTimer;
-function showToast(msg, success) {
+function showToast(msg, success, duration) {
   const t = document.getElementById('toast');
   t.textContent = msg;
-  t.className = 'toast' + (success ? ' success' : '') + ' show';
+  t.className = 'toast' + (success ? ' success' : '') + (duration ? ' long' : '') + ' show';
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  toastTimer = setTimeout(() => t.classList.remove('show'), duration || 2600);
 }
 
 function closePlugin() {

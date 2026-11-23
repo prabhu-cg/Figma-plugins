@@ -35,9 +35,6 @@ HOW TO USE: work top to bottom. Tick each box. Copy-paste text is in section 4.
       Plugins > Development > Import plugin from manifest...).
   [ ] Plan: Starter, Professional, Education, Organization or Enterprise all
       work. Free plan is fine for a free plugin.
-  [ ] Free plugin = no Stripe or "approved creator" status needed. (Those are
-      only for paid plugins. Pattern Pilot is free; leave "Sell this resource"
-      off.)
   [ ] You have read: Figma Developer Terms, Creator Agreement, Licensing Terms
       and Community Terms (the review guidelines ask you to).
 
@@ -204,10 +201,7 @@ HOW TO USE: work top to bottom. Tick each box. Copy-paste text is in section 4.
            "networkAccess": {"allowedDomains": ["none"]} and re-import.
          - Additional contributors: none (optional).
          - Community comments: your choice (allow or disallow).
-         - "Sell this resource on Community": LEAVE OFF (free plugin).
-           Note: Figma's page says a PAID plugin cannot later become free. It
-           does not say whether a free plugin can become paid, so decide your
-           pricing before you publish.
+         - "Sell this resource on Community": leave OFF (Pattern Pilot is free).
   [ ] 8. Submit. The plugin moves to your Published section with an
          "In review" badge.
   [ ] 9. Watch the email on your Figma account: Figma sends the approval or
@@ -235,9 +229,10 @@ HOW TO USE: work top to bottom. Tick each box. Copy-paste text is in section 4.
 -------------------------------------------------------------------------------
   Tick each as you confirm it for Pattern Pilot.
   [ ] No crashes or obvious bugs.                       (section 2)
-  [ ] No temporary content; no developer error text shown to users.
-      Note: a failed insert shows "Build failed: <technical message>" in the
-      panel. Consider friendlier wording before submitting.
+  [x] No temporary content; no developer error text shown to users.
+      Done: a failed insert now shows a plain message ("Couldn't insert this
+      pattern. Please try again, or report it using the support link...").
+      Technical details go to the console only. Test it if you can.
   [ ] Listing operates as described; screenshots match what you get.
   [ ] Listing references documentation and offers support contact. (section 4)
   [ ] Performance: no long-running background processes. Pattern Pilot only

@@ -3314,7 +3314,13 @@ figma.ui.onmessage = async function(msg) {
       }
       node.name = "["+msg.sectionName+"] "+msg.variantName;
     } catch(e) {
-      figma.ui.postMessage({type:"error", message:"Build failed: "+(e.message||String(e))});
+      // Technical details go to the console only; users get a plain-language message.
+      console.error("Pattern Pilot: insert failed for " + msg.variantStyle + " at " + msg.width + "px", e);
+      const text = String((e && e.message) || e);
+      const userMsg = /font/i.test(text)
+        ? "Couldn't load the Inter font. Please check that Inter is available in Figma and try again."
+        : "Couldn't insert this pattern. Please try again, or report it using the support link on the plugin's Community page.";
+      figma.ui.postMessage({type:"error", message:userMsg});
       return;
     }
 
