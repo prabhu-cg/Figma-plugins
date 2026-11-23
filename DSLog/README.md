@@ -2,6 +2,8 @@
 
 **Design System Change tracker.** Know what changed.
 
+[Install from Figma Community](https://www.figma.com/community/plugin/1706827369859131527) · [Report an issue](https://github.com/prabhu-cg/Figma-plugins/issues/new?labels=dslog)
+
 DSLog is a free, local-first Figma plugin for tracking changes to Design
 System components and design tokens. It requires no AI, no backend, no
 authentication, no paid service, no external API, no telemetry, no

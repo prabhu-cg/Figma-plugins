@@ -136,7 +136,7 @@ Chrome at 1920x960 if you change copy).
 9. AFTER PUBLISHING
 -------------------
 [x] Assigned plugin id is in manifest.json (commit it).
-[ ] Add the Community link to README.md.
+[x] Community link added to README.md: https://www.figma.com/community/plugin/1706827369859131527
 [ ] Updates: bump "version" in package.json, rebuild, then Publish new version
     from Manage plugins with release notes. Updates are reviewed again.
 [ ] Keep dist/ rebuilt before every commit (CI at the monorepo root diffs it).
