@@ -200,3 +200,8 @@ No AI, cloud database, login, analytics, telemetry, subscriptions,
 payments, GitHub/Storybook/Slack integration, automatic publishing, Figma
 Version History access, or automatic modification of components/variables.
 DSLog is read-only with respect to your Design System assets.
+
+## License
+
+MIT. See [LICENSE](LICENSE). The bundled Manrope font is under the SIL Open Font License 1.1
+(`src/ui/assets/fonts/MANROPE-OFL-LICENSE.txt`).

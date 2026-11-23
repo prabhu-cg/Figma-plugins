@@ -116,10 +116,8 @@ Chrome at 1920x960 if you change copy).
 [ ] Content rights: you own the code, icon, and the cover art. Manrope font is
     bundled under the SIL OFL 1.1 (license text is at
     src/ui/assets/fonts/MANROPE-OFL-LICENSE.txt).
-[ ] LICENSE: the repo has NO LICENSE file and the README names no license.
-    Because the code is public on GitHub, choose one (MIT is typical for a free
-    plugin) or state "all rights reserved". This is your decision, so it was not
-    added for you.
+[x] LICENSE: MIT added (LICENSE at repo root, linked from README). Copyright line
+    reads "2026 prabhu-cg"; change it to your legal name if you prefer.
 [ ] No trademarks or Figma logos in the assets (none used).
 [ ] Read Figma's Community Resource / Plugin guidelines once:
     https://help.figma.com/hc/en-us/articles/360039958914
