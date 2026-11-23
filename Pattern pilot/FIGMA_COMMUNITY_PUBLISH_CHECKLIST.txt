@@ -210,8 +210,10 @@ HOW TO USE: work top to bottom. Tick each box. Copy-paste text is in section 4.
 -------------------------------------------------------------------------------
 6. THE PLUGIN ID  (Figma's pages do not explain this - verify yourself)
 -------------------------------------------------------------------------------
-  - manifest.json currently has "id": "pattern-pilot-plugin". This is a
-    placeholder.
+  UPDATE 2026-11-23: Figma generated the ID 1706818632276973691 and it is now
+  set in manifest.json (and must stay unchanged in future versions).
+  (Older note, kept for context:)
+  - manifest.json had "id": "pattern-pilot-plugin", a placeholder.
   - Figma's publish page does not say where the ID is shown or how it relates
     to manifest.json, so this is NOT confirmed by their docs.
   - Your repo history for the DesignMD plugin has a commit "Set the Figma
