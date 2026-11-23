@@ -1,0 +1,170 @@
+DSLog — FIGMA COMMUNITY PUBLISHING CHECKLIST
+=============================================
+Plugin: DSLog — Design System Change Tracker   |   Version: 1.0.0   |   Price: Free
+Everything below marked [ ] is for you to do. Items marked [x] were verified in
+the repo on 2026-11-23.
+
+NOTE: Figma changes its publishing form and review rules from time to time.
+Where a limit is quoted (image sizes, tagline length) it is the value the
+assets were built to; confirm against the live form and
+https://help.figma.com/hc/en-us/articles/360042293394 before submitting.
+
+
+1. ACCOUNT PREREQUISITES  (you)
+-------------------------------
+[ ] Figma account has two-factor authentication enabled (required to publish).
+[ ] Decide the publisher: your personal profile, or a team/org profile.
+[ ] Publisher profile has a name, avatar and short bio (shown on the listing).
+[ ] Figma desktop app is up to date (publishing is done from the desktop app).
+
+
+2. PRE-FLIGHT: CODE AND BUILD  (verified)
+-----------------------------------------
+[x] npm run typecheck          clean
+[x] npm test                   458 tests pass (45 files)
+[x] npm run build              clean; sandbox-globals check passes
+[x] dist/code.js + dist/ui.html rebuilt and match the source
+[x] npm audit --omit=dev       0 vulnerabilities (production deps)
+[x] No network calls in dist/ (only XML namespace strings and a React error URL
+    that is never fetched)
+[ ] npm audit (dev toolchain) still reports advisories in vitest/vite/esbuild.
+    They are dev-only and never ship in dist/. Optional: upgrade later.
+[ ] Commit the changes. REMINDER: a commit in DSLog auto-publishes to the
+    Figma-plugins monorepo on GitHub via the local post-commit hook, including
+    dist/. Commit only when you are happy for that to go public.
+
+
+3. MANIFEST  (manifest.json)
+----------------------------
+[x] name: "DSLog"
+[x] api: "1.0.0", main: dist/code.js, ui: dist/ui.html (both exist)
+[x] editorType: ["figma"]
+[x] documentAccess: "dynamic-page"  (required for new plugins)
+[x] networkAccess.allowedDomains: ["none"]  (matches "no network" claim)
+[x] permissions: [] and capabilities: []  (nothing extra requested)
+[ ] "id" is currently a placeholder (dslog-design-system-change-tracker).
+    Figma assigns the real numeric id when you publish. After the first publish,
+    copy the assigned id into manifest.json so local development installs match
+    the published plugin. Do not guess one.
+[ ] If you ever add a network domain, you must add a "reasoning" string and
+    update the listing's privacy text. Today: none.
+
+
+4. TEST IN REAL FIGMA  (you — cannot be automated here)
+-------------------------------------------------------
+Import manifest.json: Figma desktop > Plugins > Development > Import plugin
+from manifest. Use a file with real components and variables.
+[ ] Opens at 1180x760 with no console errors (Plugins > Development > Open console).
+[ ] Track: baseline from Selection, Current page, Entire document, and tokens.
+[ ] Overview > Scan for changes finds an edit you made (rename a variant,
+    change padding, change a variable value).
+[ ] Changes: review states, notes, bulk actions, keyboard shortcuts A/R/V/Z/N
+    reach the plugin iframe (this was still unmeasured in real Figma).
+[ ] "Select in canvas" jumps to the node.
+[ ] Releases: recommended version, validation, create release, Copy changelog
+    (Markdown and JSON) works in the Figma iframe.
+[ ] History: all five tabs, Compare, deprecations, optional impact index.
+[ ] Close and reopen the plugin: data persists (baseline, reviews, releases).
+[ ] Light and dark Figma themes both look right.
+[ ] Large file: time a scan and a save (see docs/performance.md checklist).
+[ ] First-run: open on a file with no baseline. Changes and Releases now send
+    you to Track (fixed in this pass; previously Changes offered a Scan that
+    failed with "No baseline exists yet").
+
+
+5. LISTING ASSETS  (store-assets/)
+----------------------------------
+All regenerated from the current build on 2026-11-23. Sources are in
+store-assets/source/ (HTML templates + screenshots; re-render with headless
+Chrome at 1920x960 if you change copy).
+
+[x] icon-128.png                128 x 128
+[x] cover-1920x960.png          1920 x 960   (Changes screen)
+[x] gallery-1-1920x960.png      "Scan, then review every change"
+[x] gallery-2-1920x960.png      "Turn reviews into a release"
+[x] gallery-3-1920x960.png      "Browse the full history"
+[x] gallery-4-1920x960.png      "Choose exactly what to track"
+[x] gallery-5-1920x960.png      "Private by design"
+[ ] Look at each PNG once at full size before uploading (copy, crop, sample
+    data). Sample data is fictional (Button, Input, Card ...), no real client data.
+[ ] Optional: a short screen recording (Figma accepts video in the carousel).
+
+
+6. LISTING FIELDS  (copy from store-assets/LISTING.md)
+------------------------------------------------------
+[ ] Name:          DSLog — Design System Change Tracker
+[ ] Tagline:       Know what changed. Track components and tokens, review changes,
+                   ship versioned changelogs.            (90 characters)
+[ ] Description:   paste from LISTING.md
+[ ] Category:      Design systems (pick the closest available in the form)
+[ ] Tags:          design system, changelog, versioning, tokens, variables,
+                   components, release notes, governance
+[ ] Pricing:       Free
+[ ] Release notes: "First release." (or paste the version note from LISTING.md)
+[ ] Support contact: https://github.com/prabhu-cg/Figma-plugins/issues/new?labels=dslog
+                   Opens a new issue pre-labelled "dslog" in prabhu-cg/Figma-plugins,
+                   same convention as DesignMD ("designmd") and Pattern Pilot
+                   ("pattern-pilot"). Open issues: .../issues?q=is%3Aissue+label%3Adslog
+                   GitHub asks visitors to sign in before they can file one.
+
+
+7. PRIVACY, SECURITY AND LEGAL
+------------------------------
+[ ] Privacy answers in the form: no data collected or transmitted; manifest
+    declares networkAccess "none"; data stays in the Figma file (pluginData)
+    and local plugin storage (clientStorage).
+[ ] Content rights: you own the code, icon, and the cover art. Manrope font is
+    bundled under the SIL OFL 1.1 (license text is at
+    src/ui/assets/fonts/MANROPE-OFL-LICENSE.txt).
+[ ] LICENSE: the repo has NO LICENSE file and the README names no license.
+    Because the code is public on GitHub, choose one (MIT is typical for a free
+    plugin) or state "all rights reserved". This is your decision, so it was not
+    added for you.
+[ ] No trademarks or Figma logos in the assets (none used).
+[ ] Read Figma's Community Resource / Plugin guidelines once:
+    https://help.figma.com/hc/en-us/articles/360039958914
+
+
+8. PUBLISH  (you)
+-----------------
+1. Figma desktop > Plugins > Manage plugins > find DSLog (development) > Publish.
+2. Fill the form with section 6; upload section 5 assets.
+3. Choose who can use it: "Anyone" (public Community listing).
+4. Accept the Community Terms and submit for review.
+5. Review typically takes several business days. Watch the email on your Figma
+   account for approval or change requests.
+6. After approval: install it from the Community page on a clean account and
+   repeat the smoke test in section 4.
+
+
+9. AFTER PUBLISHING
+-------------------
+[ ] Copy the assigned plugin id into manifest.json (see section 3) and commit.
+[ ] Add the Community link to README.md.
+[ ] Updates: bump "version" in package.json, rebuild, then Publish new version
+    from Manage plugins with release notes. Updates are reviewed again.
+[ ] Keep dist/ rebuilt before every commit (CI at the monorepo root diffs it).
+
+
+10. KNOWN LIMITS TO MENTION IF ASKED
+------------------------------------
+- DSLog only tracks what you tell it to; it does not watch the file in the
+  background and does not read Figma's native Version History.
+- The "impact index" (instance counts) is an explicit, optional full-document
+  scan and can be slow on very large files.
+- Selection in the Changes list is not remembered across a re-scan.
+- Window opens at 1180x760. Below about 1100px wide the History detail panel
+  drops beneath its list instead of sitting beside it.
+
+
+CHANGES MADE IN THIS PRE-PUBLISH PASS
+-------------------------------------
+- Changes page with no baseline now says "No baseline yet" and links to Track
+  (it used to offer a scan that could only fail). Test added.
+- History > Releases, Compare, Components/Tokens and Track layouts use
+  responsive CSS classes. Before, the History Releases view overflowed and
+  clipped the detail panel in windows narrower than about 1100px.
+- Copy: "Releases tab" -> "Releases page" on History and Help; "In use above."
+  -> "Matches the version above."
+- Store images regenerated from the current build (2x screenshots, richer
+  sample data, before/after values and per-mode token values visible).

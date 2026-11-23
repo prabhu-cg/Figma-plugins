@@ -142,7 +142,7 @@ export function TrackPage({ onNavigate }: { onNavigate: (page: PageId) => void }
           </Banner>
         )}
 
-        <div className="grid" style={{ gridTemplateColumns: "1fr 360px" }}>
+        <div className="split">
           <div className="card-title">Components</div>
           <div className="card-title">Create baseline</div>
 

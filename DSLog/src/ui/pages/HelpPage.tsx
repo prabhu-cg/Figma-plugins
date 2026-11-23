@@ -7,7 +7,7 @@ const WORKFLOW_STEPS: { title: string; body: string }[] = [
   { title: "Keep working", body: "Edit components and tokens in Figma as normal. DSLog doesn't watch anything in the background." },
   { title: "Scan for changes", body: "From Overview, click \"Scan for changes\" to compare the current file against your baseline." },
   { title: "Review changes", body: "On the Changes tab, read what changed, mark items reviewed, add notes, and confirm or dismiss any possible renames." },
-  { title: "Create a release", body: "On the Releases tab, DSLog recommends a version and flags anything worth checking first. Creating a release bundles everything into a changelog and becomes your new baseline." },
+  { title: "Create a release", body: "On the Releases page, DSLog recommends a version and flags anything worth checking first. Creating a release bundles everything into a changelog and becomes your new baseline." },
   { title: "Browse History", body: "See what changed release-by-release, per component, or per token — including deprecations, impact, and how tokens depend on each other." },
 ];
 

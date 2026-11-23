@@ -929,8 +929,22 @@ input[type="radio"] {
   gap: var(--space-3);
   align-items: start;
 }
+/* A narrow rail (release or entity list) beside content that may itself be a list + detail split. */
+.split-nav {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
 @media (max-width: 820px) {
-  .split {
+  .split,
+  .split-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* Rail + list + detail needs ~1100px; below that the nested detail drops under its list. */
+@media (max-width: 1100px) {
+  .split-nav .split {
     grid-template-columns: minmax(0, 1fr);
   }
 }

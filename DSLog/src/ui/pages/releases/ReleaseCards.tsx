@@ -45,7 +45,7 @@ export function VersionRecommendationCard({
       {recommendation.recommendedVersion &&
         (currentVersion.trim() === recommendation.recommendedVersion ? (
           <div className="text-secondary" style={{ fontSize: 12 }}>
-            In use above.
+            Matches the version above.
           </div>
         ) : (
           <button className="btn btn-secondary btn-sm" onClick={() => onApply(recommendation.recommendedVersion as string)}>

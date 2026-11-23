@@ -94,6 +94,7 @@ function Shell() {
             <ChangesPage
               focusChangeId={focus?.page === "changes" ? focus.targetId : undefined}
               onFocusConsumed={clearFocus}
+              onNavigate={navigate}
             />
           )}
           {page === "releases" && <ReleasesPage onNavigate={navigate} />}

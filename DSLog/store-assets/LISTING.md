@@ -20,7 +20,7 @@ Private by design: no network access, no AI, no accounts, no telemetry. Data sta
 First release.
 
 ## Support / privacy
-Support contact: <https://github.com/users/prabhu-cg/projects/3>   ·   Privacy: no data collected or transmitted; manifest declares networkAccess "none".
+Support contact: <https://github.com/prabhu-cg/Figma-plugins/issues/new?labels=dslog>   ·   Privacy: no data collected or transmitted; manifest declares networkAccess "none".
 
 ## Assets
-icon-128.png (128×128) · cover-1920x960.png · gallery-1…5-1920x960.png
+icon-128.png (128×128) · cover-1920x960.png · gallery-1…5-1920x960.png (regenerated 2026-11-23). Full publishing steps: FIGMA-COMMUNITY-CHECKLIST.txt

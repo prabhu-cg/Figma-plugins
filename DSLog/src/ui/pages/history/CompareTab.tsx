@@ -146,7 +146,7 @@ export function CompareTab() {
               <div className="text-secondary">No changes match these filters.</div>
             </div>
           ) : (
-            <div className="grid" style={{ gridTemplateColumns: "1fr 360px", alignItems: "start" }}>
+            <div className="split">
               <div className="flex flex-col gap-2">
                 {filtered.map((change) => (
                   <ChangeListItem

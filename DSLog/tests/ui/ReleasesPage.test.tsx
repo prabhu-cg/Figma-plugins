@@ -37,7 +37,7 @@ describe("ReleasesPage", () => {
     it("starts from the recommended version, not a hardcoded one", () => {
       renderPage();
       expect(versionInput().value).toBe("2.0.0");
-      expect(screen.getByText("In use above.")).toBeTruthy();
+      expect(screen.getByText("Matches the version above.")).toBeTruthy();
     });
 
     it("recommends a different version when the changes are not breaking", () => {

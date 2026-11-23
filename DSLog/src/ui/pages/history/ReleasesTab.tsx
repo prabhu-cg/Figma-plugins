@@ -29,7 +29,7 @@ export function ReleasesTab({
     return (
       <div className="state-screen">
         <div className="state-title">No releases yet</div>
-        <div className="state-body">Create a release from the Releases tab to start building release history.</div>
+        <div className="state-body">Create a release from the Releases page to start building release history.</div>
       </div>
     );
   }
@@ -39,7 +39,7 @@ export function ReleasesTab({
   const selectedChange = changeSet?.changes.find((c) => c.id === selectedChangeId) ?? null;
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: "260px 1fr", alignItems: "start", gap: "var(--space-3)" }}>
+    <div className="split-nav">
       <div className="flex flex-col gap-2">
         {releases.map((release) => {
           const cs = project.changeSets.find((c) => c.id === release.changeSetId);
@@ -69,7 +69,7 @@ export function ReleasesTab({
         })}
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: "1fr 360px", alignItems: "start" }}>
+      <div className="split">
         <div className="flex flex-col gap-2">
           {(changeSet?.changes.length ?? 0) === 0 ? (
             <div className="card state-card">

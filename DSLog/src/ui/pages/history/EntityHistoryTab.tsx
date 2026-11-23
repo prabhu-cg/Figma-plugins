@@ -61,7 +61,7 @@ export function EntityHistoryTab({
   return (
     <div className="flex flex-col gap-3">
       <ImpactIndexControl />
-      <div className="grid" style={{ gridTemplateColumns: "260px 1fr", alignItems: "start", gap: "var(--space-3)" }}>
+      <div className="split-nav">
       <div className="flex flex-col gap-2">
         <div style={{ position: "relative" }}>
           <SearchIcon

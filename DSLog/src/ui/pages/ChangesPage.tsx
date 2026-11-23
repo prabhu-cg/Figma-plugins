@@ -1,4 +1,5 @@
 import { useMemo, useRef } from "react";
+import type { PageId } from "@ui/App";
 import { useProjectState } from "@ui/state/ProjectContext";
 import { useShortcutHints } from "@ui/state/useShortcutHints";
 import { ChangeDetail } from "@ui/components/ChangeDetail";
@@ -13,9 +14,11 @@ import { useChangesView } from "./changes/useChangesView";
 export function ChangesPage({
   focusChangeId,
   onFocusConsumed,
+  onNavigate,
 }: {
   focusChangeId?: string;
   onFocusConsumed?: () => void;
+  onNavigate?: (page: PageId) => void;
 } = {}) {
   const { project, send, scanning } = useProjectState();
 
@@ -41,6 +44,22 @@ export function ChangesPage({
   }, [changeSet]);
 
   if (!project) return null;
+
+  // Nothing to scan against yet: send people to Track rather than offering a scan that can only fail.
+  if (!project.currentBaselineId) {
+    return (
+      <div className="state-screen">
+        <div className="state-icon">
+          <TrackIcon style={{ width: 24, height: 24 }} />
+        </div>
+        <div className="state-title">No baseline yet</div>
+        <div className="state-body">Create a baseline first, then scan to see what changed since it.</div>
+        <button className="btn btn-primary" onClick={() => onNavigate?.("track")}>
+          Create baseline
+        </button>
+      </div>
+    );
+  }
 
   if (!changeSet || changeSet.changes.length === 0) {
     return (

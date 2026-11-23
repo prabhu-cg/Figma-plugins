@@ -32,6 +32,16 @@ describe("ChangesPage", () => {
       expect(bridge.sentOfType("scan")).toHaveLength(1);
     });
 
+    it("sends people to Track, not to a scan that would fail, when no baseline exists", async () => {
+      const user = userEvent.setup();
+      const onNavigate = vi.fn();
+      renderWithProject(<ChangesPage onNavigate={onNavigate} />, makeProject([], { baselines: [], currentBaselineId: undefined }));
+      expect(screen.getByText("No baseline yet")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Scan for changes" })).toBeNull();
+      await user.click(screen.getByRole("button", { name: "Create baseline" }));
+      expect(onNavigate).toHaveBeenCalledWith("track");
+    });
+
     it("renders nothing until the project arrives", () => {
       const { container } = renderWithProject(<ChangesPage />, undefined);
       expect(container.textContent).toBe("");
