@@ -42,10 +42,8 @@ https://help.figma.com/hc/en-us/articles/360042293394 before submitting.
 [x] documentAccess: "dynamic-page"  (required for new plugins)
 [x] networkAccess.allowedDomains: ["none"]  (matches "no network" claim)
 [x] permissions: [] and capabilities: []  (nothing extra requested)
-[ ] "id" is currently a placeholder (dslog-design-system-change-tracker).
-    Figma assigns the real numeric id when you publish. After the first publish,
-    copy the assigned id into manifest.json so local development installs match
-    the published plugin. Do not guess one.
+[x] "id" is the Figma-assigned plugin id (1706827369859131527), set in manifest.json.
+    Keep it unchanged; it ties local development installs to the published plugin.
 [ ] If you ever add a network domain, you must add a "reasoning" string and
     update the listing's privacy text. Today: none.
 
@@ -137,7 +135,7 @@ Chrome at 1920x960 if you change copy).
 
 9. AFTER PUBLISHING
 -------------------
-[ ] Copy the assigned plugin id into manifest.json (see section 3) and commit.
+[x] Assigned plugin id is in manifest.json (commit it).
 [ ] Add the Community link to README.md.
 [ ] Updates: bump "version" in package.json, rebuild, then Publish new version
     from Manage plugins with release notes. Updates are reviewed again.
